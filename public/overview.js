@@ -42,6 +42,7 @@ async function loadOverview(nextPeriod = period) {
     if (currentRequest !== requestId) return;
     overview = result;
     render();
+    window.dispatchEvent(new CustomEvent('rhythm:overview-loaded', { detail: result.activity }));
   } catch (error) {
     if (currentRequest !== requestId) return;
     byId('period-date-label').textContent = 'No Data';

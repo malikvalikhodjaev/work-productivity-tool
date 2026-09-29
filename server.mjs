@@ -4,12 +4,19 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { createStore } from './lib/store.mjs';
 import { createIndicatorStore } from './lib/indicators.mjs';
+import { createWorkspaceStore } from './lib/workspace.mjs';
+import { parseFinanceCsv } from './lib/finance-csv.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.DASHBOARD_PORT ?? 8787);
-const store = createStore(process.env.DASHBOARD_DATA_FILE ?? path.join(root, 'data', 'dashboard.json'));
-const indicators = createIndicatorStore(path.join(root, 'data', 'indicators.json'));
+const dataDir = process.env.DASHBOARD_DATA_DIR ?? path.join(root, 'data');
+let store;
+const workspace = createWorkspaceStore(path.join(dataDir, 'workspace.json'), () => store.getPortfolio());
+store = createStore(process.env.DASHBOARD_DATA_FILE ?? path.join(dataDir, 'dashboard.json'), { validateWorkRef: workspace.validateRef });
+const indicators = createIndicatorStore(path.join(dataDir, 'indicators.json'));
 const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/projects.js': ['projects.js', 'text/javascript; charset=utf-8'], '/overview.js': ['overview.js', 'text/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8'], '/projects.css': ['projects.css', 'text/css; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
+assets['/workspace.js'] = ['workspace.js', 'text/javascript; charset=utf-8'];
+assets['/workspace.css'] = ['workspace.css', 'text/css; charset=utf-8'];
 
 function json(res, status, value) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -22,7 +29,7 @@ async function body(req) {
   let bytes = 0;
   for await (const part of req) {
     bytes += part.length;
-    if (bytes > 65536) throw new Error('Запрос слишком большой.');
+    if (bytes > (req.url === '/api/finance/import' ? 4 * 1024 * 1024 : 65536)) throw new Error('Запрос слишком большой.');
     parts.push(part);
   }
   const value = JSON.parse(Buffer.concat(parts).toString('utf8'));
@@ -39,10 +46,26 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.1.0', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/workspace') return json(res, 200, workspace.view());
+    if (req.method === 'POST' && url.pathname === '/api/workspace') { const value = await body(req); return json(res, 200, workspace.mutate(value.action, value.input)); }
+    if (req.method === 'GET' && url.pathname === '/api/finance') {
+      const period = store.getPeriod(url.searchParams.get('period') ?? '7d');
+      return json(res, 200, workspace.finance(period.start, period.end));
+    }
+    if (req.method === 'POST' && url.pathname === '/api/finance/transactions') return json(res, 201, workspace.addTransaction(await body(req)));
+    if (req.method === 'PATCH' && /^\/api\/finance\/transactions\/[^/]+$/.test(url.pathname)) return json(res, 200, workspace.correctTransaction(decodeURIComponent(url.pathname.split('/').at(-1)), await body(req)));
+    if (req.method === 'POST' && url.pathname === '/api/finance/import') {
+      const value = await body(req);
+      return json(res, 200, workspace.importTransactions(parseFinanceCsv(value.csv), value.source, value.commit === true));
+    }
     if (req.method === 'GET' && url.pathname === '/adr/time-sources') {
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' });
       return res.end(readFileSync(path.join(root, 'docs', 'ADR-001-time-sources.md')));
+    }
+    if (req.method === 'GET' && url.pathname === '/adr/work-loop') {
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' });
+      return res.end(readFileSync(path.join(root, 'docs', 'ADR-002-personal-work-loop.md')));
     }
     if (req.method === 'GET' && url.pathname === '/api/dashboard') return json(res, 200, store.getWeek(url.searchParams.get('week') ?? undefined));
     if (req.method === 'GET' && url.pathname === '/api/overview') {
@@ -53,7 +76,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/indicator-ratings') return json(res, 200, indicators.rate(await body(req)));
     if (req.method === 'GET' && url.pathname === '/api/portfolio') return json(res, 200, store.getPortfolio());
     if (req.method === 'GET' && url.pathname === '/api/imported-data') {
-      const folder = path.join(root, 'data', 'imports');
+      const folder = path.join(dataDir, 'imports');
       const readOptional = (name, empty) => {
         const file = path.join(folder, name);
         return existsSync(file) ? { ...JSON.parse(readFileSync(file, 'utf8')), available: true } : { ...empty, available: false };
@@ -77,6 +100,7 @@ const server = http.createServer(async (req, res) => {
       const result = store.addEntry(await body(req));
       return json(res, result.duplicate ? 200 : 201, result);
     }
+    if (req.method === 'PATCH' && /^\/api\/entries\/[^/]+$/.test(url.pathname)) return json(res, 200, store.classifyEntry(decodeURIComponent(url.pathname.split('/').at(-1)), await body(req)));
     if (req.method === 'DELETE' && /^\/api\/entries\/[a-f0-9-]{36}$/.test(url.pathname)) {
       const entry = store.removeEntry(url.pathname.split('/').at(-1));
       return json(res, 200, { removed: entry.id });

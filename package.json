@@ -1,12 +1,14 @@
 {
   "name": "personal-rhythm-dashboard",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check server.mjs && node --check lib/store.mjs && node --check lib/portfolio.mjs && node --check lib/indicators.mjs && node --check public/app.js && node --check public/projects.js && node --check public/overview.js",
+    "check": "node --check server.mjs && node --check lib/store.mjs && node --check lib/portfolio.mjs && node --check lib/indicators.mjs && node --check public/app.js && node --check public/projects.js && node --check public/overview.js && node --check lib/workspace.mjs && node --check lib/finance-csv.mjs && node --check public/workspace.js",
     "test": "node --test tests/*.test.mjs"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22"
+  }
 }

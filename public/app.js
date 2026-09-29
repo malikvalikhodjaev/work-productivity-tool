@@ -69,8 +69,8 @@ function render() {
   $('dashboard').setAttribute('aria-busy', 'false');
   $('week-label').textContent = weekLabel(state);
   $('week-tag').textContent = state.week === state.currentWeek ? 'Текущая неделя' : state.week < state.currentWeek ? 'Прошлая неделя' : 'Будущая неделя';
-  $('hours-actual').textContent = state.metrics.some(metric => metric.unit === 'hours' && observed(metric)) ? format(state.summary.actualHours) : 'No Data';
-  $('hours-target').textContent = ` / ${state.summary.targetHours ? format(state.summary.targetHours) : 'No Data'} ч`;
+  $('hours-actual').textContent = state.summary.hourRecords > 0 ? format(state.summary.actualHours) : 'No Data';
+  $('hours-target').textContent = ` ч · план по нормам ${state.summary.targetHours ? format(state.summary.targetHours) : 'No Data'} ч`;
   $('hours-hint').textContent = state.summary.unconfigured ? 'План учитывает заданные нормативы часов' : 'По всем направлениям недели';
   $('completed').textContent = state.summary.completed;
   $('configured').textContent = ` / ${state.summary.configured}`;
@@ -82,9 +82,11 @@ function render() {
   const guides = state.metrics.find(metric => metric.id === 'guides');
   const mentor = state.metrics.find(metric => metric.id === 'mentor');
   $('goals-grid').innerHTML = guidesCard(guides, mentor) + state.metrics.filter(metric => !['guides', 'mentor'].includes(metric.id)).map(card).join('');
+  const pending = state.metrics.filter(m => m.unit === 'hours' && m.target !== null && m.remaining > 0);
+  $('weekly-next-step').textContent = pending.length ? 'До нормы по учтённым записям: ' + pending.map(m => `${m.title} — ${format(m.remaining)} ч`).join(' · ') : 'Заданные нормативы часов выполнены или пока не заданы.';
   $('entry-count').textContent = state.entries.length;
   $('journal').innerHTML = state.entries.length ? `<div class="journal-list">${state.entries.map(entry => {
-    const metric = state.metrics.find(item => item.id === entry.metricId);
+    const metric = state.metrics.find(item => item.id === entry.metricId) ?? { title: entry.allocation === 'outside' ? 'Вне нормативов' : 'Не разобрано', unit: 'hours' };
     return `<div class="journal-row"><span class="journal-date">${date(entry.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</span><div><div class="journal-title">${esc(entry.title || metric.title)}</div><div class="journal-category">${metric.title} · ${entry.source === 'manual' ? 'Вручную' : esc(entry.source)}</div></div><strong class="journal-amount">${format(entry.amount)} ${unit(metric)}</strong><button class="delete-entry" data-delete="${entry.id}" aria-label="Удалить запись: ${esc(entry.title || metric.title)}">×</button></div>`;
   }).join('')}</div>` : '<div class="journal-empty"><div><strong>No Data</strong><p>Нормативы уже готовы. Добавь первую запись — прогресс посчитается автоматически.</p></div></div>';
   $('save-label').textContent = `Недельные записи сохранены · ${new Date(state.updatedAt).toLocaleTimeString('ru-RU', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit' })}`;
@@ -144,7 +146,7 @@ function openEntry() {
   if (!state) return;
   $('entry-form').reset();
   $('entry-error').hidden = true;
-  $('entry-metric').innerHTML = state.metrics.map(metric => `<option value="${metric.id}">${metric.title}</option>`).join('');
+  $('entry-metric').innerHTML = state.metrics.map(metric => `<option value="${metric.id}">${metric.title}</option>`).join('') + '<option value="outside">Вне нормативов</option><option value="unclassified">Пока не разобрано</option>';
   $('entry-date').value = state.week === state.currentWeek ? state.today : state.week;
   entryUnit();
   $('entry-dialog').showModal();
@@ -171,6 +173,7 @@ $('next-week').addEventListener('click', () => load(shift(state.week, 7)));
 $('current-week').addEventListener('click', () => load(state.currentWeek));
 $('retry-button').addEventListener('click', () => load());
 window.addEventListener('rhythm:portfolio-saved', () => { void load(); });
+window.addEventListener('rhythm:entry-classified', () => { void load(); });
 $('entry-metric').addEventListener('change', entryUnit);
 $('target-fields').addEventListener('input', updateTargetsTotal);
 $('goals-grid').addEventListener('click', event => { const edit = event.target.closest('[data-edit]'); if (edit) openTargets(edit.dataset.edit); });
@@ -191,6 +194,8 @@ $('entry-form').addEventListener('submit', event => {
   event.preventDefault();
   void submit(event.currentTarget, 'entry-error', async () => {
     const input = { metricId: $('entry-metric').value, date: $('entry-date').value, amount: Number($('entry-amount').value), title: $('entry-title').value };
+    if (['outside', 'unclassified'].includes(input.metricId)) { input.allocation = input.metricId; input.metricId = null; }
+    input.workType = $('entry-work-type').value; input.workRef = $('entry-work-ref').value || null;
     await api('/api/entries', { method: 'POST', body: JSON.stringify(input) });
     $('entry-dialog').close();
     await load(input.date);
@@ -203,7 +208,7 @@ $('journal').addEventListener('click', event => {
   if (!button) return;
   deleteId = button.dataset.delete;
   const entry = state.entries.find(item => item.id === deleteId);
-  const metric = state.metrics.find(item => item.id === entry.metricId);
+  const metric = state.metrics.find(item => item.id === entry.metricId) ?? { title: entry.allocation === 'outside' ? 'Вне нормативов' : 'Не разобрано', unit: 'hours' };
   $('delete-description').textContent = `${entry.title || metric.title} · ${format(entry.amount)} ${unit(metric)} · ${dateLabel(entry.date)}. Прогресс недели будет пересчитан.`;
   $('delete-error').hidden = true;
   $('delete-dialog').showModal();
