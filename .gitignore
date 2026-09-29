@@ -1,0 +1,13 @@
+data/
+logs/
+node_modules/
+outputs/
+preview*.png
+.env
+.env.*
+*.log
+*.xlsx
+*.jsonl
+__pycache__/
+*.pyc
+.DS_Store

@@ -1,0 +1,98 @@
+import http from 'node:http';
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { createStore } from './lib/store.mjs';
+import { createIndicatorStore } from './lib/indicators.mjs';
+
+const root = path.dirname(fileURLToPath(import.meta.url));
+const port = Number(process.env.DASHBOARD_PORT ?? 8787);
+const store = createStore(process.env.DASHBOARD_DATA_FILE ?? path.join(root, 'data', 'dashboard.json'));
+const indicators = createIndicatorStore(path.join(root, 'data', 'indicators.json'));
+const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/projects.js': ['projects.js', 'text/javascript; charset=utf-8'], '/overview.js': ['overview.js', 'text/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8'], '/projects.css': ['projects.css', 'text/css; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
+
+function json(res, status, value) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify(value));
+}
+
+async function body(req) {
+  if (!req.headers['content-type']?.startsWith('application/json')) throw new Error('Нужен запрос в формате JSON.');
+  const parts = [];
+  let bytes = 0;
+  for await (const part of req) {
+    bytes += part.length;
+    if (bytes > 65536) throw new Error('Запрос слишком большой.');
+    parts.push(part);
+  }
+  const value = JSON.parse(Buffer.concat(parts).toString('utf8'));
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Нужен объект JSON.');
+  return value;
+}
+
+const server = http.createServer(async (req, res) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'self'");
+  const expectedHosts = [`127.0.0.1:${port}`, `localhost:${port}`];
+  if (!expectedHosts.includes(req.headers.host)) return json(res, 403, { error: 'Доступ только с этого компьютера.' });
+  if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
+  try {
+    const url = new URL(req.url, `http://127.0.0.1:${port}`);
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/adr/time-sources') {
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' });
+      return res.end(readFileSync(path.join(root, 'docs', 'ADR-001-time-sources.md')));
+    }
+    if (req.method === 'GET' && url.pathname === '/api/dashboard') return json(res, 200, store.getWeek(url.searchParams.get('week') ?? undefined));
+    if (req.method === 'GET' && url.pathname === '/api/overview') {
+      const activity = store.getPeriod(url.searchParams.get('period') ?? '7d');
+      return json(res, 200, { activity, assessment: indicators.getPeriod(activity.start, activity.end) });
+    }
+    if (req.method === 'GET' && url.pathname === '/api/indicator-ratings') return json(res, 200, indicators.getAll());
+    if (req.method === 'POST' && url.pathname === '/api/indicator-ratings') return json(res, 200, indicators.rate(await body(req)));
+    if (req.method === 'GET' && url.pathname === '/api/portfolio') return json(res, 200, store.getPortfolio());
+    if (req.method === 'GET' && url.pathname === '/api/imported-data') {
+      const folder = path.join(root, 'data', 'imports');
+      const readOptional = (name, empty) => {
+        const file = path.join(folder, name);
+        return existsSync(file) ? { ...JSON.parse(readFileSync(file, 'utf8')), available: true } : { ...empty, available: false };
+      };
+      return json(res, 200, {
+        snapshot: readOptional('coda-snapshot.json', { capturedAt: null, sources: {}, work: [], goals: [], issues: [] }),
+        reference: readOptional('alpha-reference.json', { capturedAt: null, sources: {}, rows: [], roles: [], mistakes: [], actions: [], guidance: [], objectFields: [] })
+      });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/portfolio') {
+      const input = await body(req);
+      if (!input.input || typeof input.input !== 'object' || Array.isArray(input.input)) throw new Error('Укажи данные для сохранения.');
+      return json(res, 200, store.updatePortfolio(input.action, input.input));
+    }
+    if (req.method === 'PUT' && url.pathname === '/api/targets') {
+      const input = await body(req);
+      if (typeof input.week !== 'string') throw new Error('Укажи неделю для нормативов.');
+      return json(res, 200, store.updateTargets(input.week, input.targets));
+    }
+    if (req.method === 'POST' && url.pathname === '/api/entries') {
+      const result = store.addEntry(await body(req));
+      return json(res, result.duplicate ? 200 : 201, result);
+    }
+    if (req.method === 'DELETE' && /^\/api\/entries\/[a-f0-9-]{36}$/.test(url.pathname)) {
+      const entry = store.removeEntry(url.pathname.split('/').at(-1));
+      return json(res, 200, { removed: entry.id });
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && assets[url.pathname]) {
+      const [file, contentType] = assets[url.pathname];
+      const content = readFileSync(path.join(root, 'public', file));
+      res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'no-cache' });
+      return res.end(req.method === 'HEAD' ? undefined : content);
+    }
+    json(res, 404, { error: 'Страница не найдена.' });
+  } catch (error) {
+    const systemError = error.code || (!(error instanceof SyntaxError) && /ENOENT|EACCES|EPERM/.test(error.message));
+    if (systemError) console.error(error);
+    json(res, systemError ? 500 : 400, { error: systemError ? 'Не удалось сохранить или прочитать данные. Повтори попытку.' : error instanceof SyntaxError ? 'Некорректный JSON.' : error.message });
+  }
+});
+server.listen(port, '127.0.0.1', () => console.log(`Ритм: http://127.0.0.1:${port}\nДанные: ${process.env.DASHBOARD_DATA_FILE ?? path.join(root, 'data', 'dashboard.json')}`));
+server.on('error', error => { console.error(error.code === 'EADDRINUSE' ? `Порт ${port} занят. Открой http://127.0.0.1:${port} или задай DASHBOARD_PORT.` : error); process.exitCode = 1; });
