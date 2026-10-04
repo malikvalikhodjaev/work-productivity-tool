@@ -72,6 +72,7 @@ $('financial-tab').addEventListener('click', () => chooseView('financial'));
 $('data-tab').addEventListener('click', () => chooseView('data'));
 window.addEventListener('rhythm:show-assessments', () => { activeDataTable = 'assessments'; chooseView('data'); });
 window.addEventListener('rhythm:show-daily-problems', () => { activeDataTable = 'dailyProblems'; chooseView('data'); renderData(); });
+window.addEventListener('rhythm:show-daily-results', () => { activeDataTable = 'dailyResults'; chooseView('data'); renderData(); });
 for (const id of ['week-tab', 'projects-tab', 'financial-tab', 'data-tab']) $(id).addEventListener('keydown', event => {
   if (['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) {
     event.preventDefault();
@@ -128,7 +129,7 @@ function render() {
 function tableValue(value) { return value === null || value === undefined || value === '' ? 'No Data' : String(value); }
 function countLabel(count, one, few, many) { return `${count} ${count % 100 >= 11 && count % 100 <= 14 ? many : count % 10 === 1 ? one : count % 10 >= 2 && count % 10 <= 4 ? few : many}`; }
 
-function makeDataTables(week, snapshot, imported, ratings, dailyProblems) {
+function makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyResults) {
   const projects = new Map(snapshot.projects.map(project => [project.id, project]));
   const alphas = new Map(snapshot.alphas.map(alpha => [alpha.id, alpha]));
   const metrics = new Map(week.metrics.map(metric => [metric.id, metric]));
@@ -141,6 +142,12 @@ function makeDataTables(week, snapshot, imported, ratings, dailyProblems) {
         const metric = metrics.get(entry.metricId) ?? { title: entry.allocation === 'outside' ? 'Вне нормативов' : 'Не разобрано', unit: 'hours' };
         return [entry.date, metric?.title, entry.title, `${entry.amount} ${metric?.unit === 'hours' ? 'ч' : 'шт.'}`, entry.source === 'manual' ? 'Вручную' : entry.source];
       })
+    },
+    dailyResults: {
+      title: 'Основные результаты дня',
+      note: `${countLabel(dailyResults.entries.length, 'запись', 'записи', 'записей')} · вся история по датам · data/daily-results.csv`,
+      columns: ['Дата', 'Результат', 'Состояние', 'Подтверждение', 'Обновлено', 'Правок'],
+      rows: dailyResults.entries.map(item => [item.date, item.text, item.status === 'ready' ? 'Готов' : 'В работе', item.evidence, new Date(item.updatedAt).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' }), item.revisions.length])
     },
     dailyProblems: {
       title: 'Главная проблема дня',
@@ -250,17 +257,18 @@ async function loadData() {
   $('data-table-note').textContent = 'Обновляю таблицы…';
   $('data-error').hidden = true;
   try {
-    const [weekResponse, portfolioResponse, importedResponse, ratingsResponse, problemsResponse] = await Promise.all([
+    const [weekResponse, portfolioResponse, importedResponse, ratingsResponse, problemsResponse, resultsResponse] = await Promise.all([
       fetch(`/api/dashboard${dataWeek ? `?week=${encodeURIComponent(dataWeek)}` : ''}`),
       fetch('/api/portfolio'),
       fetch('/api/imported-data'),
       fetch('/api/indicator-ratings'),
-      fetch('/api/daily-problems')
+      fetch('/api/daily-problems'),
+      fetch('/api/daily-results')
     ]);
-    if (!weekResponse.ok || !portfolioResponse.ok || !importedResponse.ok || !ratingsResponse.ok || !problemsResponse.ok) throw new Error('Не удалось прочитать локальные данные.');
-    const [week, snapshot, imported, ratings, dailyProblems] = await Promise.all([weekResponse.json(), portfolioResponse.json(), importedResponse.json(), ratingsResponse.json(), problemsResponse.json()]);
+    if (!weekResponse.ok || !portfolioResponse.ok || !importedResponse.ok || !ratingsResponse.ok || !problemsResponse.ok || !resultsResponse.ok) throw new Error('Не удалось прочитать локальные данные.');
+    const [week, snapshot, imported, ratings, dailyProblems, dailyResults] = await Promise.all([weekResponse.json(), portfolioResponse.json(), importedResponse.json(), ratingsResponse.json(), problemsResponse.json(), resultsResponse.json()]);
     if (currentRequest !== dataRequestId) return;
-    dataTables = makeDataTables(week, snapshot, imported, ratings, dailyProblems);
+    dataTables = makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyResults);
     for (const key of ['work', 'goals', 'issues']) $('import-' + key + '-count').textContent = imported.snapshot.available ? imported.snapshot[key].length : 'No Data';
     $('import-captured-at').textContent = tableValue(imported.snapshot.capturedAt);
     $('reference-summary-text').textContent = imported.reference.available
@@ -398,6 +406,7 @@ window.addEventListener('rhythm:week-loaded', event => {
 });
 window.addEventListener('rhythm:portfolio-saved', () => { if (!$('data-panel').hidden) void loadData(); });
 window.addEventListener('rhythm:daily-problem-saved', () => { if (!$('data-panel').hidden) void loadData(); });
+window.addEventListener('rhythm:daily-result-saved', () => { if (!$('data-panel').hidden) void loadData(); });
 $('portfolio-retry').addEventListener('click', loadPortfolio);
 $('project-list').addEventListener('click', event => { const button = event.target.closest('[data-project]'); if (button) { selectedProject = button.dataset.project; render(); } });
 $('alpha-parent').addEventListener('change', syncAlphaParent);

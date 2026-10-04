@@ -142,12 +142,13 @@ function entryUnit() {
   $('entry-amount-help').textContent = count ? 'Укажи количество заполненных альф.' : '30 минут = 0,5 ч · 1 час 30 минут = 1,5 ч';
 }
 
-function openEntry() {
+function openEntry(metricId = null, date = null) {
   if (!state) return;
   $('entry-form').reset();
   $('entry-error').hidden = true;
   $('entry-metric').innerHTML = state.metrics.map(metric => `<option value="${metric.id}">${metric.title}</option>`).join('') + '<option value="outside">Вне нормативов</option><option value="unclassified">Пока не разобрано</option>';
-  $('entry-date').value = state.week === state.currentWeek ? state.today : state.week;
+  if (typeof metricId === 'string' && state.metrics.some(metric => metric.id === metricId)) $('entry-metric').value = metricId;
+  $('entry-date').value = date ?? (state.week === state.currentWeek ? state.today : state.week);
   entryUnit();
   $('entry-dialog').showModal();
 }
@@ -168,6 +169,10 @@ async function saveTargets(targets) {
 $('targets-button').addEventListener('click', () => openTargets());
 $('entry-button').addEventListener('click', openEntry);
 $('journal-add').addEventListener('click', openEntry);
+window.addEventListener('rhythm:add-today-entry', async event => {
+  if (!state) await load();
+  if (state) openEntry(event.detail.metricId, event.detail.date);
+});
 $('previous-week').addEventListener('click', () => load(shift(state.week, -7)));
 $('next-week').addEventListener('click', () => load(shift(state.week, 7)));
 $('current-week').addEventListener('click', () => load(state.currentWeek));

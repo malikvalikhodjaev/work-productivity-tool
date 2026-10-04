@@ -5,6 +5,7 @@ import path from 'node:path';
 import { createStore } from './lib/store.mjs';
 import { createIndicatorStore } from './lib/indicators.mjs';
 import { createDailyProblemStore } from './lib/daily-problems.mjs';
+import { createDailyResultStore } from './lib/daily-results.mjs';
 import { createWorkspaceStore } from './lib/workspace.mjs';
 import { parseFinanceCsv } from './lib/finance-csv.mjs';
 
@@ -16,11 +17,14 @@ const workspace = createWorkspaceStore(path.join(dataDir, 'workspace.json'), () 
 store = createStore(process.env.DASHBOARD_DATA_FILE ?? path.join(dataDir, 'dashboard.json'), { validateWorkRef: workspace.validateRef });
 const indicators = createIndicatorStore(path.join(dataDir, 'indicators.json'));
 const dailyProblems = createDailyProblemStore(path.join(dataDir, 'daily-problems.json'));
+const dailyResults = createDailyResultStore(path.join(dataDir, 'daily-results.json'));
 const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/projects.js': ['projects.js', 'text/javascript; charset=utf-8'], '/overview.js': ['overview.js', 'text/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8'], '/projects.css': ['projects.css', 'text/css; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
 assets['/workspace.js'] = ['workspace.js', 'text/javascript; charset=utf-8'];
 assets['/workspace.css'] = ['workspace.css', 'text/css; charset=utf-8'];
 assets['/daily-problem.js'] = ['daily-problem.js', 'text/javascript; charset=utf-8'];
 assets['/daily-problem.css'] = ['daily-problem.css', 'text/css; charset=utf-8'];
+assets['/today.js'] = ['today.js', 'text/javascript; charset=utf-8'];
+assets['/today.css'] = ['today.css', 'text/css; charset=utf-8'];
 
 function json(res, status, value) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -50,7 +54,13 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.1.1', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.1.2', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/today') {
+      const snapshot = store.getToday();
+      return json(res, 200, { ...snapshot, result: dailyResults.view().entries.find(item => item.date === snapshot.date) ?? null });
+    }
+    if (req.method === 'GET' && url.pathname === '/api/daily-results') return json(res, 200, dailyResults.view());
+    if (req.method === 'POST' && url.pathname === '/api/daily-results') return json(res, 200, dailyResults.save(await body(req)));
     if (req.method === 'GET' && url.pathname === '/api/daily-problems') return json(res, 200, dailyProblems.view());
     if (req.method === 'POST' && url.pathname === '/api/daily-problems') return json(res, 200, dailyProblems.save(await body(req)));
     if (req.method === 'GET' && url.pathname === '/api/workspace') return json(res, 200, workspace.view());
