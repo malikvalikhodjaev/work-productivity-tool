@@ -173,7 +173,11 @@ $('entry-button').addEventListener('click', openEntry);
 $('journal-add').addEventListener('click', openEntry);
 window.addEventListener('rhythm:add-today-entry', async event => {
   if (!state) await load();
-  if (state) openEntry(event.detail.metricId, event.detail.date);
+  if (state) {
+    openEntry(event.detail.metricId, event.detail.date);
+    if (event.detail.workRef) $('entry-work-ref').value = event.detail.workRef;
+    if (event.detail.title) $('entry-title').value = event.detail.title.slice(0, 300);
+  }
 });
 $('previous-week').addEventListener('click', () => load(shift(state.week, -7)));
 $('next-week').addEventListener('click', () => load(shift(state.week, 7)));

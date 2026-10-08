@@ -6,6 +6,7 @@ if (embedded) document.documentElement.classList.add('embedded');
 const notifyParent = type => { if (embedded) parent.postMessage({ type }, location.origin); };
 const fields = ['projectId','uniqueName','description','evidence','criteria','nextStep','reviewDate','typeName','adaptedAlpha','area','stateLabel','whyImportant','source','metaAdaptation','systemTime','attention','zoneId','parentId','state','filledDate'];
 let portfolio; let reference = []; let selectedId = null; let selectedRevision = 0; let dirty = false; let saving = false; let pendingBackup = null;
+let focusResult = null;
 const dateLabel = value => value ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '';
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tashkent', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 async function request(url, input) {
@@ -55,7 +56,18 @@ function setValues(input) {
   }
   referenceOptions();
 }
-function updateDirty() { $('save-state').textContent = dirty ? 'Есть несохранённые изменения' : 'Без изменений'; $('save-state').classList.toggle('dirty', dirty); }
+function renderFocus() {
+  $('alpha-make-focus').disabled = !selectedId || dirty || saving;
+  const selected = selectedId && focusResult?.workRef === `alpha:${selectedId}`;
+  const label = { planned: 'Выбрано', in_progress: 'В работе', blocked: 'Есть препятствие', ready: 'Готово' };
+  $('alpha-focus-state').textContent = selected ? `Главное сегодня · ${label[focusResult.status]} · ${focusResult.progress === null ? 'No Data' : `${focusResult.progress}%`}` : dirty || !selectedId ? 'Сначала сохрани запись' : 'Можно выбрать эту работу главной на день';
+}
+async function loadFocus() {
+  try { const data = await request('/api/daily-results'); focusResult = data.entries.find(item => item.date === data.today) ?? null; }
+  catch { focusResult = null; }
+  renderFocus();
+}
+function updateDirty() { $('save-state').textContent = dirty ? 'Есть несохранённые изменения' : 'Без изменений'; $('save-state').classList.toggle('dirty', dirty); renderFocus(); }
 function keepDraft() {
   dirty = true; updateDirty();
   try { localStorage.setItem(draftKey(), JSON.stringify({ input: values(), revision: selectedRevision, at: new Date().toISOString() })); }
@@ -88,11 +100,11 @@ function openEditor(alphaId, ask = true) {
   $('saved-at').textContent = alpha ? `Последнее изменение: ${dateLabel(alpha.updatedAt)}` : 'Достаточно проекта и имени объекта';
   $('history-panel').open = false; $('draft-banner').hidden = true;
   try { $('draft-banner').hidden = !localStorage.getItem(draftKey()); } catch {}
-  updateDirty(); renderList(); void historyFor(selectedId);
+  updateDirty(); renderList(); void historyFor(selectedId); void loadFocus();
 }
 async function save(event) {
   event?.preventDefault(); if (saving || $('editor-form').hidden || !$('editor-form').reportValidity()) return;
-  saving = true; $('save').disabled = true; $('save-state').textContent = 'Сохраняю в локальный файл…';
+  saving = true; renderFocus(); $('save').disabled = true; $('save-state').textContent = 'Сохраняю в локальный файл…';
   for (const id of [...fields,'new','export','import']) $(id).disabled = true;
   const key = draftKey(); const priorId = selectedId; let savedId;
   try {
@@ -104,7 +116,7 @@ async function save(event) {
     try { localStorage.removeItem(key); } catch {}
     renderProjects(); notice('Запись сохранена в локальном файле.');
   } catch(error) { notice(error.message, true); updateDirty(); }
-  finally { saving = false; for (const id of [...fields,'export','import']) $(id).disabled = false; $('projectId').disabled = Boolean(selectedId); $('new').disabled = !portfolio.projects.length; $('save').disabled = false; if (savedId) openEditor(savedId, false); }
+  finally { saving = false; renderFocus(); for (const id of [...fields,'export','import']) $(id).disabled = false; $('projectId').disabled = Boolean(selectedId); $('new').disabled = !portfolio.projects.length; $('save').disabled = false; if (savedId) openEditor(savedId, false); }
   if (savedId) notifyParent('rhythm:alpha-saved');
 }
 async function selectProject(projectId) {
@@ -137,14 +149,24 @@ async function load() {
     const imported = await request('/api/imported-data'); reference = imported.reference.rows ?? [];
     $('alpha-names').innerHTML = [...new Set(reference.filter(row => row.alpha).map(row => row.alpha))].map(alpha => `<option value="${escape(alpha)}"></option>`).join('');
   } catch { notice('Локальный справочник сейчас недоступен. Свои записи можно сохранять.', true); }
-  const project = params.get('project');
-  if (project && portfolio.projects.some(p=>p.id===project)) { $('project-filter').value = project; openEditor(portfolio.alphas.find(a=>a.projectId===project)?.id ?? null, false); }
+  const project = params.get('project'), requestedAlpha = portfolio.alphas.find(item => item.id === params.get('alpha') && (!project || item.projectId === project));
+  if (requestedAlpha) { $('project-filter').value = requestedAlpha.projectId; openEditor(requestedAlpha.id, false); }
+  else if (project && portfolio.projects.some(p=>p.id===project)) { $('project-filter').value = project; openEditor(portfolio.alphas.find(a=>a.projectId===project)?.id ?? null, false); }
   else openEditor(portfolio.alphas[0]?.id ?? null, false);
   notifyParent('rhythm:alpha-ready');
 }
 $('objects').addEventListener('click', event => { const button = event.target.closest('[data-id]'); if (button) openEditor(button.dataset.id); });
 for (const id of ['project-filter','search','due-only']) $(id).addEventListener(id === 'search' ? 'input' : 'change', renderList);
 $('new').addEventListener('click', () => { openEditor(null); if (!saving && !selectedId) $('uniqueName').focus(); });
+$('alpha-make-focus').addEventListener('click', () => {
+  if (dirty || saving || !selectedId) return;
+  const alpha = portfolio.alphas.find(item => item.id === selectedId);
+  const work = { workRef: `alpha:${alpha.id}`, text: alpha.nextStep || `Продвинуть ${alpha.uniqueName || alpha.typeName}`, whyImportant: alpha.whyImportant, nextStep: alpha.nextStep };
+  if (embedded) parent.postMessage({ type: 'rhythm:focus-object', work }, location.origin);
+  else location.href = `/?focusAlpha=${encodeURIComponent(alpha.id)}#work`;
+});
+window.addEventListener('message', event => { if (embedded && event.origin === location.origin && event.source === parent && event.data?.type === 'rhythm:work-updated') void loadFocus(); });
+window.addEventListener('focus', () => void loadFocus());
 $('projectId').addEventListener('change', () => { selectZone($('projectId').value); $('object-meta').textContent = portfolio.projects.find(project => project.id === $('projectId').value)?.name ?? ''; });
 $('typeName').addEventListener('input', referenceOptions);
 $('editor-form').addEventListener('input', keepDraft); $('editor-form').addEventListener('change', keepDraft); $('editor-form').addEventListener('submit', save);

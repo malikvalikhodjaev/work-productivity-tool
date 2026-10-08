@@ -6,6 +6,11 @@ let saving = false;
 let dirty = false;
 let requestId = 0;
 let currentDay = null;
+window.rhythmDailyProblem = { isDirty: () => dirty, isSaving: () => saving };
+window.addEventListener('rhythm:work-date-selected', event => {
+  if ((dirty || saving) && !event.detail.discard) return;
+  $('daily-problem-date').value = event.detail.date; selectDate();
+});
 
 function setStatus(text, error = false) {
   $('daily-problem-status').textContent = text;
@@ -29,11 +34,10 @@ async function load() {
     if (!response.ok) throw new Error(result.error ?? 'Не удалось прочитать проблему дня.');
     if (id !== requestId) return;
     entries = result.entries;
-    const followedToday = !$('daily-problem-date').value || $('daily-problem-date').value === currentDay;
     currentDay = result.today;
     $('daily-problem-date').max = result.today;
     if (!dirty) {
-      if (followedToday) $('daily-problem-date').value = result.today;
+      $('daily-problem-date').value = $('work-date').value || result.today;
       selectDate();
     }
   } catch (error) {

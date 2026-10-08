@@ -206,6 +206,7 @@ $('workspace-form').addEventListener('submit',async event=>{
 });
 window.addEventListener('rhythm:overview-loaded',event=>{activity=event.detail; period=activity.period; renderTime(); void loadFinance();});
 window.addEventListener('rhythm:portfolio-rendered',renderImpacts);
+window.addEventListener('rhythm:work-link-changed',renderImpacts);
 window.addEventListener('rhythm:portfolio-saved',()=>void load());
 $('data-refresh').addEventListener('click',()=>void load());
 void load();

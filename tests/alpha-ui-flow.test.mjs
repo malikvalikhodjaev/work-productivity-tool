@@ -30,6 +30,7 @@ test('Скрипт страницы загружает старый объект
     try {
       if(url==='/api/portfolio') payload=options?.method==='POST'?store.updatePortfolio(...((body)=>[body.action,body.input])(JSON.parse(options.body))):store.getPortfolio();
       else if(url==='/api/imported-data') payload={reference:{rows:[{alpha:'Клиентура',state:'Пользовательское состояние'}]}};
+      else if(url==='/api/daily-results') payload={today:'2026-10-09',entries:[]};
       else if(url.startsWith('/api/alphas/history')) payload={entries:store.alphaHistory(new URL(url,'http://localhost').searchParams.get('id'))};
       else throw new Error(`Unexpected route: ${url}`);
     }catch(error){ok=false;payload={error:error.message}}

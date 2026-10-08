@@ -43,40 +43,44 @@ function notice(message) {
 
 function setView(view) {
   if (view === 'financial') { view = 'week'; history.replaceState(null, '', '#week'); $('financial-panel').open = true; }
-  if (!['week', 'projects', 'data'].includes(view)) view = 'week';
+  if (!['week', 'projects', 'work', 'data'].includes(view)) view = 'week';
   const changed = currentView !== view;
   currentView = view;
   const wasData = !$('data-panel').hidden;
   const projects = view === 'projects';
   $('week-panel').hidden = view !== 'week';
   $('projects-panel').hidden = !projects;
+  $('work-panel').hidden = view !== 'work';
   $('data-panel').hidden = view !== 'data';
   $('period-toolbar').hidden = view !== 'week';
   $('week-actions').hidden = view !== 'week';
   $('project-actions').hidden = !projects;
-  const title = view === 'week' ? 'Показатели' : projects ? 'Проекты' : 'Данные';
+  const title = view === 'week' ? 'Показатели' : projects ? 'Проекты' : view === 'work' ? 'Работа' : 'Данные';
   $('page-title').innerHTML = `${title}<span class="title-dot">.</span>`;
-  for (const [id, isSelected] of [['week-tab', view === 'week'], ['projects-tab', projects], ['data-tab', view === 'data']]) {
+  for (const [id, isSelected] of [['week-tab', view === 'week'], ['projects-tab', projects], ['work-tab', view === 'work'], ['data-tab', view === 'data']]) {
     $(id).setAttribute('aria-selected', String(isSelected));
     $(id).tabIndex = isSelected ? 0 : -1;
   }
   document.title = `Ритм — ${title.toLowerCase()}`;
   if (view === 'data' && !wasData) void loadData();
   if (projects) syncModeler();
+  if (changed && view === 'work') window.dispatchEvent(new Event('rhythm:work-opened'));
   if (changed) window.scrollTo(0, 0);
 }
 
 function chooseView(view) { window.location.hash = view; setView(view); }
 $('week-tab').addEventListener('click', () => chooseView('week'));
 $('projects-tab').addEventListener('click', () => chooseView('projects'));
+$('work-tab').addEventListener('click', () => chooseView('work'));
+window.addEventListener('rhythm:show-work', () => chooseView('work'));
 $('data-tab').addEventListener('click', () => chooseView('data'));
 window.addEventListener('rhythm:show-assessments', () => { activeDataTable = 'assessments'; chooseView('data'); });
 window.addEventListener('rhythm:show-daily-problems', () => { activeDataTable = 'dailyProblems'; chooseView('data'); renderData(); });
 window.addEventListener('rhythm:show-daily-results', () => { activeDataTable = 'dailyResults'; chooseView('data'); renderData(); });
-for (const id of ['week-tab', 'projects-tab', 'data-tab']) $(id).addEventListener('keydown', event => {
+for (const id of ['week-tab', 'projects-tab', 'work-tab', 'data-tab']) $(id).addEventListener('keydown', event => {
   if (['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
     event.preventDefault();
-    const views = ['week', 'projects', 'data'];
+    const views = ['week', 'projects', 'work', 'data'];
     const current = views.indexOf(id.replace('-tab', ''));
     const view = event.key === 'Home' ? 'week' : event.key === 'End' ? 'data' : views[(current + (['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : views.length - 1)) % views.length];
     chooseView(view); $(`${view}-tab`).focus();
@@ -179,10 +183,10 @@ function makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyR
       })
     },
     dailyResults: {
-      title: 'Основные результаты дня',
+      title: 'Главная работа и результаты дня',
       note: `${countLabel(dailyResults.entries.length, 'запись', 'записи', 'записей')} · вся история по датам · data/daily-results.csv`,
-      columns: ['Дата', 'Результат', 'Состояние', 'Подтверждение', 'Обновлено', 'Правок'],
-      rows: dailyResults.entries.map(item => [item.date, item.text, item.status === 'ready' ? 'Готов' : 'В работе', item.evidence, new Date(item.updatedAt).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' }), item.revisions.length])
+      columns: ['Дата', 'Главное', 'Состояние', 'Прогресс, %', 'Связь', 'Почему важно', 'Следующий ход', 'Окно фокуса · план', 'Подтверждение', 'Обновлено', 'Правок'],
+      rows: dailyResults.entries.map(item => [item.date, item.text, ({planned:'Выбрано',in_progress:'В работе',blocked:'Есть препятствие',ready:'Готово'})[item.status], item.progress, item.workRef, item.whyImportant, item.nextStep, item.focusWindow, item.evidence, new Date(item.updatedAt).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' }), item.revisions.length])
     },
     dailyProblems: {
       title: 'Главная проблема дня',
@@ -449,7 +453,7 @@ window.addEventListener('rhythm:portfolio-saved', () => {
   if (refresh) void refresh().catch(error => notice(error.message));
 });
 window.addEventListener('rhythm:daily-problem-saved', () => { if (!$('data-panel').hidden) void loadData(); });
-window.addEventListener('rhythm:daily-result-saved', () => { if (!$('data-panel').hidden) void loadData(); });
+window.addEventListener('rhythm:daily-result-saved', () => { if (!$('data-panel').hidden) void loadData(); $('alpha-modeler-frame').contentWindow?.postMessage({ type: 'rhythm:work-updated' }, location.origin); });
 $('portfolio-retry').addEventListener('click', loadPortfolio);
 $('project-list').addEventListener('click', async event => {
   const button = event.target.closest('[data-project]');
@@ -461,6 +465,7 @@ $('project-list').addEventListener('click', async event => {
 window.addEventListener('message', event => {
   if (event.origin !== location.origin || event.source !== $('alpha-modeler-frame').contentWindow) return;
   if (event.data?.type === 'rhythm:alpha-height' && Number.isFinite(event.data.height)) $('alpha-modeler-frame').style.height = Math.max(520, Math.min(12000, event.data.height)) + 'px';
+  if (event.data?.type === 'rhythm:focus-object') window.dispatchEvent(new CustomEvent('rhythm:pick-work', { detail: event.data.work }));
   if (event.data?.type === 'rhythm:alpha-ready') void syncModeler();
   if (event.data?.type === 'rhythm:alpha-saved') { void loadPortfolio(); window.dispatchEvent(new Event('rhythm:portfolio-saved')); }
 });
