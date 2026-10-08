@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Моделер альф — Ритм</title>
+  <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/alphas.css">
+  <script type="module" src="/alphas.js"></script>
+</head>
+<body>
+  <header><a href="/" class="brand">р<span>ритм<small>Личный дашборд</small></span></a><a href="/#projects" class="back">← Проекты</a><span class="local">⌂ На моём компьютере</span></header>
+  <main>
+    <div class="page-heading"><div><p class="eyebrow">ОБЪЕКТ → ЗАПИСЬ → СЛЕДУЮЩИЙ ХОД</p><h1>Моделер альф<span>.</span></h1><p class="intro">Выбери один объект проекта. Запиши, что известно и к чему вернуться.</p></div><div class="tools"><button id="export">Экспорт JSON</button><button id="import">Импорт</button><button id="new" class="primary" disabled>＋ Объект</button></div></div>
+    <p id="notice" role="status" aria-live="polite" hidden></p>
+    <div class="modeler">
+      <aside aria-label="Объекты проектов"><label>Проект<select id="project-filter"><option value="">Все проекты</option></select></label><label>Поиск<input id="search" type="search" placeholder="Объект, альфа или запись"></label><label class="check"><input id="due-only" type="checkbox"> Пора вернуться</label><p id="count" class="muted"></p><div id="objects" class="objects"><p class="muted">Загрузка…</p></div><p class="aside-foot">Проекты и слоты — те же, что в разделе «Проекты». <a href="/">Открыть дашборд</a></p></aside>
+      <section class="editor" aria-label="Запись об объекте">
+        <div id="blank" hidden><h2>Начни с конкретного объекта</h2><p>Создай проект в разделе «Проекты» или добавь объект к существующему проекту.</p></div>
+        <form id="editor-form" hidden>
+          <div class="editor-heading"><div><p id="object-meta" class="eyebrow"></p><h2 id="editor-title">Новый объект</h2></div><span id="save-state" class="save-state">Без изменений</span></div>
+          <div id="draft-banner" class="draft-banner" hidden><span>Есть несохранённый черновик этой записи.</span><button id="restore-draft" type="button">Восстановить</button><button id="discard-draft" type="button">Удалить черновик</button></div>
+          <div class="pair"><label>Проект<select id="projectId" required></select></label><label>Конкретный объект<input id="uniqueName" maxlength="180" required placeholder="Имя объекта именно в этом проекте"></label></div>
+          <label class="note-label">Моя запись<textarea id="description" class="main-note" rows="5" maxlength="4000" placeholder="Мысли, наблюдения, вопросы. Можно начать только с этой заметки."></textarea></label>
+          <div class="pair"><label>Что известно / фактическое состояние<textarea id="evidence" rows="3" maxlength="4000" placeholder="Факт, свидетельство, ссылка — или «пока неизвестно»"></textarea></label><label>К чему хочу прийти / критерий<textarea id="criteria" rows="3" maxlength="4000" placeholder="Как узнаю, что нужное состояние достигнуто?"></textarea></label></div>
+          <div class="next-row"><label>Следующий ход<textarea id="nextStep" rows="2" maxlength="1000" placeholder="Одно действие или вопрос для проверки"></textarea></label><label>Когда вернуться<input id="reviewDate" type="date"></label></div>
+          <details class="details"><summary>Альфа, источник и детали объекта <span>необязательно</span></summary><div class="details-body">
+            <div class="pair"><label>Альфа / типовое имя<input id="typeName" list="alpha-names" maxlength="120" placeholder="Выбери из своего справочника или впиши"><datalist id="alpha-names"></datalist></label><label>Адаптированная альфа<input id="adaptedAlpha" maxlength="180"></label></div>
+            <div class="pair"><label>Область интересов<input id="area" maxlength="180"></label><label>Состояние по моему шаблону<input id="stateLabel" list="alpha-states" maxlength="160"><datalist id="alpha-states"></datalist></label></div>
+            <p id="reference-hint" class="muted"></p>
+            <label>Почему важен / чей интерес<textarea id="whyImportant" rows="2" maxlength="4000"></textarea></label>
+            <label>Источник / MetaU<input id="source" maxlength="2000" placeholder="Руководство, ссылка, исходная идея"></label>
+            <label>Адаптация к проекту MetaS → L0<textarea id="metaAdaptation" rows="2" maxlength="4000"></textarea></label>
+            <div class="pair"><label>Время системы<select id="systemTime"><option value="">Не задано</option><option>Эксплуатация</option><option>Создание/изменение</option><option>Оба</option><option>Не определено</option></select></label><label>Статус внимания<select id="attention"><option value="">Не задано</option><option>Активный</option><option>Проверить позже</option><option>Закрыт</option></select></label></div>
+            <div class="pair"><label>Зона в разделе «Проекты»<select id="zoneId" required></select></label><label>Родительский объект<select id="parentId"><option value="">Самостоятельный объект</option></select></label></div>
+          </div></details>
+          <details class="details"><summary>Учёт заполнения в нормативе <span>по желанию</span></summary><div class="details-body"><p class="muted">Заметка сохраняется без отметки заполнения. Для учёта в нормативе нужны имя, описание, состояние и дата; факт и критерий подтверждают готовность отдельно.</p><div class="pair"><label>Рабочая отметка<select id="state"></select></label><label>Дата заполнения<input id="filledDate" type="date"></label></div><p class="muted">Пустая дата — объект не добавляется в количество заполненных альф. Не учитывай его второй раз вручную.</p></div></details>
+          <div class="save-bar"><span id="saved-at" class="muted"></span><button type="submit" id="save" class="primary">Сохранить запись <span class="shortcut">Ctrl + S</span></button></div>
+          <details id="history-panel" class="details history"><summary>История содержательных сохранений <span id="history-count"></span></summary><div id="history" class="details-body"></div></details>
+        </form>
+      </section>
+    </div>
+    <footer>Данные хранятся в локальном data/dashboard.json. Экспорт JSON — переносимая копия объектов и истории. Несохранённый черновик остаётся в этом браузере.</footer>
+  </main>
+  <dialog id="import-dialog"><h2>Импорт объектов</h2><p>Выбери экспорт JSON этого моделера. Сначала будет показан результат проверки.</p><input id="import-file" type="file" accept="application/json,.json"><div id="import-preview" role="status"></div><p class="muted">Добавляются только отсутствующие объекты. Отличающиеся записи с тем же ID остаются локальными; проекты, нормы и часы не заменяются.</p><div class="dialog-actions"><button id="import-cancel">Закрыть</button><button id="import-commit" class="primary" disabled>Добавить объекты</button></div></dialog>
+</body>
+</html>

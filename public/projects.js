@@ -4,10 +4,11 @@ let portfolio = null;
 let selectedProject = null;
 let editedProject = null;
 let editedAlpha = null;
+let editedAlphaRevision = 0;
 let noticeTimer;
 let dataWeek = null;
 let dataTables = null;
-let activeDataTable = 'entries';
+let activeDataTable = 'timeEntries';
 let dataRequestId = 0;
 let currentView = null;
 const projectStatus = { active: 'Активен', paused: 'На паузе', closed: 'Закрыт' };
@@ -41,44 +42,43 @@ function notice(message) {
 }
 
 function setView(view) {
-  if (!['week', 'projects', 'financial', 'data'].includes(view)) view = 'week';
+  if (view === 'financial') { view = 'week'; history.replaceState(null, '', '#week'); $('financial-panel').open = true; }
+  if (!['week', 'projects', 'data'].includes(view)) view = 'week';
   const changed = currentView !== view;
   currentView = view;
   const wasData = !$('data-panel').hidden;
   const projects = view === 'projects';
-  const financial = view === 'financial';
   $('week-panel').hidden = view !== 'week';
   $('projects-panel').hidden = !projects;
-  $('financial-panel').hidden = !financial;
   $('data-panel').hidden = view !== 'data';
-  $('period-toolbar').hidden = view !== 'week' && !financial;
+  $('period-toolbar').hidden = view !== 'week';
   $('week-actions').hidden = view !== 'week';
   $('project-actions').hidden = !projects;
-  const title = view === 'week' ? 'Показатели' : projects ? 'Workflow' : financial ? 'Financial flow' : 'Данные';
+  const title = view === 'week' ? 'Показатели' : projects ? 'Проекты' : 'Данные';
   $('page-title').innerHTML = `${title}<span class="title-dot">.</span>`;
-  for (const [id, isSelected] of [['week-tab', view === 'week'], ['projects-tab', projects], ['financial-tab', financial], ['data-tab', view === 'data']]) {
+  for (const [id, isSelected] of [['week-tab', view === 'week'], ['projects-tab', projects], ['data-tab', view === 'data']]) {
     $(id).setAttribute('aria-selected', String(isSelected));
     $(id).tabIndex = isSelected ? 0 : -1;
   }
   document.title = `Ритм — ${title.toLowerCase()}`;
   if (view === 'data' && !wasData) void loadData();
+  if (projects) syncModeler();
   if (changed) window.scrollTo(0, 0);
 }
 
 function chooseView(view) { window.location.hash = view; setView(view); }
 $('week-tab').addEventListener('click', () => chooseView('week'));
 $('projects-tab').addEventListener('click', () => chooseView('projects'));
-$('financial-tab').addEventListener('click', () => chooseView('financial'));
 $('data-tab').addEventListener('click', () => chooseView('data'));
 window.addEventListener('rhythm:show-assessments', () => { activeDataTable = 'assessments'; chooseView('data'); });
 window.addEventListener('rhythm:show-daily-problems', () => { activeDataTable = 'dailyProblems'; chooseView('data'); renderData(); });
 window.addEventListener('rhythm:show-daily-results', () => { activeDataTable = 'dailyResults'; chooseView('data'); renderData(); });
-for (const id of ['week-tab', 'projects-tab', 'financial-tab', 'data-tab']) $(id).addEventListener('keydown', event => {
-  if (['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) {
+for (const id of ['week-tab', 'projects-tab', 'data-tab']) $(id).addEventListener('keydown', event => {
+  if (['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
     event.preventDefault();
-    const views = ['week', 'projects', 'financial', 'data'];
+    const views = ['week', 'projects', 'data'];
     const current = views.indexOf(id.replace('-tab', ''));
-    const view = event.key === 'Home' ? 'week' : event.key === 'End' ? 'data' : views[(current + (event.key === 'ArrowRight' ? 1 : views.length - 1)) % views.length];
+    const view = event.key === 'Home' ? 'week' : event.key === 'End' ? 'data' : views[(current + (['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : views.length - 1)) % views.length];
     chooseView(view); $(`${view}-tab`).focus();
   }
 });
@@ -103,7 +103,27 @@ function alphaCard(alpha, depth = 0) {
   return `${depth ? '<div class="alpha-child">' : ''}${body}${children.map(child => alphaCard(child, depth + 1)).join('')}${depth ? '</div>' : ''}`;
 }
 
+async function syncModeler() {
+  const project = selected();
+  $('project-modeler').hidden = !project;
+  if (!project) return;
+  const frame = $('alpha-modeler-frame');
+  $('modeler-project-label').textContent = project.name;
+  $('modeler-fullscreen').href = '/alphas?project=' + encodeURIComponent(project.id);
+  if (currentView !== 'projects') return;
+  if (!frame.getAttribute('src')) frame.src = '/alphas?embedded=1&project=' + encodeURIComponent(project.id);
+  else {
+    try {
+      const bridge = frame.contentWindow.rhythmAlphaModeler;
+      if (await bridge?.selectProject(project.id) === false && bridge.currentProjectId && selectedProject === project.id) {
+        selectedProject = bridge.currentProjectId; render();
+      }
+    } catch (error) { notice(error.message); }
+  }
+}
+
 function render() {
+  syncModeler();
   $('new-project').disabled = false;
   $('active-projects').textContent = portfolio.summary.activeProjects;
   $('before-operation-tasks').textContent = portfolio.summary.beforeOperationTasks;
@@ -129,11 +149,26 @@ function render() {
 function tableValue(value) { return value === null || value === undefined || value === '' ? 'No Data' : String(value); }
 function countLabel(count, one, few, many) { return `${count} ${count % 100 >= 11 && count % 100 <= 14 ? many : count % 10 === 1 ? one : count % 10 >= 2 && count % 10 <= 4 ? few : many}`; }
 
-function makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyResults) {
+function makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyResults, alphaBackup, storedEntries) {
   const projects = new Map(snapshot.projects.map(project => [project.id, project]));
   const alphas = new Map(snapshot.alphas.map(alpha => [alpha.id, alpha]));
   const metrics = new Map(week.metrics.map(metric => [metric.id, metric]));
   return {
+    timeEntries: {
+      title: 'Все записи времени и количества', note: `${storedEntries.entries.length} строк · вся история · изменение хранилища: ${tableValue(storedEntries.updatedAt)}`,
+      columns: ['ID', 'Дата', 'Код норматива', 'Назначение', 'Количество', 'Что сделано', 'Характер работы', 'Связь', 'Источник', 'ID источника', 'Создано', 'История разбора'],
+      rows: storedEntries.entries.map(e => [e.id, e.date, e.metricId, e.allocation, e.amount, e.title, e.workType, e.workRef, e.source, e.externalId, e.createdAt, e.classificationHistory?.length ? JSON.stringify(e.classificationHistory) : null])
+    },
+    norms: {
+      title: 'Недельные нормативы', note: week.week + ' — ' + week.end + ' · источник: data/dashboard.json → plans',
+      columns: ['Код', 'Норматив', 'Цель', 'Единица', 'Факт', 'Записей', 'Прогресс, %'],
+      rows: week.metrics.map(m => [m.id, m.title, m.target, m.unit === 'hours' ? 'ч' : 'шт.', m.recordCount ? m.actual : null, m.recordCount, m.recordCount && m.target ? m.percent : null])
+    },
+    alphaHistory: {
+      title: 'История альф', note: 'Содержательные сохранения · источник: data/dashboard.json → portfolio.history',
+      columns: ['ID', 'ID альфы', 'Дата', 'Действие', 'Объект', 'Запись', 'Факт', 'Критерий', 'Следующий ход'],
+      rows: alphaBackup.history.map(h => [h.id, h.alphaId, h.at, h.action, h.snapshot.uniqueName, h.snapshot.description, h.snapshot.evidence, h.snapshot.criteria, h.snapshot.nextStep])
+    },
     entries: {
       title: 'Записи недели',
       note: `${week.week} — ${week.end} · ${countLabel(week.entries.length, 'запись', 'записи', 'записей')}`,
@@ -170,11 +205,11 @@ function makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyR
     alphas: {
       title: 'Альфы',
       note: `${countLabel(snapshot.alphas.length, 'слот', 'слота', 'слотов')} · включая подальфы`,
-      columns: ['Проект', 'Зона', 'Типовое имя', 'Уникальное имя', 'Состояние', 'Дата заполнения', 'Следующий шаг'],
+      columns: ['ID', 'Проект', 'Зона', 'Родитель', 'Типовое имя', 'Уникальное имя', 'Запись', 'Факт', 'Критерий', 'Состояние', 'Состояние шаблона', 'Дата заполнения', 'Следующий шаг', 'Вернуться', 'Адаптированная альфа', 'Область', 'Почему важен', 'Источник', 'Адаптация', 'Время системы', 'Статус внимания', 'Версия', 'Изменено'],
       rows: snapshot.alphas.map(alpha => {
         const project = projects.get(alpha.projectId);
         const zone = project?.zones.find(item => item.id === alpha.zoneId);
-        return [project?.name, zone?.title, alpha.typeName, alpha.uniqueName, snapshot.states.find(item => item.id === alpha.state)?.title, alpha.filledDate, alpha.nextStep];
+        return [alpha.id, project?.name, zone?.title, alpha.parentId, alpha.typeName, alpha.uniqueName, alpha.description, alpha.evidence, alpha.criteria, snapshot.states.find(item => item.id === alpha.state)?.title, alpha.stateLabel, alpha.filledDate, alpha.nextStep, alpha.reviewDate, alpha.adaptedAlpha, alpha.area, alpha.whyImportant, alpha.source, alpha.metaAdaptation, alpha.systemTime, alpha.attention, alpha.revision, alpha.updatedAt];
       })
     },
     tasks: {
@@ -240,8 +275,9 @@ function renderData() {
   for (const [key, id] of [['entries', 'data-entries-count'], ['projects', 'data-projects-count'], ['alphas', 'data-alphas-count'], ['tasks', 'data-tasks-count']]) $(id).textContent = dataTables[key].rows.length;
   const table = dataTables[activeDataTable];
   if (!table) return;
+  const localSources = { timeEntries: 'data/dashboard.json → entries', entries: 'data/dashboard.json → entries', projects: 'data/dashboard.json → portfolio.projects', alphas: 'data/dashboard.json → portfolio.alphas', tasks: 'data/dashboard.json → portfolio.tasks', dailyResults: 'data/daily-results.json', dailyProblems: 'data/daily-problems.json', assessments: 'data/indicators.json' };
   $('data-table-title').textContent = table.title;
-  $('data-table-note').textContent = table.note;
+  $('data-table-note').textContent = table.note + (localSources[activeDataTable] ? ' · источник: ' + localSources[activeDataTable] : '');
   $('data-table-caption').textContent = table.title;
   $('data-source').hidden = !table.sourceUrl;
   $('data-source').innerHTML = table.sourceUrl ? `Источник: <a href="${escape(table.sourceUrl)}" target="_blank" rel="noopener noreferrer">открыть в Coda ↗</a>` : '';
@@ -257,18 +293,20 @@ async function loadData() {
   $('data-table-note').textContent = 'Обновляю таблицы…';
   $('data-error').hidden = true;
   try {
-    const [weekResponse, portfolioResponse, importedResponse, ratingsResponse, problemsResponse, resultsResponse] = await Promise.all([
+    const [weekResponse, portfolioResponse, importedResponse, ratingsResponse, problemsResponse, resultsResponse, alphaResponse, entriesResponse] = await Promise.all([
       fetch(`/api/dashboard${dataWeek ? `?week=${encodeURIComponent(dataWeek)}` : ''}`),
       fetch('/api/portfolio'),
       fetch('/api/imported-data'),
       fetch('/api/indicator-ratings'),
       fetch('/api/daily-problems'),
-      fetch('/api/daily-results')
+      fetch('/api/daily-results'),
+      fetch('/api/alphas/export'),
+      fetch('/api/time-entries')
     ]);
-    if (!weekResponse.ok || !portfolioResponse.ok || !importedResponse.ok || !ratingsResponse.ok || !problemsResponse.ok || !resultsResponse.ok) throw new Error('Не удалось прочитать локальные данные.');
-    const [week, snapshot, imported, ratings, dailyProblems, dailyResults] = await Promise.all([weekResponse.json(), portfolioResponse.json(), importedResponse.json(), ratingsResponse.json(), problemsResponse.json(), resultsResponse.json()]);
+    if (!weekResponse.ok || !portfolioResponse.ok || !importedResponse.ok || !ratingsResponse.ok || !problemsResponse.ok || !resultsResponse.ok || !alphaResponse.ok || !entriesResponse.ok) throw new Error('Не удалось прочитать локальные данные.');
+    const [week, snapshot, imported, ratings, dailyProblems, dailyResults, alphaBackup, storedEntries] = await Promise.all([weekResponse.json(), portfolioResponse.json(), importedResponse.json(), ratingsResponse.json(), problemsResponse.json(), resultsResponse.json(), alphaResponse.json(), entriesResponse.json()]);
     if (currentRequest !== dataRequestId) return;
-    dataTables = makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyResults);
+    dataTables = makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyResults, alphaBackup, storedEntries);
     for (const key of ['work', 'goals', 'issues']) $('import-' + key + '-count').textContent = imported.snapshot.available ? imported.snapshot[key].length : 'No Data';
     $('import-captured-at').textContent = tableValue(imported.snapshot.capturedAt);
     $('reference-summary-text').textContent = imported.reference.available
@@ -334,6 +372,7 @@ function openZone() {
 
 function openAlpha(id = null, parentId = null, zoneId = null) {
   editedAlpha = id;
+  editedAlphaRevision = portfolio.alphas.find(item => item.id === id)?.revision ?? 0;
   const project = selected();
   const alpha = portfolio.alphas.find(item => item.id === id);
   $('alpha-form').reset();
@@ -404,11 +443,28 @@ window.addEventListener('rhythm:week-loaded', event => {
   dataWeek = event.detail.week;
   if (!$('data-panel').hidden) void loadData();
 });
-window.addEventListener('rhythm:portfolio-saved', () => { if (!$('data-panel').hidden) void loadData(); });
+window.addEventListener('rhythm:portfolio-saved', () => {
+  if (!$('data-panel').hidden) void loadData();
+  const refresh = $('alpha-modeler-frame').contentWindow?.rhythmAlphaModeler?.refresh;
+  if (refresh) void refresh().catch(error => notice(error.message));
+});
 window.addEventListener('rhythm:daily-problem-saved', () => { if (!$('data-panel').hidden) void loadData(); });
 window.addEventListener('rhythm:daily-result-saved', () => { if (!$('data-panel').hidden) void loadData(); });
 $('portfolio-retry').addEventListener('click', loadPortfolio);
-$('project-list').addEventListener('click', event => { const button = event.target.closest('[data-project]'); if (button) { selectedProject = button.dataset.project; render(); } });
+$('project-list').addEventListener('click', async event => {
+  const button = event.target.closest('[data-project]');
+  if (!button) return;
+  const accepted = await $('alpha-modeler-frame').contentWindow?.rhythmAlphaModeler?.selectProject(button.dataset.project);
+  if (accepted === false) return;
+  selectedProject = button.dataset.project; render();
+});
+window.addEventListener('message', event => {
+  if (event.origin !== location.origin || event.source !== $('alpha-modeler-frame').contentWindow) return;
+  if (event.data?.type === 'rhythm:alpha-height' && Number.isFinite(event.data.height)) $('alpha-modeler-frame').style.height = Math.max(520, Math.min(12000, event.data.height)) + 'px';
+  if (event.data?.type === 'rhythm:alpha-ready') void syncModeler();
+  if (event.data?.type === 'rhythm:alpha-saved') { void loadPortfolio(); window.dispatchEvent(new Event('rhythm:portfolio-saved')); }
+});
+$('alpha-modeler-frame').addEventListener('load', syncModeler);
 $('alpha-parent').addEventListener('change', syncAlphaParent);
 $('alpha-filled').addEventListener('change', syncFilled);
 $('project-detail').addEventListener('click', async event => {
@@ -430,7 +486,7 @@ $('project-detail').addEventListener('click', async event => {
 
 $('project-form').addEventListener('submit', event => void submit(event, 'project-form-error', editedProject ? 'updateProject' : 'createProject', { id: editedProject, name: $('project-name').value, status: $('project-status').value, phase: $('project-phase').value, zoneIds: [...$('project-zone-options').querySelectorAll('input:checked')].map(input => input.value) }, 'project-dialog', 'Проект сохранён'));
 $('zone-form').addEventListener('submit', event => void submit(event, 'zone-form-error', 'addZone', { projectId: selectedProject, title: $('zone-title').value, hint: $('zone-hint').value }, 'zone-dialog', 'Зона добавлена. Пока в ней нет слота альфы'));
-$('alpha-form').addEventListener('submit', event => void submit(event, 'alpha-form-error', editedAlpha ? 'updateAlpha' : 'createAlpha', { id: editedAlpha, projectId: selectedProject, zoneId: $('alpha-zone').value, parentId: $('alpha-parent').value || null, typeName: $('alpha-type').value, uniqueName: $('alpha-name').value, description: $('alpha-description').value, state: $('alpha-state').value, stateLabel: $('alpha-state-label').value, criteria: $('alpha-criteria').value, evidence: $('alpha-evidence').value, nextStep: $('alpha-next-step').value, filledDate: $('alpha-filled').checked ? $('alpha-filled-date').value : null }, 'alpha-dialog', 'Альфа сохранена. Зоны и недельный норматив пересчитаны'));
+$('alpha-form').addEventListener('submit', event => void submit(event, 'alpha-form-error', editedAlpha ? 'updateAlpha' : 'createAlpha', { id: editedAlpha, expectedRevision: editedAlpha ? editedAlphaRevision : undefined, projectId: selectedProject, zoneId: $('alpha-zone').value, parentId: $('alpha-parent').value || null, typeName: $('alpha-type').value, uniqueName: $('alpha-name').value, description: $('alpha-description').value, state: $('alpha-state').value, stateLabel: $('alpha-state-label').value, criteria: $('alpha-criteria').value, evidence: $('alpha-evidence').value, nextStep: $('alpha-next-step').value, filledDate: $('alpha-filled').checked ? $('alpha-filled-date').value : null }, 'alpha-dialog', 'Альфа сохранена. Зоны и недельный норматив пересчитаны'));
 $('task-form').addEventListener('submit', event => void submit(event, 'task-form-error', 'createTask', { projectId: selectedProject, alphaId: $('task-alpha').value || null, title: $('task-title').value, beforeOperation: $('task-before-operation').checked }, 'task-dialog', 'Задача добавлена'));
 
 setView(window.location.hash.slice(1));

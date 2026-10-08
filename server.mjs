@@ -21,10 +21,14 @@ const dailyResults = createDailyResultStore(path.join(dataDir, 'daily-results.js
 const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/projects.js': ['projects.js', 'text/javascript; charset=utf-8'], '/overview.js': ['overview.js', 'text/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8'], '/projects.css': ['projects.css', 'text/css; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
 assets['/workspace.js'] = ['workspace.js', 'text/javascript; charset=utf-8'];
 assets['/workspace.css'] = ['workspace.css', 'text/css; charset=utf-8'];
+assets['/sections.css'] = ['sections.css', 'text/css; charset=utf-8'];
 assets['/daily-problem.js'] = ['daily-problem.js', 'text/javascript; charset=utf-8'];
 assets['/daily-problem.css'] = ['daily-problem.css', 'text/css; charset=utf-8'];
 assets['/today.js'] = ['today.js', 'text/javascript; charset=utf-8'];
 assets['/today.css'] = ['today.css', 'text/css; charset=utf-8'];
+assets['/alphas'] = ['alphas.html', 'text/html; charset=utf-8'];
+assets['/alphas.js'] = ['alphas.js', 'text/javascript; charset=utf-8'];
+assets['/alphas.css'] = ['alphas.css', 'text/css; charset=utf-8'];
 
 function json(res, status, value) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -37,7 +41,7 @@ async function body(req) {
   let bytes = 0;
   for await (const part of req) {
     bytes += part.length;
-    if (bytes > (req.url === '/api/finance/import' ? 4 * 1024 * 1024 : 65536)) throw new Error('Запрос слишком большой.');
+    if (bytes > (['/api/finance/import', '/api/alphas/import'].includes(req.url) ? 4 * 1024 * 1024 : 65536)) throw new Error('Запрос слишком большой.');
     parts.push(part);
   }
   const value = JSON.parse(Buffer.concat(parts).toString('utf8'));
@@ -54,7 +58,7 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.1.2', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.1.4', timezone: 'Asia/Tashkent' });
     if (req.method === 'GET' && url.pathname === '/api/today') {
       const snapshot = store.getToday();
       return json(res, 200, { ...snapshot, result: dailyResults.view().entries.find(item => item.date === snapshot.date) ?? null });
@@ -91,6 +95,10 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/indicator-ratings') return json(res, 200, indicators.getAll());
     if (req.method === 'POST' && url.pathname === '/api/indicator-ratings') return json(res, 200, indicators.rate(await body(req)));
     if (req.method === 'GET' && url.pathname === '/api/portfolio') return json(res, 200, store.getPortfolio());
+    if (req.method === 'GET' && url.pathname === '/api/time-entries') return json(res, 200, store.getStoredEntries());
+    if (req.method === 'GET' && url.pathname === '/api/alphas/export') return json(res, 200, store.alphaBackup());
+    if (req.method === 'GET' && url.pathname === '/api/alphas/history') return json(res, 200, { entries: store.alphaHistory(url.searchParams.get('id')) });
+    if (req.method === 'POST' && url.pathname === '/api/alphas/import') { const input = await body(req); return json(res, 200, store.importAlphas(input.backup, input.commit === true)); }
     if (req.method === 'GET' && url.pathname === '/api/imported-data') {
       const folder = path.join(dataDir, 'imports');
       const readOptional = (name, empty) => {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { createStore, monday, validDate } from '../lib/store.mjs';
+import { createStore, monday, validDate, today, shiftDate } from '../lib/store.mjs';
 
 function fixture() {
   const file = path.join(mkdtempSync(path.join(tmpdir(), 'rhythm-test-')), 'dashboard.json');
@@ -48,10 +48,12 @@ test('Нормативы сохраняются после перезапуск�
 
 test('Новая неделя наследует план; изменение старой не меняет уже созданную неделю', () => {
   const { store } = fixture();
-  store.updateTargets('2026-09-28', { business: 7 });
-  assert.equal(store.getWeek('2026-10-05').metrics.find(item => item.id === 'business').target, 7);
-  store.updateTargets('2026-09-28', { business: 2 });
-  assert.equal(store.getWeek('2026-10-05').metrics.find(item => item.id === 'business').target, 7);
+  const currentWeek = monday(today());
+  const nextWeek = shiftDate(currentWeek, 7);
+  store.updateTargets(currentWeek, { business: 7 });
+  assert.equal(store.getWeek(nextWeek).metrics.find(item => item.id === 'business').target, 7);
+  store.updateTargets(currentWeek, { business: 2 });
+  assert.equal(store.getWeek(nextWeek).metrics.find(item => item.id === 'business').target, 7);
 });
 
 test('Повторная загрузка одной задачи ботом не удваивает часы', () => {

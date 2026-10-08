@@ -81,7 +81,9 @@ function render() {
   $('alpha-hint').textContent = alpha.target === null ? 'Норматив — в настройках недели' : alpha.remaining === 0 ? 'Норматив выполнен' : `Осталось ${format(alpha.remaining)} шт.`;
   const guides = state.metrics.find(metric => metric.id === 'guides');
   const mentor = state.metrics.find(metric => metric.id === 'mentor');
-  $('goals-grid').innerHTML = guidesCard(guides, mentor) + state.metrics.filter(metric => !['guides', 'mentor'].includes(metric.id)).map(card).join('');
+  const chosen = state.metrics.filter(metric => metric.target !== null);
+  const guidePair = guides.target !== null && mentor.target !== null;
+  $('goals-grid').innerHTML = (guidePair ? guidesCard(guides, mentor) : '') + chosen.filter(metric => !guidePair || !['guides', 'mentor'].includes(metric.id)).map(card).join('') || '<div class="project-empty">No Data · выбери направления и задай нормативы в «Мои нормативы».</div>';
   const pending = state.metrics.filter(m => m.unit === 'hours' && m.target !== null && m.remaining > 0);
   $('weekly-next-step').textContent = pending.length ? 'До нормы по учтённым записям: ' + pending.map(m => `${m.title} — ${format(m.remaining)} ч`).join(' · ') : 'Заданные нормативы часов выполнены или пока не заданы.';
   $('entry-count').textContent = state.entries.length;
