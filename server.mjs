@@ -8,6 +8,7 @@ import { createDailyProblemStore } from './lib/daily-problems.mjs';
 import { createDailyResultStore } from './lib/daily-results.mjs';
 import { createWorkspaceStore } from './lib/workspace.mjs';
 import { parseFinanceCsv } from './lib/finance-csv.mjs';
+import { createReferenceStore } from './lib/references.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.DASHBOARD_PORT ?? 8787);
@@ -18,6 +19,7 @@ store = createStore(process.env.DASHBOARD_DATA_FILE ?? path.join(dataDir, 'dashb
 const indicators = createIndicatorStore(path.join(dataDir, 'indicators.json'));
 const dailyProblems = createDailyProblemStore(path.join(dataDir, 'daily-problems.json'));
 const dailyResults = createDailyResultStore(path.join(dataDir, 'daily-results.json'), { validateWorkRef: workspace.validateRef });
+const references = createReferenceStore(path.join(dataDir, 'references.json'));
 const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/projects.js': ['projects.js', 'text/javascript; charset=utf-8'], '/overview.js': ['overview.js', 'text/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8'], '/projects.css': ['projects.css', 'text/css; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
 assets['/workspace.js'] = ['workspace.js', 'text/javascript; charset=utf-8'];
 assets['/workspace.css'] = ['workspace.css', 'text/css; charset=utf-8'];
@@ -26,6 +28,8 @@ assets['/daily-problem.js'] = ['daily-problem.js', 'text/javascript; charset=utf
 assets['/daily-problem.css'] = ['daily-problem.css', 'text/css; charset=utf-8'];
 assets['/today.js'] = ['today.js', 'text/javascript; charset=utf-8'];
 assets['/work.css'] = ['work.css', 'text/css; charset=utf-8'];
+assets['/references.js'] = ['references.js', 'text/javascript; charset=utf-8'];
+assets['/references.css'] = ['references.css', 'text/css; charset=utf-8'];
 assets['/today.css'] = ['today.css', 'text/css; charset=utf-8'];
 assets['/alphas'] = ['alphas.html', 'text/html; charset=utf-8'];
 assets['/alphas.js'] = ['alphas.js', 'text/javascript; charset=utf-8'];
@@ -59,7 +63,15 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.1.5', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.1.6', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/references') return json(res, 200, references.view());
+    if (req.method === 'POST' && url.pathname === '/api/references') return json(res, 200, references.save(await body(req)));
+    if (req.method === 'GET' && /^\/api\/references\/[a-z0-9-]+\/attachment$/.test(url.pathname)) {
+      const file = references.attachment(url.pathname.split('/')[3]);
+      if (!file) return json(res, 404, { error: 'No Data · локальное вложение не найдено.' });
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-cache' });
+      return res.end(readFileSync(file));
+    }
     if (req.method === 'GET' && url.pathname === '/api/today') {
       const date = url.searchParams.get('date');
       if (date && date > dailyResults.view().today) throw new Error('Выбери прошедшую или сегодняшнюю дату.');

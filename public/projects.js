@@ -77,6 +77,7 @@ $('data-tab').addEventListener('click', () => chooseView('data'));
 window.addEventListener('rhythm:show-assessments', () => { activeDataTable = 'assessments'; chooseView('data'); });
 window.addEventListener('rhythm:show-daily-problems', () => { activeDataTable = 'dailyProblems'; chooseView('data'); renderData(); });
 window.addEventListener('rhythm:show-daily-results', () => { activeDataTable = 'dailyResults'; chooseView('data'); renderData(); });
+window.addEventListener('rhythm:show-sources', () => { activeDataTable = 'sources'; chooseView('data'); renderData(); });
 for (const id of ['week-tab', 'projects-tab', 'work-tab', 'data-tab']) $(id).addEventListener('keydown', event => {
   if (['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
     event.preventDefault();
@@ -153,11 +154,16 @@ function render() {
 function tableValue(value) { return value === null || value === undefined || value === '' ? 'No Data' : String(value); }
 function countLabel(count, one, few, many) { return `${count} ${count % 100 >= 11 && count % 100 <= 14 ? many : count % 10 === 1 ? one : count % 10 >= 2 && count % 10 <= 4 ? few : many}`; }
 
-function makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyResults, alphaBackup, storedEntries) {
+function makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyResults, alphaBackup, storedEntries, references) {
   const projects = new Map(snapshot.projects.map(project => [project.id, project]));
   const alphas = new Map(snapshot.alphas.map(alpha => [alpha.id, alpha]));
   const metrics = new Map(week.metrics.map(metric => [metric.id, metric]));
   return {
+    sources: {
+      title: 'Источники и мысли', note: `${countLabel(references.entries.length, 'запись', 'записи', 'записей')} · data/references.json · исходные формулировки и заметки`,
+      columns: ['ID', 'Группа', 'Название', 'Ссылка', 'Вложение', 'Кто / источник', 'Исходная запись', 'Моя заметка', 'Добавлено', 'Обновлено', 'Правок'],
+      rows: references.entries.map(item => [item.id, item.group, item.title, item.url, item.attachment ? `/api/references/${encodeURIComponent(item.id)}/attachment` : null, item.attribution, item.originalText, item.note, item.createdAt, item.updatedAt, item.revisions?.length ?? 0])
+    },
     timeEntries: {
       title: 'Все записи времени и количества', note: `${storedEntries.entries.length} строк · вся история · изменение хранилища: ${tableValue(storedEntries.updatedAt)}`,
       columns: ['ID', 'Дата', 'Код норматива', 'Назначение', 'Количество', 'Что сделано', 'Характер работы', 'Связь', 'Источник', 'ID источника', 'Создано', 'История разбора'],
@@ -286,7 +292,7 @@ function renderData() {
   $('data-source').hidden = !table.sourceUrl;
   $('data-source').innerHTML = table.sourceUrl ? `Источник: <a href="${escape(table.sourceUrl)}" target="_blank" rel="noopener noreferrer">открыть в Coda ↗</a>` : '';
   $('data-table-head').innerHTML = `<tr>${table.columns.map(column => `<th scope="col">${escape(column)}</th>`).join('')}</tr>`;
-  $('data-table-body').innerHTML = table.rows.length ? table.rows.map(row => `<tr>${row.map(value => `<td>${escape(tableValue(value))}</td>`).join('')}</tr>`).join('') : `<tr><td class="data-empty" colspan="${table.columns.length}">No Data</td></tr>`;
+  $('data-table-body').innerHTML = table.rows.length ? table.rows.map(row => `<tr>${row.map((value, index) => `<td>${activeDataTable === 'sources' && value && ((index === 3 && /^https?:\/\//i.test(value)) || (index === 4 && /^\/api\/references\/[a-z0-9-]+\/attachment$/.test(value))) ? `<a href="${escape(value)}" target="_blank" rel="noopener noreferrer">${index === 4 ? 'Скриншот ↗' : escape(value)}</a>` : escape(tableValue(value))}</td>`).join('')}</tr>`).join('') : `<tr><td class="data-empty" colspan="${table.columns.length}">No Data</td></tr>`;
   $('data-download').disabled = table.rows.length === 0;
   document.querySelectorAll('[data-table]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.table === activeDataTable)));
 }
@@ -297,7 +303,7 @@ async function loadData() {
   $('data-table-note').textContent = 'Обновляю таблицы…';
   $('data-error').hidden = true;
   try {
-    const [weekResponse, portfolioResponse, importedResponse, ratingsResponse, problemsResponse, resultsResponse, alphaResponse, entriesResponse] = await Promise.all([
+    const [weekResponse, portfolioResponse, importedResponse, ratingsResponse, problemsResponse, resultsResponse, alphaResponse, entriesResponse, referencesResponse] = await Promise.all([
       fetch(`/api/dashboard${dataWeek ? `?week=${encodeURIComponent(dataWeek)}` : ''}`),
       fetch('/api/portfolio'),
       fetch('/api/imported-data'),
@@ -305,12 +311,13 @@ async function loadData() {
       fetch('/api/daily-problems'),
       fetch('/api/daily-results'),
       fetch('/api/alphas/export'),
-      fetch('/api/time-entries')
+      fetch('/api/time-entries'),
+      fetch('/api/references')
     ]);
-    if (!weekResponse.ok || !portfolioResponse.ok || !importedResponse.ok || !ratingsResponse.ok || !problemsResponse.ok || !resultsResponse.ok || !alphaResponse.ok || !entriesResponse.ok) throw new Error('Не удалось прочитать локальные данные.');
-    const [week, snapshot, imported, ratings, dailyProblems, dailyResults, alphaBackup, storedEntries] = await Promise.all([weekResponse.json(), portfolioResponse.json(), importedResponse.json(), ratingsResponse.json(), problemsResponse.json(), resultsResponse.json(), alphaResponse.json(), entriesResponse.json()]);
+    if (!weekResponse.ok || !portfolioResponse.ok || !importedResponse.ok || !ratingsResponse.ok || !problemsResponse.ok || !resultsResponse.ok || !alphaResponse.ok || !entriesResponse.ok || !referencesResponse.ok) throw new Error('Не удалось прочитать локальные данные.');
+    const [week, snapshot, imported, ratings, dailyProblems, dailyResults, alphaBackup, storedEntries, references] = await Promise.all([weekResponse.json(), portfolioResponse.json(), importedResponse.json(), ratingsResponse.json(), problemsResponse.json(), resultsResponse.json(), alphaResponse.json(), entriesResponse.json(), referencesResponse.json()]);
     if (currentRequest !== dataRequestId) return;
-    dataTables = makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyResults, alphaBackup, storedEntries);
+    dataTables = makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyResults, alphaBackup, storedEntries, references);
     for (const key of ['work', 'goals', 'issues']) $('import-' + key + '-count').textContent = imported.snapshot.available ? imported.snapshot[key].length : 'No Data';
     $('import-captured-at').textContent = tableValue(imported.snapshot.capturedAt);
     $('reference-summary-text').textContent = imported.reference.available
@@ -453,6 +460,7 @@ window.addEventListener('rhythm:portfolio-saved', () => {
   if (refresh) void refresh().catch(error => notice(error.message));
 });
 window.addEventListener('rhythm:daily-problem-saved', () => { if (!$('data-panel').hidden) void loadData(); });
+window.addEventListener('rhythm:sources-saved', () => { if (!$('data-panel').hidden) void loadData(); });
 window.addEventListener('rhythm:daily-result-saved', () => { if (!$('data-panel').hidden) void loadData(); $('alpha-modeler-frame').contentWindow?.postMessage({ type: 'rhythm:work-updated' }, location.origin); });
 $('portfolio-retry').addEventListener('click', loadPortfolio);
 $('project-list').addEventListener('click', async event => {
