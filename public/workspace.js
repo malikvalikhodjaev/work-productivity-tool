@@ -188,7 +188,7 @@ function exportTable() {
   const cell=v=>'"'+String(v??'').replace(/^[=+@-]/,"'$&").replaceAll('"','""')+'"';
   const csv='\uFEFF'+[data.headers,...data.rows].map(row=>row.map(cell).join(',')).join('\r\n');
   const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),link=document.createElement('a');
-  link.href=url; link.download=`rhythm-${activeTable}.csv`; link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+  link.href=url; link.download=`momentum-traction-${activeTable}.csv`; link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 document.addEventListener('click',event=>{
   const b=event.target.closest('[data-w-action]'); if (!b || !workspace) return;
