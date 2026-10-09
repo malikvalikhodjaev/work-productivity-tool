@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$NoBrowser, [switch]$NoAutostart)
+param([switch]$NoBrowser, [switch]$NoAutostart, [switch]$ReadOnly)
 $ErrorActionPreference = 'Stop'
 $dashboardRoot = $PSScriptRoot
 $tailscaleCandidates = @((Join-Path $env:ProgramFiles 'Tailscale\tailscale.exe'), (Join-Path ${env:ProgramFiles(x86)} 'Tailscale\tailscale.exe'))
@@ -38,10 +38,17 @@ if (Test-Path -LiteralPath $configPath) {
     New-Item -ItemType Directory -Path (Split-Path $configBackup -Parent) -Force | Out-Null
     Copy-Item -LiteralPath $configPath -Destination $configBackup
 }
-$dashboardConfig = @{version=1; url="https://$dashboardDns"; allowedLogin=$ownerLogin}
+$dashboardConfig = @{version=1; url="https://$dashboardDns"; allowedLogin=$ownerLogin; access=$(if ($ReadOnly) { 'read-only' } else { 'read-write' })}
 $configTemp = "$configPath.tmp"
 [System.IO.File]::WriteAllText($configTemp, ($dashboardConfig | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))
 Move-Item -LiteralPath $configTemp -Destination $configPath -Force
+$hostingPath = Join-Path $dashboardData 'hosting.json'
+if (Test-Path -LiteralPath $hostingPath) {
+    $hostingBackup = Join-Path $dashboardRoot ('outputs\backups\hosting-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.json')
+    New-Item -ItemType Directory -Path (Split-Path $hostingBackup -Parent) -Force | Out-Null
+    Copy-Item -LiteralPath $hostingPath -Destination $hostingBackup
+}
+[System.IO.File]::WriteAllText($hostingPath, '{"version":1,"provider":"computer"}', [System.Text.UTF8Encoding]::new($false))
 & (Join-Path $dashboardRoot 'Start-Dashboard.ps1') -NoBrowser
 $gatewayStatus = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/api/mobile-access' -TimeoutSec 5
 if (-not $gatewayStatus.gatewayReady -or -not $gatewayStatus.configured) { throw 'Restart the updated dashboard server and run this script again.' }
@@ -50,5 +57,5 @@ if ($LASTEXITCODE -ne 0) { throw 'HTTPS setup is incomplete. Follow the Tailscal
 if (-not $NoAutostart) { & (Join-Path $dashboardRoot 'Install-Autostart.ps1') }
 Write-Host "Android URL: https://$dashboardDns"
 Write-Host 'Connect Tailscale on Android. Open this URL in Chrome, then choose Install / Add to home screen.'
-Write-Host 'The PC must stay powered on. Only viewing is available remotely.'
+Write-Host ('The PC must stay powered on. Access: ' + $dashboardConfig.access + '. Tasks and timer share the same saved data.')
 if (-not $NoBrowser) { Start-Process "https://$dashboardDns" }

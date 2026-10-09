@@ -48,6 +48,29 @@ test('Некорректные HTTPS-адреса и пустой аккаунт
   }
   writeFileSync(file, JSON.stringify({ version: 1, url: 'https://laptop.private-net.ts.net', allowedLogin: '' })); assert.throws(() => readRemoteConfig(file));
 });
+test('Рабочий шлюз допускает запись только владельцу с правильным Origin и перечисленным маршрутом',async t=>{
+  const writes=[];
+  const owner=http.createServer(async(req,res)=>{let body='';for await(const p of req)body+=p;writes.push({method:req.method,path:req.url,body,origin:req.headers.origin,host:req.headers.host});res.setHeader('Content-Type','application/json');res.end('{"saved":true}');});
+  owner.listen(0,'127.0.0.1'); await once(owner,'listening');t.after(()=>owner.close());
+  const configFile=path.join(mkdtempSync(path.join(tmpdir(),'iw-editor-')),'remote-access.json');
+  writeFileSync(configFile,JSON.stringify({version:1,url:'https://laptop.private-net.ts.net',allowedLogin:'owner@example.com',access:'read-write'}));
+  const gateway=createRemoteViewer({configFile,ownerPort:owner.address().port,viewerPort:0,assetPaths:new Set(['/'])});gateway.start();await once(gateway.server,'listening');t.after(()=>gateway.server.close());
+  const send=(route,overrides={})=>new Promise((resolve,reject)=>{
+    const headers=Object.fromEntries(Object.entries({host:'laptop.private-net.ts.net','Tailscale-User-Login':'owner@example.com',Origin:'https://laptop.private-net.ts.net','Content-Type':'application/json',...overrides.headers}).filter(([,v])=>v!==null));
+    const req=http.request({hostname:'127.0.0.1',port:gateway.server.address().port,path:route,method:overrides.method??'POST',headers},res=>{res.resume();res.on('end',()=>resolve({status:res.statusCode}));});
+    req.on('error',reject);req.end(overrides.body??'{"action":"pause"}');
+  });
+  assert.equal((await send('/api/timer',{headers:{Origin:''}})).status,403);
+  assert.equal((await send('/api/timer',{headers:{'Tailscale-User-Login':'other@example.com'}})).status,403);
+  assert.equal((await send('/api/timer',{headers:{Origin:'https://attacker.example'}})).status,403);
+  assert.equal((await send('/api/admin')).status,404);
+  assert.equal((await send('/api/timer',{headers:{'Content-Type':'text/plain'}})).status,415);
+  assert.equal(writes.length,0);
+  assert.equal((await send('/api/timer')).status,200); assert.equal(writes[0].path,'/api/timer');assert.equal(writes[0].origin,undefined);
+  assert.equal(writes[0].host,`127.0.0.1:${owner.address().port}`);
+  assert.equal((await send('/api/entries/00000000-0000-4000-8000-000000000001',{method:'DELETE',body:'',headers:{'Content-Type':null}})).status,200);
+  assert.equal(writes.length,2);
+});
 
 test('Офлайн-режим не перехватывает и не сохраняет личные API-ответы', async () => {
   const listeners = new Map(); const cached = []; const fallbacks = [];

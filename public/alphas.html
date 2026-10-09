@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/mobile.css"><script type="module" src="/remote-view.js"></script>
   <script type="module" src="/mobile.js"></script>
   <script type="module" src="/alphas.js"></script>
+  <link rel="stylesheet" href="/timer.css"><script type="module" src="/timer.js"></script>
 </head>
 <body>
   <header><a href="/" class="brand" aria-label="Indicators &amp; Work Dashboard — главная"><span class="brand-initials" aria-hidden="true">I&amp;W</span><span>Indicators &amp; Work Dashboard<small>Личный дашборд</small></span></a><a href="/#projects" class="back">← Проекты</a><span class="local">⌂ На моём компьютере</span></header>
@@ -20,7 +21,7 @@
         <div id="blank" hidden><h2>Начни с конкретного объекта</h2><p>Создай проект в разделе «Проекты» или добавь объект к существующему проекту.</p></div>
         <form id="editor-form" hidden>
           <div class="editor-heading"><div><p id="object-meta" class="eyebrow"></p><h2 id="editor-title">Новый объект</h2></div><span id="save-state" class="save-state">Без изменений</span></div>
-          <div class="alpha-focus-row"><span id="alpha-focus-state" class="muted">No Data</span><button id="alpha-make-focus" type="button" disabled>Главное на сегодня →</button></div>
+          <div class="alpha-focus-row"><span id="alpha-focus-state" class="muted">No Data</span><button id="alpha-make-focus" type="button" disabled>Главное на сегодня →</button><button id="alpha-timer" type="button">◷ Таймер объекта</button></div>
           <div id="draft-banner" class="draft-banner" hidden><span>Есть несохранённый черновик этой записи.</span><button id="restore-draft" type="button">Восстановить</button><button id="discard-draft" type="button">Удалить черновик</button></div>
           <div class="pair"><label>Проект<select id="projectId" required></select></label><label>Конкретный объект<input id="uniqueName" maxlength="180" required placeholder="Имя объекта именно в этом проекте"></label></div>
           <label class="note-label">Моя запись<textarea id="description" class="main-note" rows="5" maxlength="4000" placeholder="Мысли, наблюдения, вопросы. Можно начать только с этой заметки."></textarea></label>

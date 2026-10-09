@@ -154,6 +154,9 @@ function addTime(metricId = null) {
   if (snapshot) window.dispatchEvent(new CustomEvent('rhythm:add-today-entry', { detail: { date: snapshot.date, metricId, workRef: $('today-work-ref').value, title: $('today-result-text').value } }));
 }
 $('today-add-time').addEventListener('click', () => addTime());
+const timerButton = document.createElement('button'); timerButton.type = 'button'; timerButton.className = 'button secondary'; timerButton.textContent = '◷ Таймер';
+$('today-add-time').after(timerButton);
+timerButton.addEventListener('click', () => window.dispatchEvent(new CustomEvent('rhythm:timer-work', { detail: { workRef: $('today-work-ref').value || null, title: $('today-result-text').value || entities.find(e=>e.ref===$('today-work-ref').value)?.title || '' } })));
 $('today-norms').addEventListener('click', event => { const button = event.target.closest('[data-today-metric]'); if (button) addTime(button.dataset.todayMetric); });
 $('today-retry').addEventListener('click', () => void load());
 $('work-date').addEventListener('change', () => void selectDate($('work-date').value));

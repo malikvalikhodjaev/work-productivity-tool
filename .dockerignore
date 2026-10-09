@@ -1,0 +1,9 @@
+data
+outputs
+logs
+.git
+node_modules
+.env
+.env.*
+hosting
+tests

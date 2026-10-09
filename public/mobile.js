@@ -35,14 +35,14 @@ document.addEventListener('DOMContentLoaded', () => {
         details.append(steps);
         note.textContent = 'ПК может быть выключен. Доступен просмотр снимка данных; изменения на ПК пока не синхронизируются автоматически.';
       } else if (value.configured && value.gatewayReady) {
-        note.textContent = 'На телефоне доступен просмотр. Компьютер должен быть включён, а Tailscale подключён на обоих устройствах.';
-        status.textContent = viewer ? 'Открыта версия для просмотра.' : 'Закрытый HTTPS-адрес настроен. Проверка доступа — с телефона.';
+        note.textContent = value.access === 'read-write' ? 'Задачи, таймер и записи сохраняются на ПК и доступны с обоих устройств. Компьютер должен быть включён, Tailscale подключён.' : 'На телефоне доступен просмотр. Компьютер должен быть включён, а Tailscale подключён на обоих устройствах.';
+        status.textContent = value.access === 'read-write' ? 'Рабочая версия на твоём компьютере.' : viewer ? 'Открыта версия для просмотра.' : 'Закрытый HTTPS-адрес настроен. Проверка доступа — с телефона.';
         const link = document.createElement('a'); link.href = value.url; link.textContent = value.url; link.className = 'connection-address'; link.target = '_blank'; link.rel = 'noopener'; details.append(link);
         const steps = document.createElement('ol');
         steps.innerHTML = '<li>Подключи Tailscale на телефоне под тем же аккаунтом, что на ПК.</li><li>Открой этот адрес в Chrome.</li><li>Нажми «Установить на главный экран» или меню Chrome → «Добавить на главный экран» → «Установить».</li>';
         details.append(steps);
       } else {
-        note.textContent = 'На телефоне доступен просмотр после подключения закрытого HTTPS-адреса.';
+        note.textContent = 'Сервер работает на ПК. После подключения закрытого адреса задачи и таймер доступны с телефона; данные остаются на компьютере.';
         status.textContent = value.error || (value.gatewayError ? 'Сервер просмотра не запустился. Проверь журнал сервера.' : 'Веб-приложение подготовлено. Закрытый доступ ещё не подключён.');
         const steps = document.createElement('ol');
         steps.innerHTML = '<li>Установи <a href="https://tailscale.com/download/windows" target="_blank" rel="noopener">Tailscale на ПК</a> и <a href="https://tailscale.com/download/android" target="_blank" rel="noopener">Android</a>. Войди в один аккаунт.</li><li>На ПК запусти <strong>Подключить Android.cmd</strong> из папки дашборда.</li><li>Здесь появится постоянный адрес для телефона.</li>';

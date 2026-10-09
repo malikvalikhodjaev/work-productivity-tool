@@ -10,13 +10,14 @@ import { createWorkspaceStore } from './lib/workspace.mjs';
 import { parseFinanceCsv } from './lib/finance-csv.mjs';
 import { createReferenceStore } from './lib/references.mjs';
 import { createRemoteViewer } from './lib/remote-view.mjs';
+import { backupData, backupStatus } from './lib/backup.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.DASHBOARD_PORT ?? 8787);
 const dataDir = process.env.DASHBOARD_DATA_DIR ?? path.join(root, 'data');
 let store;
 const workspace = createWorkspaceStore(path.join(dataDir, 'workspace.json'), () => store.getPortfolio());
-store = createStore(process.env.DASHBOARD_DATA_FILE ?? path.join(dataDir, 'dashboard.json'), { validateWorkRef: workspace.validateRef });
+store = createStore(process.env.DASHBOARD_DATA_FILE ?? path.join(dataDir, 'dashboard.json'), { validateWorkRef: workspace.validateRef, getEntities: () => workspace.view().entities });
 const indicators = createIndicatorStore(path.join(dataDir, 'indicators.json'));
 const dailyProblems = createDailyProblemStore(path.join(dataDir, 'daily-problems.json'));
 const dailyResults = createDailyResultStore(path.join(dataDir, 'daily-results.json'), { validateWorkRef: workspace.validateRef });
@@ -36,6 +37,8 @@ assets['/alphas'] = ['alphas.html', 'text/html; charset=utf-8'];
 assets['/alphas.js'] = ['alphas.js', 'text/javascript; charset=utf-8'];
 assets['/alphas.css'] = ['alphas.css', 'text/css; charset=utf-8'];
 for (const [route, type] of [['/manifest.webmanifest','application/manifest+json'],['/service-worker.js','text/javascript; charset=utf-8'],['/mobile.js','text/javascript; charset=utf-8'],['/remote-view.js','text/javascript; charset=utf-8'],['/mobile.css','text/css; charset=utf-8'],['/offline.html','text/html; charset=utf-8'],['/offline.js','text/javascript; charset=utf-8'],['/icon-192.png','image/png'],['/icon-512.png','image/png'],['/icon-maskable-512.png','image/png']]) assets[route] = [route.slice(1), type];
+assets['/timer.js'] = ['timer.js', 'text/javascript; charset=utf-8'];
+assets['/timer.css'] = ['timer.css', 'text/css; charset=utf-8'];
 const viewerPort = Number(process.env.DASHBOARD_VIEWER_PORT ?? 8789);
 if (!Number.isInteger(viewerPort) || viewerPort < 1 || viewerPort > 65535 || viewerPort === port) throw new Error('DASHBOARD_VIEWER_PORT должен быть отдельным портом 1–65535.');
 const remoteViewer = createRemoteViewer({ configFile: path.join(dataDir, 'remote-access.json'), ownerPort: port, viewerPort, assetPaths: new Set(Object.keys(assets)) });
@@ -68,10 +71,15 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.3.0', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.4.0', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/timer') return json(res, 200, store.getTimer(url.searchParams.get('week') ?? undefined));
+    if (req.method === 'POST' && url.pathname === '/api/timer') { const input = await body(req); return json(res, 200, store.mutateTimer(input.action, input.input)); }
+    if (req.method === 'GET' && url.pathname === '/api/server-status') return json(res, 200, { hosting: 'computer', persistence: 'files', timezone: 'Asia/Tashkent', backup: backupStatus(dataDir), remote: remoteViewer.status() });
     if (req.method === 'GET' && url.pathname === '/api/mobile-access') {
       const file = path.join(dataDir, 'cloud-view.json');
-      if (existsSync(file)) {
+      const hosting = path.join(dataDir, 'hosting.json');
+      const prefersComputer = existsSync(hosting) && JSON.parse(readFileSync(hosting, 'utf8')).provider === 'computer';
+      if (existsSync(file) && !prefersComputer) {
         const value = JSON.parse(readFileSync(file, 'utf8'));
         const site = new URL(value.url);
         if (site.protocol !== 'https:' || !site.hostname.endsWith('.chatgpt.site') || site.username || site.password || site.pathname !== '/' || site.search || site.hash) throw new Error('Неверный адрес закрытого Site.');
@@ -169,8 +177,11 @@ const server = http.createServer(async (req, res) => {
   } catch (error) {
     const systemError = error.code || (!(error instanceof SyntaxError) && /ENOENT|EACCES|EPERM/.test(error.message));
     if (systemError) console.error(error);
-    json(res, systemError ? 500 : 400, { error: systemError ? 'Не удалось сохранить или прочитать данные. Повтори попытку.' : error instanceof SyntaxError ? 'Некорректный JSON.' : error.message });
+    json(res, error.status === 409 ? 409 : systemError ? 500 : 400, { error: systemError ? 'Не удалось сохранить или прочитать данные. Повтори попытку.' : error instanceof SyntaxError ? 'Некорректный JSON.' : error.message });
   }
 });
-server.listen(port, '127.0.0.1', () => { remoteViewer.start(); console.log(`Indicators & Work Dashboard: http://127.0.0.1:${port}\nДанные: ${dataDir}\nПросмотр через Tailscale: 127.0.0.1:${viewerPort}`); });
+let backupInterval;
+const saveBackup = () => { try { backupData(dataDir); } catch (error) { console.error('Резервная копия: ' + error.message); } };
+server.listen(port, process.env.DASHBOARD_BIND ?? '127.0.0.1', () => { remoteViewer.start(); saveBackup(); backupInterval = setInterval(saveBackup, 15 * 60 * 1000); backupInterval.unref(); console.log(`Indicators & Work Dashboard: http://127.0.0.1:${port}\nДанные: ${dataDir}\nЗакрытый шлюз: 127.0.0.1:${viewerPort}`); });
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { clearInterval(backupInterval); saveBackup(); remoteViewer.server.close(); server.close(() => process.exit(0)); });
 server.on('error', error => { console.error(error.code === 'EADDRINUSE' ? `Порт ${port} занят. Открой http://127.0.0.1:${port} или задай DASHBOARD_PORT.` : error); process.exitCode = 1; });

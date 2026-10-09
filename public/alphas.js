@@ -138,6 +138,12 @@ window.rhythmAlphaModeler = {
     openEditor(portfolio.alphas.find(a=>a.id===priorId && (!filter || a.projectId===filter))?.id ?? portfolio.alphas.find(a=>!filter || a.projectId===filter)?.id ?? null, false);
   }
 };
+const alphaTimer = $('alpha-timer');
+alphaTimer.addEventListener('click', () => {
+  const alpha = portfolio?.alphas.find(item => item.id === selectedId);
+  if (!alpha || saving) { notice('Сначала сохрани объект, чтобы связать с ним время.'); return; }
+  window.dispatchEvent(new CustomEvent('rhythm:timer-work', { detail: { workRef: `alpha:${alpha.id}`, title: alpha.uniqueName || alpha.typeName } }));
+});
 if (embedded) {
   const resize = () => parent.postMessage({ type: 'rhythm:alpha-height', height: Math.ceil(document.querySelector('main').getBoundingClientRect().height) + 4 }, location.origin);
   new ResizeObserver(resize).observe(document.querySelector('main'));
