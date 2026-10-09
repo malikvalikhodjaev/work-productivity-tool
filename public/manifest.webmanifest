@@ -1,0 +1,23 @@
+{
+  "id": "/",
+  "name": "Indicators & Work Dashboard",
+  "short_name": "I&W Dashboard",
+  "description": "Мои показатели, проекты, главная работа и данные.",
+  "lang": "ru",
+  "start_url": "/#week",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f7f9",
+  "theme_color": "#181a20",
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Показатели", "url": "/#week" },
+    { "name": "Проекты", "url": "/#projects" },
+    { "name": "Работа", "url": "/#work" }
+  ]
+}

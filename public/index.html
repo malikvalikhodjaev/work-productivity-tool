@@ -6,6 +6,12 @@
   <title>Indicators &amp; Work Dashboard — показатели</title>
   <meta name="description" content="Личные недельные нормативы, часы работы с руководствами, чтение, проекты и заполненные альфы.">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#181a20">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="stylesheet" href="/mobile.css">
+  <script type="module" src="/remote-view.js"></script>
+  <script type="module" src="/mobile.js"></script>
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/projects.css">
   <link rel="stylesheet" href="/sections.css">
@@ -23,9 +29,9 @@
   <script type="module" src="/references.js"></script>
 </head>
 <body>
-  <header class="topbar">
+  <header class="topbar mobile-enabled">
     <a class="brand" href="/" aria-label="Indicators &amp; Work Dashboard — главная"><span class="brand-mark" aria-hidden="true">I&amp;W</span><span>Indicators &amp; Work Dashboard<span class="brand-sub">Личный дашборд</span></span></a>
-    <span class="local-label"><span aria-hidden="true" class="local-icon">⌂</span> На моём компьютере</span>
+    <div class="mobile-tools"><span class="local-label"><span aria-hidden="true" class="local-icon">⌂</span> На моём компьютере</span><button id="mobile-open" class="mobile-open" type="button">На Android ↗</button></div>
   </header>
   <main class="app-shell">
     <aside class="sidebar" aria-label="Навигация"><div class="sidebar-label">РАЗДЕЛЫ</div><div class="view-tabs" role="tablist" aria-label="Разделы дашборда"><button id="week-tab" type="button" role="tab" aria-controls="week-panel" aria-selected="true"><span class="tab-index">01</span><span>Показатели</span><span class="tab-arrow" aria-hidden="true">↗</span></button><button id="projects-tab" type="button" role="tab" aria-controls="projects-panel" aria-selected="false" tabindex="-1"><span class="tab-index">02</span><span>Проекты</span><span class="tab-arrow" aria-hidden="true">↗</span></button><button id="work-tab" type="button" role="tab" aria-controls="work-panel" aria-selected="false" tabindex="-1"><span class="tab-index">03</span><span>Работа</span><span class="tab-arrow" aria-hidden="true">↗</span></button><button id="data-tab" type="button" role="tab" aria-controls="data-panel" aria-selected="false" tabindex="-1"><span class="tab-index">04</span><span>Данные</span><span class="tab-arrow" aria-hidden="true">↗</span></button></div><div class="sidebar-foot">Личный контур</div></aside>

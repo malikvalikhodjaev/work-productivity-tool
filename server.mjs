@@ -9,6 +9,7 @@ import { createDailyResultStore } from './lib/daily-results.mjs';
 import { createWorkspaceStore } from './lib/workspace.mjs';
 import { parseFinanceCsv } from './lib/finance-csv.mjs';
 import { createReferenceStore } from './lib/references.mjs';
+import { createRemoteViewer } from './lib/remote-view.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.DASHBOARD_PORT ?? 8787);
@@ -34,6 +35,10 @@ assets['/today.css'] = ['today.css', 'text/css; charset=utf-8'];
 assets['/alphas'] = ['alphas.html', 'text/html; charset=utf-8'];
 assets['/alphas.js'] = ['alphas.js', 'text/javascript; charset=utf-8'];
 assets['/alphas.css'] = ['alphas.css', 'text/css; charset=utf-8'];
+for (const [route, type] of [['/manifest.webmanifest','application/manifest+json'],['/service-worker.js','text/javascript; charset=utf-8'],['/mobile.js','text/javascript; charset=utf-8'],['/remote-view.js','text/javascript; charset=utf-8'],['/mobile.css','text/css; charset=utf-8'],['/offline.html','text/html; charset=utf-8'],['/offline.js','text/javascript; charset=utf-8'],['/icon-192.png','image/png'],['/icon-512.png','image/png'],['/icon-maskable-512.png','image/png']]) assets[route] = [route.slice(1), type];
+const viewerPort = Number(process.env.DASHBOARD_VIEWER_PORT ?? 8789);
+if (!Number.isInteger(viewerPort) || viewerPort < 1 || viewerPort > 65535 || viewerPort === port) throw new Error('DASHBOARD_VIEWER_PORT должен быть отдельным портом 1–65535.');
+const remoteViewer = createRemoteViewer({ configFile: path.join(dataDir, 'remote-access.json'), ownerPort: port, viewerPort, assetPaths: new Set(Object.keys(assets)) });
 
 function json(res, status, value) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -63,7 +68,8 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.1.6', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.2.0', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/mobile-access') return json(res, 200, remoteViewer.status());
     if (req.method === 'GET' && url.pathname === '/api/references') return json(res, 200, references.view());
     if (req.method === 'POST' && url.pathname === '/api/references') return json(res, 200, references.save(await body(req)));
     if (req.method === 'GET' && /^\/api\/references\/[a-z0-9-]+\/attachment$/.test(url.pathname)) {
@@ -157,5 +163,5 @@ const server = http.createServer(async (req, res) => {
     json(res, systemError ? 500 : 400, { error: systemError ? 'Не удалось сохранить или прочитать данные. Повтори попытку.' : error instanceof SyntaxError ? 'Некорректный JSON.' : error.message });
   }
 });
-server.listen(port, '127.0.0.1', () => console.log(`Ритм: http://127.0.0.1:${port}\nДанные: ${process.env.DASHBOARD_DATA_FILE ?? path.join(root, 'data', 'dashboard.json')}`));
+server.listen(port, '127.0.0.1', () => { remoteViewer.start(); console.log(`Indicators & Work Dashboard: http://127.0.0.1:${port}\nДанные: ${dataDir}\nПросмотр через Tailscale: 127.0.0.1:${viewerPort}`); });
 server.on('error', error => { console.error(error.code === 'EADDRINUSE' ? `Порт ${port} занят. Открой http://127.0.0.1:${port} или задай DASHBOARD_PORT.` : error); process.exitCode = 1; });

@@ -1,11 +1,11 @@
 {
   "name": "personal-rhythm-dashboard",
-  "version": "1.1.6",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check server.mjs && node --check lib/store.mjs && node --check lib/portfolio.mjs && node --check lib/indicators.mjs && node --check public/app.js && node --check public/projects.js && node --check public/overview.js && node --check lib/workspace.mjs && node --check lib/finance-csv.mjs && node --check public/workspace.js && node --check lib/daily-problems.mjs && node --check public/daily-problem.js && node --check lib/atomic-file.mjs && node --check lib/daily-results.mjs && node --check public/today.js && node --check lib/alpha-modeler.mjs && node --check public/alphas.js && node --check lib/references.mjs && node --check public/references.js",
+    "check": "node --check server.mjs && node --check lib/store.mjs && node --check lib/portfolio.mjs && node --check lib/indicators.mjs && node --check public/app.js && node --check public/projects.js && node --check public/overview.js && node --check lib/workspace.mjs && node --check lib/finance-csv.mjs && node --check public/workspace.js && node --check lib/daily-problems.mjs && node --check public/daily-problem.js && node --check lib/atomic-file.mjs && node --check lib/daily-results.mjs && node --check public/today.js && node --check lib/alpha-modeler.mjs && node --check public/alphas.js && node --check lib/references.mjs && node --check public/references.js && node --check lib/remote-view.mjs && node --check public/mobile.js && node --check public/remote-view.js && node --check public/service-worker.js && node --check public/offline.js",
     "test": "node --test tests/*.test.mjs"
   },
   "engines": {
