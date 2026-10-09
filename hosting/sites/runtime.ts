@@ -66,6 +66,9 @@ export async function handle(request: Request) {
     if(url.pathname==='/'||url.pathname==='/alphas')return text(url.pathname==='/'?indexHtml:alphasHtml,'text/html; charset=utf-8');
     if(url.pathname==='/adr/time-sources')return text(timeSources,'text/plain; charset=utf-8');
     if(url.pathname==='/adr/work-loop')return text(workLoop,'text/plain; charset=utf-8');
+    // Unknown browser pages return to the dashboard. Authentication and its
+    // reserved routes remain dispatch-owned; no auth code is read or replayed.
+    if(!url.pathname.startsWith('/api/')&&request.headers.get('accept')?.includes('text/html'))return new Response(null,{status:303,headers:{...headers,Location:url.origin+'/'}});
     const record=await current();
     if(url.pathname==='/api/health')return json({ok:true,service:'indicators-work-dashboard',version:'1.3.0',timezone:'Asia/Tashkent',snapshotReady:Boolean(record),capturedAt:record?.captured_at??null});
     if(url.pathname==='/api/mobile-access')return json({mode:'viewer',provider:'sites',configured:true,gatewayReady:true,url:url.origin,access:'read-only',requiresComputer:false,capturedAt:record?.captured_at??null,sha:record?.sha??null});
