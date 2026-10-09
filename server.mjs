@@ -68,8 +68,17 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.2.0', timezone: 'Asia/Tashkent' });
-    if (req.method === 'GET' && url.pathname === '/api/mobile-access') return json(res, 200, remoteViewer.status());
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.3.0', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/mobile-access') {
+      const file = path.join(dataDir, 'cloud-view.json');
+      if (existsSync(file)) {
+        const value = JSON.parse(readFileSync(file, 'utf8'));
+        const site = new URL(value.url);
+        if (site.protocol !== 'https:' || !site.hostname.endsWith('.chatgpt.site') || site.username || site.password || site.pathname !== '/' || site.search || site.hash) throw new Error('Неверный адрес закрытого Site.');
+        return json(res, 200, { mode: 'owner', provider: 'sites', configured: true, gatewayReady: true, url: site.origin, access: 'read-only', requiresComputer: false, capturedAt: value.capturedAt ?? null });
+      }
+      return json(res, 200, remoteViewer.status());
+    }
     if (req.method === 'GET' && url.pathname === '/api/references') return json(res, 200, references.view());
     if (req.method === 'POST' && url.pathname === '/api/references') return json(res, 200, references.save(await body(req)));
     if (req.method === 'GET' && /^\/api\/references\/[a-z0-9-]+\/attachment$/.test(url.pathname)) {

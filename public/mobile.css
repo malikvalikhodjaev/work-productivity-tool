@@ -3,3 +3,4 @@
 .viewer-connection-alert{margin:0;padding:10px 18px;background:#fff4e3;border-bottom:1px solid #ecd5b2;color:#77501e;font:12px/1.5 system-ui,sans-serif}
 
 @media(max-width:600px){.topbar.mobile-enabled{height:auto;min-height:72px;padding:10px 12px;gap:8px}.topbar.mobile-enabled .brand{min-width:0;line-height:1.18}.topbar.mobile-enabled .brand>span:last-child{min-width:0}.topbar.mobile-enabled .mobile-tools{flex-shrink:0}.topbar.mobile-enabled .brand-sub{line-height:1.3}}
+.cloud-snapshot-info{margin:0;padding:8px 24px;background:#f0f3f7;border-bottom:1px solid #e5e8ed;color:#657080;font-size:12px;line-height:1.5;text-align:center}
