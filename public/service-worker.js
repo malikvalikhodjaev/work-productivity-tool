@@ -1,5 +1,5 @@
-const CACHE = 'indicators-work-offline-v1';
-const OFFLINE = ['/offline.html', '/mobile.css', '/offline.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png'];
+const CACHE = 'indicators-work-offline-1.5.0';
+const OFFLINE = ['/offline.html', '/offline-work.css', '/offline-work.js', '/offline-store.js', '/offline-engine.js', '/timer-core.js', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(OFFLINE)).then(() => self.skipWaiting()));
 });

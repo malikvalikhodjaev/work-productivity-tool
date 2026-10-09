@@ -11,7 +11,7 @@ $bundleData = if ($env:DASHBOARD_DATA_DIR) { $env:DASHBOARD_DATA_DIR } else { Jo
 $bundleNode = (Get-Command node.exe -ErrorAction Stop).Source
 & $bundleNode (Join-Path $bundleRoot 'scripts/backup.mjs')
 if ($LASTEXITCODE -ne 0) { throw 'Backup failed; export stopped.' }
-foreach ($bundleItem in @('lib','public','docs','scripts','server.mjs','package.json','Dockerfile','compose.yaml','README.md','Start-Dashboard.ps1','Install-Autostart.ps1','Connect-Android.ps1','Export-Server.ps1','Open-Alphas.cmd','Открыть дашборд.cmd','Подключить Android.cmd')) {
+foreach ($bundleItem in @('lib','public','docs','scripts','server.mjs','package.json','package-lock.json','tests','AGENTS.md','.dockerignore','Dockerfile','compose.yaml','README.md','Start-Dashboard.ps1','Install-Autostart.ps1','Connect-Android.ps1','Export-Server.ps1','Open-Alphas.cmd','Открыть дашборд.cmd','Подключить Android.cmd')) {
     Copy-Item -LiteralPath (Join-Path $bundleRoot $bundleItem) -Destination (Join-Path $bundleStage $bundleItem) -Recurse
 }
 $bundleDestination = Join-Path $bundleStage 'data'

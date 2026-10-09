@@ -18,6 +18,7 @@
   "shortcuts": [
     { "name": "Показатели", "url": "/#week" },
     { "name": "Проекты", "url": "/#projects" },
-    { "name": "Работа", "url": "/#work" }
+    { "name": "Работа", "url": "/#work" },
+    { "name": "Таймер без сети", "url": "/offline-work" }
   ]
 }

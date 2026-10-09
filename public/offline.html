@@ -2,9 +2,32 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#181a20"><title>Нет соединения — Indicators &amp; Work Dashboard</title>
-  <link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/mobile.css">
-  <script defer src="/offline.js"></script>
+  <meta name="theme-color" content="#f4f5f7"><title>Таймер на устройстве — Indicators &amp; Work Dashboard</title>
+  <link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icon-192.png"><link rel="stylesheet" href="/offline-work.css">
+  <script type="module" src="/offline-work.js"></script>
 </head>
-<body class="offline-page"><main class="connection-card"><img src="/icon-192.png" width="64" height="64" alt="I&amp;W"><p class="connection-eyebrow">INDICATORS &amp; WORK DASHBOARD</p><h1>Нет соединения с ПК</h1><p>Проверь интернет, подключение Tailscale и что компьютер включён. Если ПК спит, его нужно разбудить.</p><p class="connection-note">Данные обновляются с компьютера. Офлайн-копия показателей не хранится.</p><button id="offline-retry" class="mobile-button">Попробовать снова</button></main></body>
+<body><main>
+  <header><a href="/">I&amp;W <span>Дашборд ↗</span></a><span id="connection">Проверяю хранилище…</span></header>
+  <p class="eyebrow">INDICATORS &amp; WORK DASHBOARD</p><h1>Таймер на устройстве</h1><p class="lead">Работай без сети. Завершённые записи отправятся на ПК, когда он станет доступен и приложение будет открыто.</p>
+  <p id="message" role="status" hidden></p>
+  <section id="setup" class="card"><h2>Подготовить к работе без сети</h2><p>Один раз подключись к серверу. На этом устройстве сохранятся названия работ, нормативов, настройки и твои сеансы таймера.</p><button id="connect">Сохранять на этом устройстве</button></section>
+  <div id="ready" hidden>
+    <div class="toolbar"><button id="sync">Синхронизировать</button><button id="export" class="secondary">Выгрузить локальные данные</button></div>
+    <p id="context-note" class="note"></p><p id="server-active" class="warning" hidden></p>
+    <section id="active-card" class="card" hidden><p id="phase" class="eyebrow"></p><h2 id="active-title"></h2><div id="clock" aria-live="off">00:00</div><p id="active-note" class="note"></p><div class="toolbar"><button id="pause">Пауза</button><button id="extend" class="secondary">+5 минут</button><button id="finish">Завершить</button><button id="cancel" class="secondary">Отменить</button></div></section>
+    <section id="start-card" class="card"><h2>Новая работа</h2><form id="start-form">
+      <label>Работа из сохранённого списка<select id="work-ref"><option value="">Отдельная активность</option></select></label>
+      <label>Что делаю<input id="title" required maxlength="300" placeholder="Чтение, моделирование, работа над проектом"></label>
+      <div class="grid"><label>Куда идёт время<select id="metric"></select></label><label>Характер работы<input id="work-type" maxlength="80" placeholder="Создание, обучение, поддержка"></label></div>
+      <div class="grid"><label>Режим<select id="mode"><option value="pomodoro">Помидорка</option><option value="stopwatch">Секундомер</option></select></label><label>Работа, минут<input id="work-minutes" type="number" min="1" max="240" required value="25"></label></div>
+      <details><summary>Перерывы и цикл</summary><div class="grid"><label>Короткий перерыв, минут<input id="short-minutes" type="number" min="1" max="240" required value="5"></label><label>Длинный перерыв, минут<input id="long-minutes" type="number" min="1" max="240" required value="15"></label><label>Помидорок до длинного перерыва<input id="cycle" type="number" min="1" max="20" required value="4"></label></div></details>
+      <div class="toolbar"><button type="submit">Начать на устройстве</button><button type="button" id="break" class="secondary">Начать перерыв</button></div>
+    </form><p class="note">Этот сеанс сохраняется здесь до завершения. Таймер на ПК учитывается отдельно; пересечения проверим при отправке.</p></section>
+    <section class="card"><div class="section-head"><h2>Записи устройства</h2><span id="counts"></span></div><p class="note">До подтверждения сервера время не включено в показатели и нормативы. Перерывы не выполняют норматив.</p><div id="records"></div></section>
+    <p id="storage-note" class="note"></p>
+  </div>
+  <footer>Для отправки нужны интернет, Tailscale и работающий сервер. Очищая данные сайта, ты удаляешь несинхронизированные записи — сначала выгрузи их.</footer>
+</main>
+<dialog id="finish-dialog"><form id="finish-form"><h2>Подтверди фактическое время</h2><p id="finish-note"></p><label>Сколько секунд засчитать<input id="worked-seconds" type="number" min="0" required></label><div class="toolbar"><button type="submit">Сохранить на устройстве</button><button type="button" id="finish-close" class="secondary">Вернуться</button></div></form></dialog>
+</body>
 </html>

@@ -39,6 +39,9 @@ assets['/alphas.css'] = ['alphas.css', 'text/css; charset=utf-8'];
 for (const [route, type] of [['/manifest.webmanifest','application/manifest+json'],['/service-worker.js','text/javascript; charset=utf-8'],['/mobile.js','text/javascript; charset=utf-8'],['/remote-view.js','text/javascript; charset=utf-8'],['/mobile.css','text/css; charset=utf-8'],['/offline.html','text/html; charset=utf-8'],['/offline.js','text/javascript; charset=utf-8'],['/icon-192.png','image/png'],['/icon-512.png','image/png'],['/icon-maskable-512.png','image/png']]) assets[route] = [route.slice(1), type];
 assets['/timer.js'] = ['timer.js', 'text/javascript; charset=utf-8'];
 assets['/timer.css'] = ['timer.css', 'text/css; charset=utf-8'];
+assets['/offline-work'] = ['offline.html', 'text/html; charset=utf-8'];
+for (const name of ['timer-core.js','offline-store.js','offline-work.js','offline-engine.js','device-banner.js']) assets['/' + name] = [name, 'text/javascript; charset=utf-8'];
+assets['/offline-work.css'] = ['offline-work.css', 'text/css; charset=utf-8'];
 const viewerPort = Number(process.env.DASHBOARD_VIEWER_PORT ?? 8789);
 if (!Number.isInteger(viewerPort) || viewerPort < 1 || viewerPort > 65535 || viewerPort === port) throw new Error('DASHBOARD_VIEWER_PORT должен быть отдельным портом 1–65535.');
 const remoteViewer = createRemoteViewer({ configFile: path.join(dataDir, 'remote-access.json'), ownerPort: port, viewerPort, assetPaths: new Set(Object.keys(assets)) });
@@ -71,9 +74,11 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.4.0', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.5.0', timezone: 'Asia/Tashkent' });
     if (req.method === 'GET' && url.pathname === '/api/timer') return json(res, 200, store.getTimer(url.searchParams.get('week') ?? undefined));
     if (req.method === 'POST' && url.pathname === '/api/timer') { const input = await body(req); return json(res, 200, store.mutateTimer(input.action, input.input)); }
+    if (req.method === 'POST' && url.pathname === '/api/offline/connect') return json(res, 200, store.offlineContext((await body(req)).deviceId));
+    if (req.method === 'POST' && url.pathname === '/api/offline/import') return json(res, 200, store.syncOffline(await body(req)));
     if (req.method === 'GET' && url.pathname === '/api/server-status') return json(res, 200, { hosting: 'computer', persistence: 'files', timezone: 'Asia/Tashkent', backup: backupStatus(dataDir), remote: remoteViewer.status() });
     if (req.method === 'GET' && url.pathname === '/api/mobile-access') {
       const file = path.join(dataDir, 'cloud-view.json');
@@ -175,6 +180,7 @@ const server = http.createServer(async (req, res) => {
     }
     json(res, 404, { error: 'Страница не найдена.' });
   } catch (error) {
+    if (error.kind) return json(res, error.status ?? 400, { error: error.message, kind: error.kind, details: error.details });
     const systemError = error.code || (!(error instanceof SyntaxError) && /ENOENT|EACCES|EPERM/.test(error.message));
     if (systemError) console.error(error);
     json(res, error.status === 409 ? 409 : systemError ? 500 : 400, { error: systemError ? 'Не удалось сохранить или прочитать данные. Повтори попытку.' : error instanceof SyntaxError ? 'Некорректный JSON.' : error.message });
