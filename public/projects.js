@@ -61,7 +61,7 @@ function setView(view) {
     $(id).setAttribute('aria-selected', String(isSelected));
     $(id).tabIndex = isSelected ? 0 : -1;
   }
-  document.title = `Momentum Traction — ${title.toLowerCase()}`;
+  document.title = `Indicators & Work Dashboard — ${title.toLowerCase()}`;
   if (view === 'data' && !wasData) void loadData();
   if (projects) syncModeler();
   if (changed && view === 'work') window.dispatchEvent(new Event('rhythm:work-opened'));
@@ -358,7 +358,7 @@ function downloadData() {
   const url = URL.createObjectURL(new Blob([`\uFEFF${lines}\r\n`], { type: 'text/csv;charset=utf-8' }));
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `momentum-traction-${activeDataTable}${activeDataTable === 'entries' && dataWeek ? `-${dataWeek}` : ''}.csv`;
+  anchor.download = `indicators-work-${activeDataTable}${activeDataTable === 'entries' && dataWeek ? `-${dataWeek}` : ''}.csv`;
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
