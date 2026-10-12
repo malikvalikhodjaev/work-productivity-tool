@@ -32,6 +32,9 @@ test('Закрытый сервер требует аккаунт владель
     const response = await request('/api/dashboard', options); assert.equal(response.code, 403); assert.ok(!response.body.includes('личный результат'));
   }
   const response = await request('/api/dashboard'); assert.equal(response.code, 200); assert.ok(response.body.includes('личный результат')); assert.equal(response.headers['cache-control'], 'no-store');
+  assert.equal((await request('/api/reflection-hints')).code, 200);
+  assert.equal((await request('/api/reflection-hints', {login:'other@example.com'})).code, 403);
+  assert.equal((await request('/api/reflection-hints', {method:'POST'})).code, 403);
   assert.match((await request('/')).body, /name="dashboard-access" content="viewer"/);
   for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']) assert.equal((await request('/api/portfolio', { method })).code, 403);
   for (const route of ['/data/dashboard.json', '/api/admin', '/api/entries', '/../data/remote-access.json', '//attacker.example.com/api/dashboard']) assert.equal((await request(route)).code, 404);
