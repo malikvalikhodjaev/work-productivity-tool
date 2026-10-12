@@ -11,6 +11,7 @@ import { parseFinanceCsv } from './lib/finance-csv.mjs';
 import { createReferenceStore } from './lib/references.mjs';
 import { createRemoteViewer } from './lib/remote-view.mjs';
 import { backupData, backupStatus } from './lib/backup.mjs';
+import { createWritingStore } from './lib/writing.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.DASHBOARD_PORT ?? 8787);
@@ -22,6 +23,7 @@ const indicators = createIndicatorStore(path.join(dataDir, 'indicators.json'));
 const dailyProblems = createDailyProblemStore(path.join(dataDir, 'daily-problems.json'));
 const dailyResults = createDailyResultStore(path.join(dataDir, 'daily-results.json'), { validateWorkRef: workspace.validateRef });
 const references = createReferenceStore(path.join(dataDir, 'references.json'));
+const writing = createWritingStore(path.join(dataDir, 'writing.json'));
 const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/projects.js': ['projects.js', 'text/javascript; charset=utf-8'], '/overview.js': ['overview.js', 'text/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8'], '/projects.css': ['projects.css', 'text/css; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
 assets['/workspace.js'] = ['workspace.js', 'text/javascript; charset=utf-8'];
 assets['/workspace.css'] = ['workspace.css', 'text/css; charset=utf-8'];
@@ -42,6 +44,8 @@ assets['/timer.css'] = ['timer.css', 'text/css; charset=utf-8'];
 assets['/offline-work'] = ['offline.html', 'text/html; charset=utf-8'];
 for (const name of ['timer-core.js','offline-store.js','offline-work.js','offline-engine.js','device-banner.js']) assets['/' + name] = [name, 'text/javascript; charset=utf-8'];
 assets['/offline-work.css'] = ['offline-work.css', 'text/css; charset=utf-8'];
+for (const name of ['writing.js','writing-drafts.js','vendor/quill.js']) assets['/'+name]=[name,'text/javascript; charset=utf-8'];
+for (const name of ['writing.css','vendor/quill.snow.css']) assets['/'+name]=[name,'text/css; charset=utf-8'];
 const viewerPort = Number(process.env.DASHBOARD_VIEWER_PORT ?? 8789);
 if (!Number.isInteger(viewerPort) || viewerPort < 1 || viewerPort > 65535 || viewerPort === port) throw new Error('DASHBOARD_VIEWER_PORT должен быть отдельным портом 1–65535.');
 const remoteViewer = createRemoteViewer({ configFile: path.join(dataDir, 'remote-access.json'), ownerPort: port, viewerPort, assetPaths: new Set(Object.keys(assets)) });
@@ -57,7 +61,7 @@ async function body(req) {
   let bytes = 0;
   for await (const part of req) {
     bytes += part.length;
-    if (bytes > (['/api/finance/import', '/api/alphas/import'].includes(req.url) ? 4 * 1024 * 1024 : 65536)) throw new Error('Запрос слишком большой.');
+    if (bytes > (req.url==='/api/writing'?1024*1024:['/api/finance/import', '/api/alphas/import'].includes(req.url) ? 4 * 1024 * 1024 : 65536)) throw new Error('Запрос слишком большой.');
     parts.push(part);
   }
   const value = JSON.parse(Buffer.concat(parts).toString('utf8'));
@@ -74,8 +78,17 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.5.0', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.6.0', timezone: 'Asia/Tashkent' });
     if (req.method === 'GET' && url.pathname === '/api/timer') return json(res, 200, store.getTimer(url.searchParams.get('week') ?? undefined));
+    if (req.method === 'GET' && url.pathname === '/api/writing') {
+      let hintSource=null;const sourceFile=path.join(dataDir,'writing-hints.json');
+      if(existsSync(sourceFile)){try{const source=JSON.parse(readFileSync(sourceFile,'utf8'));const address=new URL(source.url);if(['http:','https:'].includes(address.protocol)&&!address.username&&!address.password)hintSource=address.href;}catch{}}
+      return json(res, 200, {...writing.view(url.searchParams.get('q')??''),hintSource});
+    }
+    if (req.method === 'GET' && url.pathname === '/api/writing/context') return json(res, 200, writing.context());
+    if (req.method === 'GET' && url.pathname === '/api/writing/export') return json(res, 200, writing.exportData());
+    if (req.method === 'GET' && /^\/api\/writing\/[a-f0-9-]{36}$/.test(url.pathname)) return json(res, 200, writing.get(url.pathname.split('/').at(-1)));
+    if (req.method === 'POST' && url.pathname === '/api/writing') return json(res, 200, writing.save(await body(req)));
     if (req.method === 'POST' && url.pathname === '/api/timer') { const input = await body(req); return json(res, 200, store.mutateTimer(input.action, input.input)); }
     if (req.method === 'POST' && url.pathname === '/api/offline/connect') return json(res, 200, store.offlineContext((await body(req)).deviceId));
     if (req.method === 'POST' && url.pathname === '/api/offline/import') return json(res, 200, store.syncOffline(await body(req)));

@@ -64,6 +64,7 @@ test('Рабочий шлюз допускает запись только вл�
   assert.equal((await send('/api/timer',{headers:{'Tailscale-User-Login':'other@example.com'}})).status,403);
   assert.equal((await send('/api/timer',{headers:{Origin:'https://attacker.example'}})).status,403);
   assert.equal((await send('/api/offline/import',{headers:{Origin:'https://attacker.example'}})).status,403);
+  assert.equal((await send('/api/writing',{headers:{Origin:'https://attacker.example'}})).status,403);
   assert.equal((await send('/api/admin')).status,404);
   assert.equal((await send('/api/timer',{headers:{'Content-Type':'text/plain'}})).status,415);
   assert.equal(writes.length,0);
@@ -74,6 +75,10 @@ test('Рабочий шлюз допускает запись только вл�
   assert.equal((await send('/api/offline/connect')).status,200);
   assert.equal((await send('/api/offline/import')).status,200);
   assert.equal(writes.length,4);
+  assert.equal((await send('/api/writing')).status,200);
+  assert.equal((await send('/api/writing/context',{method:'GET',body:''})).status,200);
+  assert.equal((await send('/api/writing/00000000-0000-4000-8000-000000000001',{method:'GET',body:''})).status,200);
+  assert.equal(writes.length,7);
 });
 
 test('Офлайн-режим не перехватывает и не сохраняет личные API-ответы', async () => {

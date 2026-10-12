@@ -42,8 +42,9 @@ function notice(message) {
 }
 
 function setView(view) {
+  if (view.startsWith('writing/')) view='writing';
   if (view === 'financial') { view = 'week'; history.replaceState(null, '', '#week'); $('financial-panel').open = true; }
-  if (!['week', 'projects', 'work', 'data'].includes(view)) view = 'week';
+  if (!['week', 'projects', 'work', 'writing', 'data'].includes(view)) view = 'week';
   const changed = currentView !== view;
   currentView = view;
   const wasData = !$('data-panel').hidden;
@@ -52,18 +53,21 @@ function setView(view) {
   $('projects-panel').hidden = !projects;
   $('work-panel').hidden = view !== 'work';
   $('data-panel').hidden = view !== 'data';
+  $('writing-panel').hidden = view !== 'writing';
+  $('writing-archive').hidden = view !== 'writing';
   $('period-toolbar').hidden = view !== 'week';
   $('week-actions').hidden = view !== 'week';
   $('project-actions').hidden = !projects;
-  const title = view === 'week' ? 'Показатели' : projects ? 'Проекты' : view === 'work' ? 'Работа' : 'Данные';
+  const title = view === 'week' ? 'Показатели' : projects ? 'Проекты' : view === 'work' ? 'Работа' : view === 'writing' ? 'Мышление письмом' : 'Данные';
   $('page-title').innerHTML = `${title}<span class="title-dot">.</span>`;
-  for (const [id, isSelected] of [['week-tab', view === 'week'], ['projects-tab', projects], ['work-tab', view === 'work'], ['data-tab', view === 'data']]) {
+  for (const [id, isSelected] of [['week-tab', view === 'week'], ['projects-tab', projects], ['work-tab', view === 'work'], ['writing-tab', view === 'writing'], ['data-tab', view === 'data']]) {
     $(id).setAttribute('aria-selected', String(isSelected));
     $(id).tabIndex = isSelected ? 0 : -1;
   }
   document.title = `Indicators & Work Dashboard — ${title.toLowerCase()}`;
   if (view === 'data' && !wasData) void loadData();
   if (projects) syncModeler();
+  if (changed && view === 'writing') window.dispatchEvent(new Event('rhythm:writing-opened'));
   if (changed && view === 'work') window.dispatchEvent(new Event('rhythm:work-opened'));
   if (changed) window.scrollTo(0, 0);
 }
@@ -74,19 +78,21 @@ $('projects-tab').addEventListener('click', () => chooseView('projects'));
 $('work-tab').addEventListener('click', () => chooseView('work'));
 window.addEventListener('rhythm:show-work', () => chooseView('work'));
 $('data-tab').addEventListener('click', () => chooseView('data'));
+$('writing-tab').addEventListener('click', () => chooseView('writing'));
 window.addEventListener('rhythm:show-assessments', () => { activeDataTable = 'assessments'; chooseView('data'); });
 window.addEventListener('rhythm:show-daily-problems', () => { activeDataTable = 'dailyProblems'; chooseView('data'); renderData(); });
 window.addEventListener('rhythm:show-daily-results', () => { activeDataTable = 'dailyResults'; chooseView('data'); renderData(); });
 window.addEventListener('rhythm:show-sources', () => { activeDataTable = 'sources'; chooseView('data'); renderData(); });
-for (const id of ['week-tab', 'projects-tab', 'work-tab', 'data-tab']) $(id).addEventListener('keydown', event => {
+for (const id of ['week-tab', 'projects-tab', 'work-tab', 'writing-tab', 'data-tab']) $(id).addEventListener('keydown', event => {
   if (['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
     event.preventDefault();
-    const views = ['week', 'projects', 'work', 'data'];
+    const views = ['week', 'projects', 'work', 'writing', 'data'];
     const current = views.indexOf(id.replace('-tab', ''));
     const view = event.key === 'Home' ? 'week' : event.key === 'End' ? 'data' : views[(current + (['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : views.length - 1)) % views.length];
     chooseView(view); $(`${view}-tab`).focus();
   }
 });
+window.addEventListener('rhythm:writing-saved', () => { if(currentView==='data')void loadData(); });
 window.addEventListener('hashchange', () => setView(window.location.hash.slice(1)));
 
 function alphaCard(alpha, depth = 0) {
@@ -323,6 +329,12 @@ async function loadData() {
       const timer = await timerResponse.json();
       if (currentRequest !== dataRequestId) return;
       dataTables.timer = { title: 'Сеансы таймера', note: `${timer.week} — ${timer.end} · data/dashboard.json → timer.sessions · активный сеанс показан независимо от недели`, columns: ['ID', 'Начало', 'Конец', 'Работа', 'Связь', 'Режим', 'Фаза', 'Статус', 'План, сек', 'Факт, сек', 'Помидорки', 'Записи времени'], rows: [timer.active, ...timer.sessions].filter(Boolean).map(s=>[s.id,s.startedAt,s.finishedAt,s.title,s.workRef,s.mode,s.phase,s.status,s.plannedMs === null ? null : s.plannedMs/1000,s.elapsedMs/1000,s.completedPomodoros,s.entryIds?.join(', ')]) };
+    }
+    const writingResponse=await fetch('/api/writing');
+    if(writingResponse.ok) {
+      const writing=await writingResponse.json();
+      if(currentRequest!==dataRequestId)return;
+      dataTables.writing={title:'Эссе и заметки',note:'data/writing.json · личный архив, черновики и корзина · месяцы по дате записи',columns:['ID','Дата','Тема','Состояние','Слов','Опубликовано','В корзине','Версия','Правок','Изменено'],rows:writing.entries.map(p=>[p.id,p.date,p.title,p.trashedAt?'Корзина':p.status==='published'?'Публикация':'Черновик',p.words,p.publishedAt,p.trashedAt,p.revision,p.edits,p.updatedAt])};
     }
     for (const key of ['work', 'goals', 'issues']) $('import-' + key + '-count').textContent = imported.snapshot.available ? imported.snapshot[key].length : 'No Data';
     $('import-captured-at').textContent = tableValue(imported.snapshot.capturedAt);
