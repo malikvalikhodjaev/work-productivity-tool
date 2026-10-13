@@ -1,87 +1,151 @@
-const topics = [
-  {id:'feynman', label:'Понять и объяснить', source:'feynman', credit:'По твоему шаблону объяснения идей', questions:[
-    'Что именно я пытаюсь понять: понятие, проблему или ситуацию?',
-    'Как объяснить эту мысль своими словами человеку, который с ней ещё не знаком?',
-    'Какой конкретный пример делает объяснение понятным?',
-    'Где моё объяснение перестаёт быть ясным? Что я упускаю?',
-    'Почему предложенный способ решения имеет смысл?',
-    'Что я могу восстановить из памяти, прежде чем смотреть в источник?',
-    'С чем сверить объяснение и что уточнить после проверки?'
-  ]},
-  {id:'oz', label:'Получить результат · Оз', source:'oz', credit:'Вопросы по мотивам «Принципа Оз»', questions:[
-    'Что ещё я могу сделать, чтобы добиться нужного результата?',
-    'Что происходит на самом деле? Какой факт я упускаю?',
-    'Что в моих действиях помогает этому разрыву сохраняться?',
-    'Какую часть ситуации я могу изменить сейчас?',
-    'Какой ещё способ стоит попробовать?',
-    'Что конкретно я сделаю сегодня и как проверю результат?'
-  ]},
-  {id:'lift', label:'Снять препятствие · LIFT', credit:'Вопросы по твоей подборке LIFT', questions:[
-    'Какую неприятную обратную связь я пока не учитываю?',
-    'Что действительно тормозит результат? Что ещё не пробовал?',
-    'Что могу исправить в своём способе действий?',
-    'Какой шаг за ближайшие 24 часа изменит ситуацию?'
-  ]},
-  {id:'done', label:'Что сделано', source:'done', credit:'Твой пост · вопрос с изображения и вопросы о пользе', questions:[
-    'Что удалось сделать за эту неделю?',
-    'Что я уже сделал сегодня для нужного результата?',
-    'Что изменилось для людей или системы благодаря этой работе?',
-    'Какое подтверждение результата у меня есть?'
-  ]}
+const blocks = [
+  {
+    id:'musk', title:'Алгоритм Маска · 5 шагов', caption:'Пересмотреть способ работы',
+    intro:'Пройди шаги по порядку на одной конкретной работе. Вопросы ниже — адаптация алгоритма для твоих проектов и повседневных действий.',
+    steps:[
+      {title:'1. Проверить требования', question:'Кому и зачем нужен этот результат? Какое требование стоит пересмотреть?', description:'Назови человека, которому нужен результат, и характеристику системы, которую он хочет изменить. Уточни основание требования, даже если его предложил опытный человек.', more:['Какой разрыв между желаемым и текущим состоянием мы устраняем?','С кем я могу проверить, что это действительно нужно?']},
+      {title:'2. Удалить лишнее', question:'Какой шаг, элемент или обязательство можно убрать?', description:'Проверь, какую пользу даёт каждый элемент. Выбери пробное удаление и способ заметить, если элемент всё-таки понадобится.', more:['Что я делаю только по привычке или «на всякий случай»?','Что произойдёт с результатом, если этого не делать?']},
+      {title:'3. Упростить и улучшить оставшееся', question:'Как получить нужный результат проще?', description:'После удаления лишнего упрости оставшийся путь. Проверь качество результата и характеристику, которую важно удержать в допустимых пределах.', more:['Где я усложняю решение?','Что можно объединить или сделать одним понятным действием?']},
+      {title:'4. Ускорить цикл', question:'Где сократить ожидание и раньше проверить первую рабочую версию?', description:'Найди задержку между действием и обратной связью. Выбери меньшую проверяемую версию результата, которую можно довести до использования.', more:['Чего я сейчас жду и могу ли снять это ожидание?','Какой ближайший результат можно уже проверить в эксплуатации?']},
+      {title:'5. Автоматизировать', question:'Что из проверенного процесса теперь стоит автоматизировать?', description:'Выбери повторяющееся действие в уже пересмотренном процессе. Сопоставь время на автоматизацию и дальнейшую поддержку с ожидаемой экономией.', more:['Процесс уже работает и нужен?','Как я пойму, что автоматизация помогает?']}
+    ],
+    closing:'Порядок: требования → удалить → упростить → ускорить → автоматизировать.',
+    sources:[['musk','Твой референс ↗'],['muskOriginal','Интервью Маска ↗']]
+  },
+  {
+    id:'oz', title:'Принцип Оз · результат и ответственность', caption:'Что ещё я могу сделать?',
+    lead:'Что ещё я могу сделать, чтобы добиться нужного результата?',
+    intro:'Роджер Коннорс, Том Смит и Крейг Хикман предлагают четыре ступени: See It → Own It → Solve It → Do It. Выбери ситуацию и желаемый результат. Эти вопросы помогут разобрать её своими словами.',
+    steps:[
+      {title:'1. Увидеть реальность · See It', question:'Что происходит на самом деле? Какой факт я упускаю?', description:'Запиши текущее и желаемое состояние. Отдели наблюдаемые факты от догадок и попроси обратную связь там, где картина неполная.', more:['Какую неприятную обратную связь я игнорирую?','Что нужно проверить, прежде чем объяснять причину?']},
+      {title:'2. Признать своё участие · Own It', question:'Как мои действия или бездействие влияют на этот результат?', description:'Определи свою часть ситуации и доступную область влияния. Заметь, что можешь изменить в способе работы, договорённостях или обращении за помощью.', more:['Что в моём поведении помогает разрыву сохраняться?','Какую часть ситуации я могу изменить прямо сейчас?']},
+      {title:'3. Найти решение · Solve It', question:'Что ещё я могу сделать? Какие варианты пока не пробовал?', description:'Предложи несколько способов приблизить нужный результат. Выбери небольшой шаг, которым можно проверить предположение и обойти конкретное препятствие.', more:['Как можно по-другому работать с этим ограничением?','Кого привлечь и с каким конкретным запросом?']},
+      {title:'4. Действовать · Do It', question:'Что конкретно я сделаю сегодня и как проверю результат?', description:'Назови действие, срок и ожидаемый наблюдаемый сдвиг. После выполнения вернись к фактам: появился ли результат, что ещё нужно изменить?', more:['Я выполняю выбранный шаг или только готовлюсь?','Какое подтверждение покажет, что ситуация сдвинулась?']}
+    ],
+    checkTitle:'Если буксую: вопросы к своему способу действий',
+    checks:[
+      ['Меня удивила обратная связь, хотя я считал, что сделал всё возможное?','Уточни ожидания и критерий результата. Что я не заметил или не согласовал?'],
+      ['Я трачу время на поиск виноватого?','Посмотри, какое следующее действие доступно мне, даже если причина находится у другого человека.'],
+      ['Я заметил назревающую проблему, но ничего не предпринял?','Какой ранний сигнал я могу сейчас сообщить и кому? Что поможет уменьшить последствия?'],
+      ['Я собираю отчёты и переписки главным образом, чтобы защититься от претензий?','Какая часть этой фиксации поможет принять решение и приблизить результат?'],
+      ['Фраза «это не моя работа» останавливает решение?','Нужно ли прояснить роли, передать проблему с контекстом или договориться о помощи?'],
+      ['Мне кажется, что я ни на что не влияю?','Какой самый маленький элемент ситуации всё-таки доступен моему действию?'],
+      ['Я жду, пока всё решится само или мне скажут, что делать?','Какой вопрос, предложение или проверку я могу инициировать сам?']
+    ],
+    closing:'Вопросы — подсказки для размышления по мотивам книги и твоей подборки.',
+    sources:[['oz','Четыре ступени · источник ↗']]
+  },
+  {
+    id:'lift', title:'LIFT · снять препятствие', caption:'От затруднения к проверяемому шагу',
+    intro:'Когда работа застряла, пройди одну цепочку: услышать препятствия → выбрать доступное влиянию → найти ещё один способ → проверить движение. Вопросы адаптированы для самостоятельного разбора.',
+    steps:[
+      {title:'L · Listen — услышать препятствия', question:'Что мешает продвижению? Какую неприятную правду я пока не учитываю?', description:'Сначала перечисли препятствия и выслушай обратную связь. Уточни, что действительно происходит, прежде чем предлагать решение.', more:['Что говорит человек, которому нужен результат?','Что я упорно не замечаю в своей работе?']},
+      {title:'I · Identify — выбрать препятствие, на которое могу повлиять', question:'Какое препятствие сейчас важнее всего снять и почему?', description:'Из нескольких затруднений выбери одно, на которое можешь воздействовать. Проверь, как его снятие приблизит нужный результат.', more:['Что действительно блокирует работу?','Что я могу изменить сам, а о чём нужно договориться?']},
+      {title:'F · Facilitate — задать вопрос о решении', question:'Что ещё я могу сделать, чтобы обойти это препятствие?', description:'Найди другой способ действий: измени подход, запроси помощь или проверь альтернативу. Заметь, что можешь исправить в собственном способе работы.', more:['Какие варианты мы ещё не пробовали?','Какой небольшой эксперимент покажет, что способ подходит?']},
+      {title:'T · Test — проверить движение', question:'Что я сделаю в следующие 24 часа и по чему замечу сдвиг?', description:'Определи действие, исполнителя и срок. После шага проверь результат и вернись к разбору, если выбранное препятствие осталось.', more:['Какое действие я могу начать прямо сейчас?','Когда и по какому факту я проверю изменение?']}
+    ],
+    closing:'Выбери один следующий шаг и дату возвращения к нему.',
+    sources:[['lift','LIFT · источник ↗']]
+  },
+  {
+    id:'done', title:'Что сделано · день и неделя', caption:'Результат и его польза',
+    intro:'Начни с вопроса из твоего поста, затем посмотри на конкретные результаты и их значение.',
+    lead:'What did you get done this week?', quoteKey:'doneQuote',
+    steps:[
+      {question:'Что я уже сделал сегодня для нужного результата?', description:'Назови полученный результат: изменение, решение, проверенную гипотезу или введённую в использование версию.'},
+      {question:'Что изменилось для людей или системы благодаря этой работе?', description:'Свяжи сделанное с важной характеристикой системы или проблемой дня. Если сдвиг ещё не проверен, отметь, что требуется узнать.'},
+      {question:'Какое подтверждение результата у меня есть?', description:'Вернись к факту, ссылке, обратной связи или замеру. Что можно показать и где результат уже используется?'},
+      {question:'Что осталось незавершённым и какой следующий шаг?', description:'Выбери ближайшее действие до эксплуатации и момент следующей проверки. Если проблема изменилась, пересмотри главный фокус.'}
+    ],
+    sources:[['done','Твой пост ↗']]
+  },
+  {
+    id:'feynman', title:'Понять и объяснить · письмо', caption:'Заметить пробел в понимании',
+    intro:'По твоему шаблону объяснения идей. Выбери один вопрос и свободно напиши ответ в заметке.',
+    steps:[
+      {question:'Что именно я пытаюсь понять: понятие, проблему или ситуацию?', description:'Назови предмет размышления и то, что сейчас непонятно.'},
+      {question:'Как объяснить эту мысль своими словами новичку?', description:'Раскрой термины и переходы между мыслями так, чтобы читатель мог проследить объяснение.'},
+      {question:'Какой конкретный пример делает объяснение понятным?', description:'Возьми случай из работы или жизни и покажи, как идея действует в нём.'},
+      {question:'Где моё объяснение перестаёт быть ясным? Что я упускаю?', description:'Найди пропущенное основание, противоречие или вопрос, на который пока нет ответа.'},
+      {question:'Почему предложенный способ решения имеет смысл?', description:'Проследи связь между действием и ожидаемым изменением. На чём держится это ожидание?'},
+      {question:'Что я могу восстановить из памяти, прежде чем смотреть в источник?', description:'Запиши своё понимание и отметь места, в которых не уверен.'},
+      {question:'С чем сверить объяснение и что уточнить после проверки?', description:'Выбери источник или наблюдение, затем исправь найденный пробел.'}
+    ],
+    sources:[['feynman','Твой шаблон ↗']]
+  }
 ];
-const algorithm = [
-  ['Проверить требования', 'Кому и зачем это нужно? Какой запрос стоит пересмотреть?'],
-  ['Удалить лишнее', 'Какой шаг или элемент можно убрать?'],
-  ['Упростить оставшееся', 'Как получить тот же результат проще?'],
-  ['Ускорить цикл', 'Где сократить ожидание и быстрее проверить результат?'],
-  ['Автоматизировать', 'Что из проверенного процесса теперь стоит автоматизировать?']
-];
+
 let sourceRequest;
 function loadSources() {
   return sourceRequest ??= fetch('/api/reflection-hints', {cache:'no-store'})
     .then(response => { if (!response.ok) throw new Error('Источники недоступны'); return response.json(); })
     .catch(() => { sourceRequest = null; return {sources:{}}; });
 }
+const element = (tag, className, text) => {
+  const node=document.createElement(tag);
+  if(className) node.className=className;
+  if(text) node.textContent=text;
+  return node;
+};
 
-export function mountReflectionHints(container, {defaultTopic='oz'} = {}) {
+export function mountReflectionHints(container) {
   if (!container || container.dataset.reflectionMounted) return;
   container.dataset.reflectionMounted = 'true';
   container.classList.add('reflection-hints');
-  container.innerHTML = `<details class="reflection-question"><summary>Вопрос для размышления</summary><div class="reflection-controls"><label>Тема <select aria-label="Тема подсказки"></select></label><span class="reflection-counter"></span><button type="button" class="text-button reflection-next">Другой вопрос →</button></div><p class="reflection-prompt" aria-live="polite"></p><div class="reflection-credit"><span></span><a target="_blank" rel="noopener noreferrer" hidden>Источник ↗</a></div></details><details class="reflection-algorithm"><summary>Алгоритм Маска · 5 шагов</summary><ol></ol><div class="reflection-credit"><span>Порядок важен: следующий шаг после предыдущего.</span><a class="reflection-musk" target="_blank" rel="noopener noreferrer" hidden>Твои заметки ↗</a><a class="reflection-musk-original" target="_blank" rel="noopener noreferrer" hidden>Интервью ↗</a></div></details>`;
-  const select = container.querySelector('select'), prompt = container.querySelector('.reflection-prompt');
-  const counter = container.querySelector('.reflection-counter'), credit = container.querySelector('.reflection-question .reflection-credit span');
-  const link = container.querySelector('.reflection-question a');
-  let position = 0, config = {sources:{}};
-  for (const topic of topics) {
-    const option = document.createElement('option'); option.value=topic.id; option.textContent=topic.label; select.append(option);
+  container.append(element('p','reflection-heading','Вопросы для размышления'));
+  for (const block of blocks) {
+    const details=element('details','reflection-block'); details.dataset.reflection=block.id;
+    const summary=element('summary');
+    summary.append(element('span','reflection-title',block.title),element('span','reflection-caption',block.caption));
+    const body=element('div','reflection-body');
+    if(block.lead) {
+      const lead=element('p','reflection-lead',block.lead);
+      if(block.quoteKey) lead.dataset.quote=block.quoteKey;
+      body.append(lead);
+    }
+    body.append(element('p','reflection-intro',block.intro));
+    for(const step of block.steps) {
+      const section=element('section','reflection-step');
+      if(step.title) section.append(element('h3','',step.title));
+      section.append(element('p','reflection-prompt',step.question),element('p','reflection-description',step.description));
+      if(step.more) {
+        const list=element('ul','reflection-more');
+        for(const question of step.more) list.append(element('li','',question));
+        section.append(list);
+      }
+      body.append(section);
+    }
+    if(block.checks) {
+      const check=element('details','reflection-check');
+      check.append(element('summary','',block.checkTitle));
+      for(const [question,description] of block.checks) {
+        const section=element('section','reflection-step');
+        section.append(element('p','reflection-prompt',question),element('p','reflection-description',description));
+        check.append(section);
+      }
+      body.append(check);
+    }
+    const credit=element('div','reflection-credit');
+    if(block.closing) credit.append(element('p','',block.closing));
+    for(const [key,label] of block.sources) {
+      const link=element('a','',label);
+      link.dataset.source=key; link.target='_blank'; link.rel='noopener noreferrer'; link.hidden=true;
+      credit.append(link);
+    }
+    body.append(credit); details.append(summary,body); container.append(details);
   }
-  select.value = topics.some(topic => topic.id === defaultTopic) ? defaultTopic : 'oz';
-  const attach = (element, source) => {
-    const value = config.sources?.[source]?.url;
-    let valid = false;
-    try { const url=new URL(value); valid=['http:','https:'].includes(url.protocol)&&!url.username&&!url.password; } catch {}
-    element.hidden = !valid;
-    if (valid) element.href=value; else element.removeAttribute('href');
-  };
-  const render = () => {
-    const topic = topics.find(item => item.id === select.value);
-    prompt.textContent = topic.id==='done' && position===0 && config.doneQuote ? config.doneQuote : topic.questions[position];
-    counter.textContent = `${position+1} / ${topic.questions.length}`;
-    credit.textContent = topic.credit;
-    attach(link, topic.source);
-  };
-  select.addEventListener('change', () => { position=0; render(); });
-  container.querySelector('.reflection-next').addEventListener('click', () => {
-    const topic=topics.find(item => item.id===select.value); position=(position+1)%topic.questions.length; render();
-  });
-  const list=container.querySelector('ol');
-  for (const [title, question] of algorithm) {
-    const item=document.createElement('li'), strong=document.createElement('strong'), text=document.createElement('span');
-    strong.textContent=title; text.textContent=question; item.append(strong,text); list.append(item);
-  }
-  render();
-  loadSources().then(value => {
-    config=value; render(); attach(container.querySelector('.reflection-musk'),'musk'); attach(container.querySelector('.reflection-musk-original'),'muskOriginal');
+  loadSources().then(config => {
+    for(const link of container.querySelectorAll('a[data-source]')) {
+      const value=config.sources?.[link.dataset.source]?.url;
+      try {
+        const address=new URL(value);
+        if(['http:','https:'].includes(address.protocol)&&!address.username&&!address.password) {link.href=value; link.hidden=false;}
+      } catch {}
+    }
+    for(const quote of container.querySelectorAll('[data-quote]')) {
+      const value=config[quote.dataset.quote];
+      if(typeof value==='string'&&value.trim()&&value.length<=200) quote.textContent=value.trim();
+    }
   });
 }
 
