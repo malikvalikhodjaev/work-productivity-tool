@@ -209,5 +209,7 @@ window.addEventListener('rhythm:portfolio-rendered',renderImpacts);
 window.addEventListener('rhythm:work-link-changed',renderImpacts);
 window.addEventListener('rhythm:portfolio-saved',()=>void load());
 window.addEventListener('rhythm:work-items-changed',()=>void load());
+window.addEventListener('rhythm:workspace-changed',()=>void load());
+window.addEventListener('rhythm:open-case',event=>{void load().then(()=>{if(workspace.cases.some(item=>item.id===event.detail.caseId))caseForm(event.detail.caseId);});});
 $('data-refresh').addEventListener('click',()=>void load());
 void load();

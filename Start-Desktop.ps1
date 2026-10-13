@@ -17,7 +17,7 @@ try {
     & (Join-Path $PSScriptRoot 'Start-Dashboard.ps1') -NoBrowser | Out-Null
     $desktopHealth = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/api/health' -TimeoutSec 3
     if (-not $desktopHealth.ok -or $desktopHealth.service -ne 'rhythm-dashboard') { throw 'The dashboard server is unavailable.' }
-    $desktopUrl = if ($Focus) { 'http://localhost:8787/focus' } else { 'http://localhost:8787/#work' }
+    $desktopUrl = if ($Focus) { 'http://localhost:8787/focus' } else { 'http://localhost:8787/#week' }
     if ($CheckOnly) { [pscustomobject]@{browser=$desktopBrowserPath;url=$desktopUrl;version=$desktopHealth.version;serverReady=$true} | ConvertTo-Json; return }
     $desktopSize = if ($Focus) { '560,900' } else { '1360,920' }
     Start-Process -FilePath $desktopBrowserPath -ArgumentList @("--app=$desktopUrl", "--window-size=$desktopSize")

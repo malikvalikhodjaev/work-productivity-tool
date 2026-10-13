@@ -203,8 +203,8 @@ function makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyR
     dailyProblems: {
       title: 'Главная проблема дня',
       note: `${countLabel(dailyProblems.entries.length, 'запись', 'записи', 'записей')} · вся история по датам · правки сохраняются в data/daily-problems.json`,
-      columns: ['Дата', 'Проблема', 'Обновлено', 'Правок'],
-      rows: dailyProblems.entries.map(item => [item.date, item.text, new Date(item.updatedAt).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' }), item.revisions.length])
+      columns: ['Дата', 'Проблема', 'Обновлено', 'Правок', 'Кейс', 'Связь'],
+      rows: dailyProblems.entries.map(item => [item.date, item.text, new Date(item.updatedAt).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' }), item.revisions.length,item.caseTitle,item.caseRef])
     },
     assessments: {
       title: 'Самооценки',

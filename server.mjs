@@ -44,6 +44,8 @@ assets['/timer.js'] = ['timer.js', 'text/javascript; charset=utf-8'];
 assets['/timer.css'] = ['timer.css', 'text/css; charset=utf-8'];
 assets['/focus'] = ['focus.html', 'text/html; charset=utf-8'];
 assets['/focus-window.css'] = ['focus-window.css', 'text/css; charset=utf-8'];
+assets['/writing-editor.js'] = ['writing-editor.js', 'text/javascript; charset=utf-8'];
+assets['/focus-youtube.js'] = ['focus-youtube.js', 'text/javascript; charset=utf-8'];
 assets['/offline-work'] = ['offline.html', 'text/html; charset=utf-8'];
 for (const name of ['timer-core.js','offline-store.js','offline-work.js','offline-engine.js','device-banner.js']) assets['/' + name] = [name, 'text/javascript; charset=utf-8'];
 assets['/offline-work.css'] = ['offline-work.css', 'text/css; charset=utf-8'];
@@ -75,13 +77,13 @@ async function body(req) {
 const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'same-origin');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'self'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'self' https://www.youtube-nocookie.com; frame-ancestors 'self'; base-uri 'none'; form-action 'self'");
   const expectedHosts = [`127.0.0.1:${port}`, `localhost:${port}`];
   if (!expectedHosts.includes(req.headers.host)) return json(res, 403, { error: 'Доступ только с этого компьютера.' });
   if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.8.0', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.9.0', timezone: 'Asia/Tashkent' });
     if (req.method === 'GET' && url.pathname === '/api/reflection-hints') return json(res, 200, readReflectionHints(dataDir));
     if (req.method === 'GET' && url.pathname === '/api/timer') return json(res, 200, store.getTimer(url.searchParams.get('week') ?? undefined));
     if (req.method === 'GET' && url.pathname === '/api/timer/history') return json(res,200,store.getTimerHistory(url.searchParams.get('workRef')));
@@ -126,8 +128,14 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/daily-results') return json(res, 200, dailyResults.view());
     if (req.method === 'POST' && url.pathname === '/api/daily-results') return json(res, 200, dailyResults.save(await body(req)));
-    if (req.method === 'GET' && url.pathname === '/api/daily-problems') return json(res, 200, dailyProblems.view());
-    if (req.method === 'POST' && url.pathname === '/api/daily-problems') return json(res, 200, dailyProblems.save(await body(req)));
+    if (req.method === 'GET' && url.pathname === '/api/daily-problems') {const value=dailyProblems.view();return json(res,200,{...value,entries:value.entries.map(problem=>{const linked=workspace.problemCase(problem.date);return {...problem,caseRef:linked?'case:'+linked.id:null,caseTitle:linked?.title??null};})});}
+    if (req.method === 'POST' && url.pathname === '/api/daily-problems') {
+      const input=await body(req);
+      if(input.action!==undefined&&!['save','case'].includes(input.action))throw new Error('Неизвестное действие проблемы дня.');
+      const problem=dailyProblems.save(input);
+      const linked=workspace.ensureProblemCase(problem);
+      return json(res,200,{...problem,caseRef:'case:'+linked.case.id,caseTitle:linked.case.title,caseCreated:linked.created});
+    }
     if (req.method === 'GET' && url.pathname === '/api/workspace') return json(res, 200, workspace.view());
     if (req.method === 'POST' && url.pathname === '/api/workspace') { const value = await body(req,1024*1024); return json(res, 200, workspace.mutate(value.action, value.input)); }
     if (req.method === 'GET' && url.pathname === '/api/finance') {

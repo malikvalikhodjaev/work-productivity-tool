@@ -13,3 +13,4 @@
 .problem-help p{margin:0 0 6px}.problem-help p:last-child{margin:0}
 @media(max-width:1180px){.daily-problem-row{flex-wrap:wrap}.daily-problem-label{flex:1}.daily-problem-row input[type=text]{order:3;flex-basis:calc(100% - 110px)}.daily-problem-row .button{order:4}.problem-history{order:5}}
 @media(max-width:680px){.daily-problem{padding:14px}.daily-problem-row{gap:10px}.daily-problem-label{font-size:13px}.daily-problem-row input[type=date]{width:133px}.problem-history{font-size:12px}.problem-status{line-height:1.5}}
+#daily-problem-focus,#daily-problem-case{white-space:nowrap}#daily-problem-case-note{overflow-wrap:anywhere}.daily-problem-row{flex-wrap:wrap}.daily-problem-row input[type=text]{flex-basis:240px}
