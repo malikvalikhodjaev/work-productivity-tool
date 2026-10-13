@@ -51,7 +51,7 @@ function tick() {
   const key=s.id+':'+s.plannedMs;
   if(view.expired&&s.phase==='work'&&!document.hidden&&!readOnly&&!acting&&!$('finish-dialog').open&&reviewKey!==key){reviewKey=key;beginFinish();}
 }
-function beginFinish(){const s=active();if(!s||acting||readOnly)return;const view=sessionView(s,Date.now());if(finishSessionId!==s.id)$('observation').value='';finishSessionId=s.id;$('finish-dialog').querySelector('h2').textContent=s.mode==='pomodoro'&&s.phase==='work'?'Как прошла помидорка?':'Подтверди фактическое время';$('worked-seconds').value=Math.min(86400,Math.floor(view.elapsedMs/1000));$('worked-seconds').max=Math.min(86400,Math.floor(view.elapsedMs/1000));$('finish-note').textContent='По отсчёту: '+duration(view.elapsedMs)+'. Паузы исключены. Можно уменьшить факт, если отвлёкся.';if(!$('finish-dialog').open)$('finish-dialog').showModal();$('observation').focus();}
+function beginFinish(){const s=active();if(!s||acting||readOnly)return;const view=sessionView(s,Date.now());if(finishSessionId!==s.id)$('observation').value='';finishSessionId=s.id;$('finish-dialog').querySelector('h2').textContent=s.mode==='pomodoro'&&s.phase==='work'?'Как прошла помидорка?':'Подтверди фактическое время';const workedMinutes=Number((Math.min(86400,Math.floor(view.elapsedMs/1000))/60).toFixed(2));$('worked-seconds').value=workedMinutes;$('worked-seconds').max=workedMinutes;$('finish-note').textContent='По отсчёту: '+new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(workedMinutes)+' мин'+'. Паузы исключены. Можно уменьшить факт, если отвлёкся.';if(!$('finish-dialog').open)$('finish-dialog').showModal();$('observation').focus();}
 async function action(name,input={}) {
   if(acting||readOnly) return; acting=true;
   try { state=await store.action(name,input,state.timer.revision); changed(); message(''); if(['finish','cancel'].includes(name)) void sync(); }
@@ -85,7 +85,7 @@ $('pause').addEventListener('click',()=>void action(active().status==='paused'?'
 $('extend').addEventListener('click',()=>{alarmId=null; void action('extend',{sessionId:active().id});});
 $('finish').addEventListener('click',beginFinish);
 $('finish-close').addEventListener('click',()=>$('finish-dialog').close());
-$('finish-form').addEventListener('submit',async e=>{e.preventDefault(); const s=active(); if(!s||s.id!==finishSessionId){$('finish-dialog').close();message('Сеанс уже изменён в другом окне.');return;} await action('finish',{sessionId:s.id,workedSeconds:Number($('worked-seconds').value),observation:$('observation').value}); if(!active()) $('finish-dialog').close();});
+$('finish-form').addEventListener('submit',async e=>{e.preventDefault(); const s=active(); if(!s||s.id!==finishSessionId){$('finish-dialog').close();message('Сеанс уже изменён в другом окне.');return;} await action('finish',{sessionId:s.id,workedSeconds:Math.round(Number($('worked-seconds').value)*60),observation:$('observation').value}); if(!active()) $('finish-dialog').close();});
 $('cancel').addEventListener('click',()=>{if(confirm('Отменить? Сеанс сохранится в истории без выполнения норматива.')) void action('cancel',{sessionId:active().id});});
 $('records').addEventListener('click',async e=>{const b=e.target.closest('[data-retry],[data-exclude]'); if(!b) return; const id=b.dataset.retry??b.dataset.exclude;
   if(b.dataset.exclude&&!confirm('Сохранить исходный сеанс на сервере без добавления часов? Локальная запись тоже останется.')) return;
