@@ -45,8 +45,8 @@ assets['/timer.css'] = ['timer.css', 'text/css; charset=utf-8'];
 assets['/offline-work'] = ['offline.html', 'text/html; charset=utf-8'];
 for (const name of ['timer-core.js','offline-store.js','offline-work.js','offline-engine.js','device-banner.js']) assets['/' + name] = [name, 'text/javascript; charset=utf-8'];
 assets['/offline-work.css'] = ['offline-work.css', 'text/css; charset=utf-8'];
-for (const name of ['writing.js','writing-drafts.js','reflection-hints.js','vendor/quill.js']) assets['/'+name]=[name,'text/javascript; charset=utf-8'];
-for (const name of ['writing.css','reflection-hints.css','vendor/quill.snow.css']) assets['/'+name]=[name,'text/css; charset=utf-8'];
+for (const name of ['writing.js','writing-drafts.js','reflection-hints.js','work-board.js','focus-ambience.js','vendor/quill.js']) assets['/'+name]=[name,'text/javascript; charset=utf-8'];
+for (const name of ['writing.css','reflection-hints.css','work-board.css','focus-ambience.css','vendor/quill.snow.css']) assets['/'+name]=[name,'text/css; charset=utf-8'];
 const viewerPort = Number(process.env.DASHBOARD_VIEWER_PORT ?? 8789);
 if (!Number.isInteger(viewerPort) || viewerPort < 1 || viewerPort > 65535 || viewerPort === port) throw new Error('DASHBOARD_VIEWER_PORT должен быть отдельным портом 1–65535.');
 const remoteViewer = createRemoteViewer({ configFile: path.join(dataDir, 'remote-access.json'), ownerPort: port, viewerPort, assetPaths: new Set(Object.keys(assets)) });
@@ -79,9 +79,10 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.6.2', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.7.0', timezone: 'Asia/Tashkent' });
     if (req.method === 'GET' && url.pathname === '/api/reflection-hints') return json(res, 200, readReflectionHints(dataDir));
     if (req.method === 'GET' && url.pathname === '/api/timer') return json(res, 200, store.getTimer(url.searchParams.get('week') ?? undefined));
+    if (req.method === 'GET' && url.pathname === '/api/timer/history') return json(res,200,store.getTimerHistory(url.searchParams.get('workRef')));
     if (req.method === 'GET' && url.pathname === '/api/writing') {
       let hintSource=null;const sourceFile=path.join(dataDir,'writing-hints.json');
       if(existsSync(sourceFile)){try{const source=JSON.parse(readFileSync(sourceFile,'utf8'));const address=new URL(source.url);if(['http:','https:'].includes(address.protocol)&&!address.username&&!address.password)hintSource=address.href;}catch{}}
@@ -126,7 +127,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/daily-problems') return json(res, 200, dailyProblems.view());
     if (req.method === 'POST' && url.pathname === '/api/daily-problems') return json(res, 200, dailyProblems.save(await body(req)));
     if (req.method === 'GET' && url.pathname === '/api/workspace') return json(res, 200, workspace.view());
-    if (req.method === 'POST' && url.pathname === '/api/workspace') { const value = await body(req); return json(res, 200, workspace.mutate(value.action, value.input)); }
+    if (req.method === 'POST' && url.pathname === '/api/workspace') { const value = await body(req,1024*1024); return json(res, 200, workspace.mutate(value.action, value.input)); }
     if (req.method === 'GET' && url.pathname === '/api/finance') {
       const period = store.getPeriod(url.searchParams.get('period') ?? '7d');
       return json(res, 200, workspace.finance(period.start, period.end));

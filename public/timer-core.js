@@ -115,7 +115,7 @@ export function changeTimer(value, action, input, { now = Date.now(), validateWo
     const duration = phase === 'work' ? settings.workMinutes : phase === 'long_break' ? settings.longBreakMinutes : settings.shortBreakMinutes;
     const s = { id: randomUUID(), phase, mode, status: 'running', title: title.trim(), workRef, metricId: metric?.id ?? null, allocation,
       workType: workType.trim() || null, settings, plannedMs: mode === 'pomodoro' ? duration * 60000 : null,
-      startedAt: stamp, updatedAt: stamp, runningSince: now, intervals: [], completedPomodoros: 0, events: [{ action, at: stamp }] };
+      startedAt: stamp, updatedAt: stamp, runningSince: now, intervals: [], completedPomodoros: 0, events: [{ action, at: stamp, elapsedSeconds:0 }] };
     timer.sessions.push(s); timer.activeId = s.id;
   } else if (['pause','resume','extend','finish','cancel'].includes(action)) {
     if (!active || active.id !== input.sessionId) conflict('Активный сеанс уже изменён или завершён.');
@@ -150,7 +150,7 @@ export function changeTimer(value, action, input, { now = Date.now(), validateWo
       }
       active.entryIds = entries.map(e => e.id); timer.activeId = null;
     }
-    active.updatedAt = stamp; active.events.push({ action, at: stamp, ...(input.workedSeconds === undefined ? {} : { workedSeconds: input.workedSeconds }) });
+    active.updatedAt = stamp; active.events.push({ action, at: stamp, elapsedSeconds:sessionView(active,now).elapsedMs/1000, ...(input.workedSeconds === undefined ? {} : { workedSeconds: input.workedSeconds }) });
   } else fail('Неизвестное действие таймера.');
   timer.revision++;
   timer.requests.push({ id: input.requestId, signature });
@@ -175,6 +175,7 @@ export function timerView(value, { now = Date.now(), entries, week, end, entitie
   });
   return { version: 1, revision: timer.revision, serverNow: new Date(now).toISOString(), settings: timer.settings, active: active ? sessionView(active, now) : null,
     cycleCount: timer.cycleCount, sessions, week, end, plans, byWork,
+    events:timer.sessions.flatMap(s=>s.events.filter(e=>atDate(Date.parse(e.at))>=week&&atDate(Date.parse(e.at))<=end).map((e,index)=>({...e,id:s.id+':'+index,sessionId:s.id,title:s.title,workRef:s.workRef,phase:s.phase}))).sort((a,b)=>b.at.localeCompare(a.at)),
     summary: { workSeconds: workEntries.length ? workEntries.reduce((sum,e) => sum + seconds(e),0) : null,
       pomodoros: sessions.filter(s => s.phase === 'work').reduce((sum,s) => sum + s.completedPomodoros,0),
       breakSeconds: sessions.filter(s => s.phase !== 'work' && s.status === 'finished').reduce((sum,s) => sum + s.elapsedMs / 1000,0), records: workEntries.length } };

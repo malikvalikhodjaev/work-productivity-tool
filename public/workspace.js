@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const nf = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
 const n = value => value === null || value === undefined ? 'No Data' : nf.format(value);
-const types = { system: 'Система', case: 'Кейс', project: 'Проект', task: 'Задача', alpha: 'Альфа' };
+const types = { system: 'Система', case: 'Кейс', project: 'Проект', task: 'Задача', work:'Работа', alpha: 'Альфа' };
 const caseStatus = { new: 'Новый', active: 'В работе', watching: 'Наблюдение', closed: 'Закрыт' };
 let workspace = null, activity = null, finance = null, period = '7d', loadId = 0, financeId = 0, submitAction = null;
 let financeImport = null, activeTable = 'systems';
@@ -115,7 +115,7 @@ function open(title, fields, action, submit = 'Сохранить') {
   $('workspace-form-error').hidden = true; $('workspace-submit').textContent = submit;
   submitAction = action; $('workspace-dialog').showModal();
 }
-async function mutate(action, input) { workspace = await api('/api/workspace', { action, input }); renderAll(); }
+async function mutate(action, input) { workspace = await api('/api/workspace', { action, input }); renderAll(); window.dispatchEvent(new Event('rhythm:workspace-changed')); }
 function systemForm(id) {
   const s = workspace.systems.find(x => x.id === id) ?? { name: '', description: '', characteristics: Array.from({length:4},(_,i) => ({ kind: i < 3 ? 'priority' : 'limit', direction: 'up' })) };
   open(id ? 'Настроить систему' : 'Новая система', field('w-name','Система',s.name,'text',true) + area('w-description','Что создаём, меняем или поддерживаем',s.description) + '<p class="field-help">Можно начать с пустых характеристик. База — исходное значение, факт записывается отдельным замером. У ограничителя верхний предел.</p>' + s.characteristics.map((c,i) => `<fieldset class="characteristic-fields"><legend>${i < 3 ? `Приоритет ${i+1}` : 'Ограничитель'}</legend>${field(`w-c-name-${i}`,'Название',c.name)}<div class="field-pair">${field(`w-c-unit-${i}`,'Единица',c.unit)}${select(`w-c-direction-${i}`,i < 3 ? 'Направление' : 'Правило', i < 3 ? [['up','Увеличить'],['down','Уменьшить']] : [['down','Не выше предела']],c.direction)}</div><div class="field-pair">${field(`w-c-base-${i}`,'База',c.baseline,'number')}${field(`w-c-target-${i}`,i < 3 ? 'Целевое значение' : 'Верхний предел',c.target,'number')}</div></fieldset>`).join(''), () => mutate('saveSystem', { id: id || undefined, name: value('w-name'), description: value('w-description'), characteristics: s.characteristics.map((c,i) => ({id:c.id, name:value(`w-c-name-${i}`), unit:value(`w-c-unit-${i}`), direction:value(`w-c-direction-${i}`), baseline:numeric(`w-c-base-${i}`), target:numeric(`w-c-target-${i}`)})) }));
@@ -208,5 +208,6 @@ window.addEventListener('rhythm:overview-loaded',event=>{activity=event.detail; 
 window.addEventListener('rhythm:portfolio-rendered',renderImpacts);
 window.addEventListener('rhythm:work-link-changed',renderImpacts);
 window.addEventListener('rhythm:portfolio-saved',()=>void load());
+window.addEventListener('rhythm:work-items-changed',()=>void load());
 $('data-refresh').addEventListener('click',()=>void load());
 void load();

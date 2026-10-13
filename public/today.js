@@ -203,3 +203,5 @@ async function initializeFocusLink() {
   } catch (error) { status(error.message, true); }
 }
 void load();
+
+for(const name of ['rhythm:work-items-changed','rhythm:workspace-changed'])window.addEventListener(name,()=>void load());

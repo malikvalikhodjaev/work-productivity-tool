@@ -1,6 +1,7 @@
 import { createDeviceStore } from './offline-store.js';
 import { sessionView } from './timer-core.js';
 import { syncDevice } from './offline-engine.js';
+import {mountFocusAmbience} from './focus-ambience.js';
 
 const $ = id => document.getElementById(id), store = createDeviceStore();
 const channel = 'BroadcastChannel' in window ? new BroadcastChannel('indicators-work-device') : null;
@@ -8,6 +9,7 @@ const readOnly = document.querySelector('meta[name="dashboard-access"]')?.conten
 let state, syncing = false, acting = false, status = 'Локальное хранилище', formInitialized = false, alarmId;
 const esc = value => String(value ?? '').replace(/[&<>"']/g,c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const duration = ms => { const s = Math.floor(Math.max(0,ms)/1000); return [Math.floor(s/3600),Math.floor(s/60)%60,s%60].map(n=>String(n).padStart(2,'0')).join(':'); };
+const ambience=mountFocusAmbience(document.querySelector('main'),{allowExpand:false});$('clock').textContent='00:25:00';
 const stamp = value => new Date(value).toLocaleString('ru-RU',{timeZone:'Asia/Tashkent'});
 const message = value => { $('message').textContent = value; $('message').hidden = !value; };
 const active = () => state?.timer.sessions.find(s=>s.id===state.timer.activeId);
@@ -32,7 +34,7 @@ function render() {
   $('context-note').textContent='Список работ обновлён: '+stamp(state.context.capturedAt)+' · учёт по Ташкенту, UTC+5';
   $('server-active').hidden=!state.context.active;
   $('server-active').textContent=state.context.active?'На сервере был активен таймер «'+state.context.active.title+'» при последнем соединении. Здесь можно сохранить отдельный сеанс; пересечения потребуют разбора.':'';
-  const s=active(); $('active-card').hidden=!s; $('start-card').hidden=Boolean(s);
+  const s=active(); $('active-card').hidden=!s; $('start-card').hidden=Boolean(s);ambience.update({active:s});if(!s)$('clock').textContent=duration(state.timer.settings.workMinutes*60000);
   if(s) { $('active-title').textContent=s.title; $('phase').textContent=s.phase==='work'?'РАБОТА · НА УСТРОЙСТВЕ':'ПЕРЕРЫВ · НА УСТРОЙСТВЕ'; $('pause').textContent=s.status==='paused'?'Продолжить':'Пауза'; $('extend').hidden=s.mode!=='pomodoro'; tick(); }
   const records=Object.values(state.queue).reverse();
   const pending=records.filter(r=>r.status==='pending').length, conflicts=records.filter(r=>r.status==='conflict').length;

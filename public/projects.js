@@ -239,7 +239,7 @@ function makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyR
       note: imported.snapshot.available ? `${countLabel(imported.snapshot.work.length, 'строка', 'строки', 'строк')} · снимок доски на ${tableValue(imported.snapshot.capturedAt)} · не все строки являются активными задачами` : 'No Data · снимок Coda не загружен',
       sourceUrl: imported.snapshot.sources.work,
       columns: ['Работа', 'Стадия', 'Проект', 'Тип работы', 'Цели', 'Срок', 'Чек-бокс'],
-      rows: imported.snapshot.work.map(item => [item.title, item.stage, item.projects.join(', '), item.workType, item.goals.join(', '), item.deadline, item.done ? 'Отмечено' : 'Не отмечено'])
+      rows: imported.snapshot.work.map(item => [item.title, item.stage, Array.isArray(item.projects)?item.projects.join(', '):null, item.workType, Array.isArray(item.goals)?item.goals.join(', '):null, item.deadline, item.done === undefined ? null : item.done ? 'Отмечено' : 'Не отмечено'])
     },
     goals: {
       title: 'Цели Coda',
@@ -329,6 +329,12 @@ async function loadData() {
       const timer = await timerResponse.json();
       if (currentRequest !== dataRequestId) return;
       dataTables.timer = { title: 'Сеансы таймера', note: `${timer.week} — ${timer.end} · data/dashboard.json → timer.sessions · активный сеанс показан независимо от недели`, columns: ['ID', 'Начало', 'Конец', 'Работа', 'Связь', 'Режим', 'Фаза', 'Статус', 'План, сек', 'Факт, сек', 'Помидорки', 'Записи времени'], rows: [timer.active, ...timer.sessions].filter(Boolean).map(s=>[s.id,s.startedAt,s.finishedAt,s.title,s.workRef,s.mode,s.phase,s.status,s.plannedMs === null ? null : s.plannedMs/1000,s.elapsedMs/1000,s.completedPomodoros,s.entryIds?.join(', ')]) };
+      dataTables.timerEvents={title:'События таймера',note:`${timer.week} — ${timer.end} · data/dashboard.json → timer.sessions.events · накопленное рабочее время на момент действия`,columns:['Сеанс','Когда','Действие','Работа','Связь','Фаза','Накоплено, сек'],rows:(timer.events??[]).map(e=>[e.sessionId,e.at,e.action,e.title,e.workRef,e.phase,e.elapsedSeconds??null])};
+    }
+    const workResponse=await fetch('/api/workspace');
+    if(workResponse.ok){const work=await workResponse.json();if(currentRequest!==dataRequestId)return;
+      dataTables.workItems={title:'Карточки работы',note:'data/workspace.json → workItems · независимые работы и issues, исходники и история сохраняются',columns:['ID','Тип','Название','Стадия','Проект','Назначение времени','Характер','Описание','Следующий шаг','Результат','Возврат','Версия','Правок','Источник'],rows:(work.workItems??[]).map(w=>[w.id,w.kind,w.title,w.stage,w.projectId,w.metricId??w.allocation,w.workType,w.description,w.nextStep,w.result,w.reviewDate,w.revision,w.revisions?.length??0,w.origin?JSON.stringify(w.origin):null])};
+      dataTables.workNotes={title:'Заметки работ',note:'data/workspace.json → workNotes · свободные заметки существующих задач и кейсов',columns:['Связь','Текст','Версия','Изменено','Правок'],rows:(work.workNotes??[]).map(w=>[w.workRef,w.text,w.revision,w.updatedAt,w.revisions.length])};
     }
     const writingResponse=await fetch('/api/writing');
     if(writingResponse.ok) {

@@ -1,3 +1,4 @@
+import {mountFocusAmbience} from './focus-ambience.js';
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const duration = seconds => { if (seconds === null) return 'No Data'; const n = Math.max(0, Math.floor(seconds)); return `${Math.floor(n / 3600) ? Math.floor(n / 3600) + ':' : ''}${String(Math.floor(n / 60) % 60).padStart(2,'0')}:${String(n % 60).padStart(2,'0')}`; };
@@ -9,7 +10,8 @@ let state, serverOffset = 0, week, entities = [], metrics = [], busy = false, lo
 const panel = document.createElement('section');
 panel.className = 'timer-panel'; panel.id = 'timer-panel';
 panel.innerHTML = `<div class="timer-heading"><div><p class="eyebrow">РАБОТА → ВРЕМЯ → НОРМАТИВ</p><h2>Фокус и время</h2></div><button class="button primary" id="timer-new" type="button">Запустить таймер</button></div><p class="timer-note"><a class="button secondary" href="/offline-work">Таймер на устройстве / Без сети</a> <span id="device-timer-badge">С локальным сохранением</span></p><p id="timer-status" class="timer-note" role="status">Загрузка…</p><div id="timer-active" hidden><div class="timer-current"><div><p id="timer-phase" class="eyebrow"></p><h3 id="timer-title"></h3><p id="timer-link" class="timer-note"></p></div><output id="timer-clock" class="timer-clock" aria-label="Отсчёт таймера"></output></div><p id="timer-warning" class="timer-note"></p><div class="timer-actions"><button id="timer-pause" class="button secondary" type="button">Пауза</button><button id="timer-extend" class="button secondary" type="button">＋ 5 минут</button><button id="timer-finish" class="button primary" type="button">Завершить и учесть</button><button id="timer-cancel" class="text-button" type="button">Отменить сеанс</button></div></div><div id="timer-idle" class="timer-idle" hidden><p>Выбери карточку работы или назови активность. Время учтётся после завершения.</p><button id="timer-break" class="button secondary" type="button">Начать перерыв</button><span id="timer-cycle" class="timer-note"></span></div><div id="timer-summary" class="timer-summary"></div><details class="timer-details"><summary>Статистика недели и норматив конкретной работы</summary><p id="timer-week" class="timer-note"></p><div id="timer-plans"></div><form id="timer-plan-form" class="timer-plan-form"><label>Работа<select id="timer-plan-ref" required></select></label><label>Часов в эту неделю<input id="timer-plan-hours" type="number" min="0.01" max="168" step="0.01" inputmode="decimal"></label><button class="button secondary" type="submit">Сохранить норматив</button></form><p class="timer-note">Пустое поле снимает норматив. В факт входит всё связанное время, включая ручные записи и импорт. Этот разрез не добавляет часы второй раз.</p><div id="timer-by-work"></div><details><summary>Сеансы таймера</summary><div class="timer-table-wrap"><table class="timer-table"><thead><tr><th>Начало</th><th>Работа</th><th>Состояние</th><th>Время</th><th>Помидорки</th></tr></thead><tbody id="timer-history"></tbody></table></div></details></details><p id="timer-backup" class="timer-note"></p>`;
-if (!embedded) ($('work-panel') ?? document.querySelector('main') ?? document.body).prepend(panel);
+if (!embedded) {if($('work-board'))$('work-board').after(panel);else ($('work-panel') ?? document.querySelector('main') ?? document.body).prepend(panel);}
+const ambience=!embedded?mountFocusAmbience(panel):null;
 const dialog = document.createElement('dialog'); dialog.id = 'timer-dialog'; dialog.className = 'modal timer-dialog';
 dialog.innerHTML = `<form id="timer-form"><div class="modal-heading"><h2>Таймер работы</h2><button class="icon-button" id="timer-close" type="button" aria-label="Закрыть таймер">×</button></div><label class="field">Что делаю<input id="timer-input-title" maxlength="300" required></label><label class="field">Связанная работа / объект<select id="timer-input-ref"></select></label><div class="field-pair"><label class="field">Учесть время<select id="timer-input-metric"></select></label><label class="field">Характер работы<input id="timer-input-type" list="work-types" maxlength="80"></label></div><div class="field-pair"><label class="field">Режим<select id="timer-mode"><option value="pomodoro">Помидорка</option><option value="stopwatch">Секундомер</option></select></label><label class="field">Пресет<select id="timer-preset"><option value="custom">Мои настройки</option><option value="25">25 / 5 минут</option><option value="50">50 / 10 минут</option></select></label></div><div class="timer-settings"><label class="field">Работа, мин<input id="timer-work" type="number" min="1" max="240" step="1" required></label><label class="field">Перерыв, мин<input id="timer-short" type="number" min="1" max="240" step="1" required></label><label class="field">Длинный, мин<input id="timer-long" type="number" min="1" max="240" step="1" required></label><label class="field">После помидорок<input id="timer-every" type="number" min="1" max="20" step="1" required></label></div><p class="timer-note">Настройки применяются к новому сеансу. Перерывы запускаются отдельно и не входят в рабочие часы. Сигнал работает на открытой странице; на заблокированном Android проверка ещё нужна.</p><p id="timer-error" class="form-error" role="alert" hidden></p><div class="modal-footer"><button id="timer-save-settings" class="button secondary" type="button">Сохранить настройки</button><button id="timer-start" class="button primary" type="submit">Начать работу</button></div></form>`;
 if (!embedded) document.body.append(dialog);
@@ -28,6 +30,7 @@ function tick() {
   const s = state.active, ms = elapsed(s), expired = s.mode === 'pomodoro' && ms >= s.plannedMs;
   const clock = duration((s.mode === 'pomodoro' ? Math.max(0,s.plannedMs-ms) : ms)/1000);
   $('timer-clock').textContent = clock; pill.textContent = `${s.status === 'paused' ? 'Ⅱ' : '◷'} ${clock} · ${s.title}`;
+  window.dispatchEvent(new CustomEvent('rhythm:timer-tick',{detail:{clock,elapsedSeconds:ms/1000,active:s}}));
   $('timer-warning').textContent = s.status === 'paused' ? 'Пауза · время не учитывается' : expired ? 'Интервал закончился. Заверши, чтобы учесть время, или добавь 5 минут.' : `Учтено ${duration(ms/1000)} · отсчёт сохраняется на сервере`;
   $('timer-pause').disabled = busy || (expired && s.status === 'paused');
   if (expired && s.status === 'running' && alarmId !== s.id) {
@@ -52,9 +55,11 @@ function render() {
   $('timer-by-work').innerHTML='<h3>Куда ушло время таймера</h3>'+(state.byWork.map(w=>`<div class="timer-work-row"><span>${esc(w.title)}</span><strong>${duration(w.seconds)}</strong></div>`).join('')||'<p>No Data</p>');
   $('timer-history').innerHTML=state.sessions.map(s=>`<tr><td>${esc(new Date(s.startedAt).toLocaleString('ru-RU',{timeZone:'Asia/Tashkent'}))}</td><td>${esc(s.title)}</td><td>${s.status==='cancelled'?'Отменён, не учтён':s.phase==='work'?'Учтён':'Перерыв'}</td><td>${duration(s.elapsedMs/1000)}</td><td>${s.completedPomodoros}</td></tr>`).join('')||'<tr><td colspan="5">No Data</td></tr>';
   tick();
-  if(readOnly) for(const control of panel.querySelectorAll('button,input,select')) control.disabled=true;
+  if(!s) $('timer-clock').textContent=duration(state.settings.workMinutes*60);
+  ambience?.update(state);
+  if(readOnly) for(const control of panel.querySelectorAll('button,input,select')) if(!control.closest('[data-local-control]'))control.disabled=true;
 }
-function accept(value) { if(state && value.revision<state.revision) return; state=value; serverOffset=Date.parse(value.serverNow)-Date.now(); render(); }
+function accept(value) { if(state && value.revision<state.revision) return; const changed=!state||value.revision!==state.revision; state=value; serverOffset=Date.parse(value.serverNow)-Date.now(); render(); window.dispatchEvent(new CustomEvent('rhythm:timer-state',{detail:{...value,changed}})); }
 async function load() {
   if (loading||busy||embedded) return; loading=true;
   try { accept(await get('/api/timer'+(week?'?week='+encodeURIComponent(week):''))); notice('Сохраняется на ПК · один общий сеанс при соединении с сервером'); }
@@ -123,7 +128,7 @@ if(!embedded) {
   $('timer-plan-ref').addEventListener('change',()=>{ $('timer-plan-hours').value=state.plans.find(p=>p.workRef===$('timer-plan-ref').value)?.target??''; });
   $('timer-plan-form').addEventListener('submit',event=>{ event.preventDefault(); void act('workTarget',{workRef:$('timer-plan-ref').value,hours:$('timer-plan-hours').value===''?null:Number($('timer-plan-hours').value)}); });
   window.addEventListener('rhythm:week-loaded',event=>{ week=event.detail.week; void load(); });
-  for(const name of ['focus','rhythm:portfolio-saved']) window.addEventListener(name,()=>{ void load(); if(!dialog.open) void context().catch(()=>{}); });
+  for(const name of ['focus','rhythm:portfolio-saved','rhythm:work-items-changed']) window.addEventListener(name,()=>{ void load(); if(!dialog.open) void context().catch(()=>{}); });
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) void load(); });
   setInterval(tick,250); setInterval(()=>{ if(!document.hidden) void load(); },3000);
   void load(); void context().catch(error=>notice(error.message,true));
@@ -132,4 +137,14 @@ if(!embedded) {
 document.addEventListener('click',event=>{ const button=event.target.closest('[data-timer-work]'); if(button) void open({workRef:button.dataset.timerWork,title:button.dataset.timerTitle}); });
 window.addEventListener('rhythm:timer-work',event=>void open(event.detail));
 window.addEventListener('message',event=>{ if(event.origin===location.origin&&event.source===$('alpha-modeler-frame')?.contentWindow&&event.data?.type==='rhythm:timer-work') void open(event.data.work); });
-window.rhythmTimer={open};
+async function focusWork(input) {
+  if(readOnly||embedded||busy)return false;
+  await load();if(!state)return false;
+  if(state.active){
+    if(state.active.workRef===input.workRef&&state.active.status==='paused')return act('resume',{sessionId:state.active.id});
+    notice(state.active.workRef===input.workRef?'Эта работа уже в фокусе.':'Сейчас в фокусе другая работа. Заверши её или отмени перед переключением.',true);
+    return false;
+  }
+  return act('start',{title:input.title,workRef:input.workRef,metricId:input.metricId??null,allocation:input.allocation??'unclassified',workType:input.workType??'',mode:input.mode??'pomodoro',settings:state.settings});
+}
+window.rhythmTimer={open,focus:focusWork,pause:async workRef=>{await load();if(state?.active?.workRef===workRef&&state.active.status==='running')return act('pause',{sessionId:state.active.id});return false;},finish:beginFinish,getState:()=>state,plan:async workRef=>{if(readOnly)return;await load();await context();$('timer-plan-ref').value=workRef;$('timer-plan-hours').value=state.plans.find(p=>p.workRef===workRef)?.target??'';const details=panel.querySelector('.timer-details');details.open=true;details.scrollIntoView({behavior:'smooth',block:'start'});}};
