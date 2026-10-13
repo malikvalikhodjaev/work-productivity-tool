@@ -42,6 +42,8 @@ assets['/alphas.css'] = ['alphas.css', 'text/css; charset=utf-8'];
 for (const [route, type] of [['/manifest.webmanifest','application/manifest+json'],['/service-worker.js','text/javascript; charset=utf-8'],['/mobile.js','text/javascript; charset=utf-8'],['/remote-view.js','text/javascript; charset=utf-8'],['/mobile.css','text/css; charset=utf-8'],['/offline.html','text/html; charset=utf-8'],['/offline.js','text/javascript; charset=utf-8'],['/icon-192.png','image/png'],['/icon-512.png','image/png'],['/icon-maskable-512.png','image/png']]) assets[route] = [route.slice(1), type];
 assets['/timer.js'] = ['timer.js', 'text/javascript; charset=utf-8'];
 assets['/timer.css'] = ['timer.css', 'text/css; charset=utf-8'];
+assets['/focus'] = ['focus.html', 'text/html; charset=utf-8'];
+assets['/focus-window.css'] = ['focus-window.css', 'text/css; charset=utf-8'];
 assets['/offline-work'] = ['offline.html', 'text/html; charset=utf-8'];
 for (const name of ['timer-core.js','offline-store.js','offline-work.js','offline-engine.js','device-banner.js']) assets['/' + name] = [name, 'text/javascript; charset=utf-8'];
 assets['/offline-work.css'] = ['offline-work.css', 'text/css; charset=utf-8'];
@@ -79,7 +81,7 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.7.0', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.8.0', timezone: 'Asia/Tashkent' });
     if (req.method === 'GET' && url.pathname === '/api/reflection-hints') return json(res, 200, readReflectionHints(dataDir));
     if (req.method === 'GET' && url.pathname === '/api/timer') return json(res, 200, store.getTimer(url.searchParams.get('week') ?? undefined));
     if (req.method === 'GET' && url.pathname === '/api/timer/history') return json(res,200,store.getTimerHistory(url.searchParams.get('workRef')));

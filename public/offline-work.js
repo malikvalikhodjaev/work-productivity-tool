@@ -6,7 +6,7 @@ import {mountFocusAmbience} from './focus-ambience.js';
 const $ = id => document.getElementById(id), store = createDeviceStore();
 const channel = 'BroadcastChannel' in window ? new BroadcastChannel('indicators-work-device') : null;
 const readOnly = document.querySelector('meta[name="dashboard-access"]')?.content === 'viewer';
-let state, syncing = false, acting = false, status = 'Локальное хранилище', formInitialized = false, alarmId;
+let state, syncing = false, acting = false, status = 'Локальное хранилище', formInitialized = false, alarmId, reviewKey, finishSessionId;
 const esc = value => String(value ?? '').replace(/[&<>"']/g,c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const duration = ms => { const s = Math.floor(Math.max(0,ms)/1000); return [Math.floor(s/3600),Math.floor(s/60)%60,s%60].map(n=>String(n).padStart(2,'0')).join(':'); };
 const ambience=mountFocusAmbience(document.querySelector('main'),{allowExpand:false});$('clock').textContent='00:25:00';
@@ -34,12 +34,12 @@ function render() {
   $('context-note').textContent='Список работ обновлён: '+stamp(state.context.capturedAt)+' · учёт по Ташкенту, UTC+5';
   $('server-active').hidden=!state.context.active;
   $('server-active').textContent=state.context.active?'На сервере был активен таймер «'+state.context.active.title+'» при последнем соединении. Здесь можно сохранить отдельный сеанс; пересечения потребуют разбора.':'';
-  const s=active(); $('active-card').hidden=!s; $('start-card').hidden=Boolean(s);ambience.update({active:s});if(!s)$('clock').textContent=duration(state.timer.settings.workMinutes*60000);
+  const s=active(); if($('finish-dialog').open&&s?.id!==finishSessionId){$('finish-dialog').close();finishSessionId=null;} $('active-card').hidden=!s; $('start-card').hidden=Boolean(s);ambience.update({active:s});if(!s)$('clock').textContent=duration(state.timer.settings.workMinutes*60000);
   if(s) { $('active-title').textContent=s.title; $('phase').textContent=s.phase==='work'?'РАБОТА · НА УСТРОЙСТВЕ':'ПЕРЕРЫВ · НА УСТРОЙСТВЕ'; $('pause').textContent=s.status==='paused'?'Продолжить':'Пауза'; $('extend').hidden=s.mode!=='pomodoro'; tick(); }
   const records=Object.values(state.queue).reverse();
   const pending=records.filter(r=>r.status==='pending').length, conflicts=records.filter(r=>r.status==='conflict').length;
   $('counts').textContent=`К отправке: ${pending} · Разобрать: ${conflicts}`;
-  $('records').innerHTML=records.map(r=>`<article class="record"><strong>${esc(r.session.title)}</strong><div class="record-meta"><span>${esc(stamp(r.session.startedAt))}</span><span>${duration(r.session.intervals.reduce((v,i)=>v+i.end-i.start,0))}</span><span>${r.session.phase!=='work'?'Перерыв · ':''}${r.status==='synced'?(r.receipt.status==='excluded'?'На сервере · без учёта времени':'На сервере'):r.status==='conflict'?'Нужен разбор':'Сохранено здесь · ждёт отправки'}</span></div>${r.error?`<p class="record-error">${esc(r.error)}${r.details?.length?' '+r.details.map(d=>esc(d.title)).join(', '):''}</p>`:''}${r.status==='conflict'?`<div class="toolbar"><button class="secondary" data-retry="${esc(r.session.id)}">Проверить снова</button><button class="secondary" data-exclude="${esc(r.session.id)}">Сохранить без учёта времени</button></div>`:''}</article>`).join('')||'<p class="note">No Data</p>';
+  $('records').innerHTML=records.map(r=>`<article class="record"><strong>${esc(r.session.title)}</strong><div class="record-meta"><span>${esc(stamp(r.session.startedAt))}</span><span>${duration(r.session.intervals.reduce((v,i)=>v+i.end-i.start,0))}</span><span>${r.session.phase!=='work'?'Перерыв · ':''}${r.status==='synced'?(r.receipt.status==='excluded'?'На сервере · без учёта времени':'На сервере'):r.status==='conflict'?'Нужен разбор':'Сохранено здесь · ждёт отправки'}</span></div>${r.session.observation?`<p class="note">${esc(r.session.observation)}</p>`:''}${r.error?`<p class="record-error">${esc(r.error)}${r.details?.length?' '+r.details.map(d=>esc(d.title)).join(', '):''}</p>`:''}${r.status==='conflict'?`<div class="toolbar"><button class="secondary" data-retry="${esc(r.session.id)}">Проверить снова</button><button class="secondary" data-exclude="${esc(r.session.id)}">Сохранить без учёта времени</button></div>`:''}</article>`).join('')||'<p class="note">No Data</p>';
   $('sync').disabled=syncing||readOnly;
   for(const b of $('active-card').querySelectorAll('button')) b.disabled=acting||readOnly;
 }
@@ -48,7 +48,10 @@ function tick() {
   const view=sessionView(s,Date.now()); $('clock').textContent=duration(s.mode==='pomodoro'?view.remainingMs:view.elapsedMs);
   $('active-note').textContent=s.status==='paused'?'Пауза · время не учитывается':view.expired?'Интервал завершён. Подтверди факт или продли на 5 минут.':'Сохранено на устройстве · можно закрыть страницу';
   if(view.expired&&alarmId!==s.id) { alarmId=s.id; try { if(Notification.permission==='granted') new Notification('I&W · Интервал завершён',{body:s.title}); } catch {} }
+  const key=s.id+':'+s.plannedMs;
+  if(view.expired&&s.phase==='work'&&!document.hidden&&!readOnly&&!acting&&!$('finish-dialog').open&&reviewKey!==key){reviewKey=key;beginFinish();}
 }
+function beginFinish(){const s=active();if(!s||acting||readOnly)return;const view=sessionView(s,Date.now());if(finishSessionId!==s.id)$('observation').value='';finishSessionId=s.id;$('finish-dialog').querySelector('h2').textContent=s.mode==='pomodoro'&&s.phase==='work'?'Как прошла помидорка?':'Подтверди фактическое время';$('worked-seconds').value=Math.min(86400,Math.floor(view.elapsedMs/1000));$('worked-seconds').max=Math.min(86400,Math.floor(view.elapsedMs/1000));$('finish-note').textContent='По отсчёту: '+duration(view.elapsedMs)+'. Паузы исключены. Можно уменьшить факт, если отвлёкся.';if(!$('finish-dialog').open)$('finish-dialog').showModal();$('observation').focus();}
 async function action(name,input={}) {
   if(acting||readOnly) return; acting=true;
   try { state=await store.action(name,input,state.timer.revision); changed(); message(''); if(['finish','cancel'].includes(name)) void sync(); }
@@ -80,9 +83,9 @@ $('start-form').addEventListener('submit',async e=>{e.preventDefault(); const ch
 $('break').addEventListener('click',()=>void action('startBreak',{settings:settings()}));
 $('pause').addEventListener('click',()=>void action(active().status==='paused'?'resume':'pause',{sessionId:active().id}));
 $('extend').addEventListener('click',()=>{alarmId=null; void action('extend',{sessionId:active().id});});
-$('finish').addEventListener('click',()=>{const view=sessionView(active(),Date.now()); $('worked-seconds').value=Math.min(86400,Math.floor(view.elapsedMs/1000)); $('worked-seconds').max=Math.min(86400,Math.floor(view.elapsedMs/1000)); $('finish-note').textContent='По отсчёту: '+duration(view.elapsedMs)+'. Паузы исключены. Можно уменьшить факт, если отвлёкся.'; $('finish-dialog').showModal();});
+$('finish').addEventListener('click',beginFinish);
 $('finish-close').addEventListener('click',()=>$('finish-dialog').close());
-$('finish-form').addEventListener('submit',async e=>{e.preventDefault(); const s=active(); if(!s) return; await action('finish',{sessionId:s.id,workedSeconds:Number($('worked-seconds').value)}); if(!active()) $('finish-dialog').close();});
+$('finish-form').addEventListener('submit',async e=>{e.preventDefault(); const s=active(); if(!s||s.id!==finishSessionId){$('finish-dialog').close();message('Сеанс уже изменён в другом окне.');return;} await action('finish',{sessionId:s.id,workedSeconds:Number($('worked-seconds').value),observation:$('observation').value}); if(!active()) $('finish-dialog').close();});
 $('cancel').addEventListener('click',()=>{if(confirm('Отменить? Сеанс сохранится в истории без выполнения норматива.')) void action('cancel',{sessionId:active().id});});
 $('records').addEventListener('click',async e=>{const b=e.target.closest('[data-retry],[data-exclude]'); if(!b) return; const id=b.dataset.retry??b.dataset.exclude;
   if(b.dataset.exclude&&!confirm('Сохранить исходный сеанс на сервере без добавления часов? Локальная запись тоже останется.')) return;

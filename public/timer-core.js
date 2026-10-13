@@ -133,6 +133,7 @@ export function changeTimer(value, action, input, { now = Date.now(), validateWo
       active.plannedMs += 300000;
       if (active.status === 'running') active.runningSince = now;
     } else {
+      if(action==='finish'&&input.observation!==undefined&&(typeof input.observation!=='string'||input.observation.length>1000||/[\r\n]/.test(input.observation)))fail('Наблюдение: одна строка до 1000 символов.');
       closeInterval(active, now);
       if (input.workedSeconds !== undefined) {
         if (!Number.isInteger(input.workedSeconds) || input.workedSeconds < 0 || input.workedSeconds * 1000 > savedMs(active) || input.workedSeconds > 86400) fail('Уточнённый факт должен быть от 0 до учтённой длительности, не более 24 часов.');
@@ -140,6 +141,7 @@ export function changeTimer(value, action, input, { now = Date.now(), validateWo
       }
       if (action === 'finish' && savedMs(active) > 24 * 3600000) fail('Длинный сеанс требует уточнения: укажи факт не больше 24 часов.');
       active.status = action === 'finish' ? 'finished' : 'cancelled'; active.finishedAt = stamp;
+      if(action==='finish'&&input.observation!==undefined)active.observation=input.observation;
       active.completedPomodoros = action === 'finish' && active.phase === 'work' && active.mode === 'pomodoro' && savedMs(active) >= active.plannedMs ? 1 : 0;
       if (active.completedPomodoros) timer.cycleCount++;
       if (action === 'finish' && active.phase === 'long_break') timer.cycleCount = 0;

@@ -328,7 +328,7 @@ async function loadData() {
     if (timerResponse.ok) {
       const timer = await timerResponse.json();
       if (currentRequest !== dataRequestId) return;
-      dataTables.timer = { title: 'Сеансы таймера', note: `${timer.week} — ${timer.end} · data/dashboard.json → timer.sessions · активный сеанс показан независимо от недели`, columns: ['ID', 'Начало', 'Конец', 'Работа', 'Связь', 'Режим', 'Фаза', 'Статус', 'План, сек', 'Факт, сек', 'Помидорки', 'Записи времени'], rows: [timer.active, ...timer.sessions].filter(Boolean).map(s=>[s.id,s.startedAt,s.finishedAt,s.title,s.workRef,s.mode,s.phase,s.status,s.plannedMs === null ? null : s.plannedMs/1000,s.elapsedMs/1000,s.completedPomodoros,s.entryIds?.join(', ')]) };
+      dataTables.timer = { title: 'Сеансы таймера', note: `${timer.week} — ${timer.end} · data/dashboard.json → timer.sessions · активный сеанс показан независимо от недели`, columns: ['ID', 'Начало', 'Конец', 'Работа', 'Связь', 'Режим', 'Фаза', 'Статус', 'План, сек', 'Факт, сек', 'Помидорки', 'Записи времени', 'Наблюдение'], rows: [timer.active, ...timer.sessions].filter(Boolean).map(s=>[s.id,s.startedAt,s.finishedAt,s.title,s.workRef,s.mode,s.phase,s.status,s.plannedMs === null ? null : s.plannedMs/1000,s.elapsedMs/1000,s.completedPomodoros,s.entryIds?.join(', '),s.observation||null]) };
       dataTables.timerEvents={title:'События таймера',note:`${timer.week} — ${timer.end} · data/dashboard.json → timer.sessions.events · накопленное рабочее время на момент действия`,columns:['Сеанс','Когда','Действие','Работа','Связь','Фаза','Накоплено, сек'],rows:(timer.events??[]).map(e=>[e.sessionId,e.at,e.action,e.title,e.workRef,e.phase,e.elapsedSeconds??null])};
     }
     const workResponse=await fetch('/api/workspace');

@@ -6,10 +6,10 @@ const number = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
 const humanTime = seconds => { const n=Math.round(seconds); return [Math.floor(n/3600) ? `${Math.floor(n/3600)} ч` : '',Math.floor(n/60)%60 ? `${Math.floor(n/60)%60} мин` : '',n%60 || n===0 ? `${n%60} с` : ''].filter(Boolean).join(' '); };
 const embedded = window.parent !== window;
 const readOnly = Boolean(document.querySelector('meta[name="dashboard-access"][content="viewer"]'));
-let state, serverOffset = 0, week, entities = [], metrics = [], busy = false, loading = false, alarmId;
+let state, serverOffset = 0, week, entities = [], metrics = [], busy = false, loading = false, alarmId, reviewKey, finishSessionId;
 const panel = document.createElement('section');
 panel.className = 'timer-panel'; panel.id = 'timer-panel';
-panel.innerHTML = `<div class="timer-heading"><div><p class="eyebrow">РАБОТА → ВРЕМЯ → НОРМАТИВ</p><h2>Фокус и время</h2></div><button class="button primary" id="timer-new" type="button">Запустить таймер</button></div><p class="timer-note"><a class="button secondary" href="/offline-work">Таймер на устройстве / Без сети</a> <span id="device-timer-badge">С локальным сохранением</span></p><p id="timer-status" class="timer-note" role="status">Загрузка…</p><div id="timer-active" hidden><div class="timer-current"><div><p id="timer-phase" class="eyebrow"></p><h3 id="timer-title"></h3><p id="timer-link" class="timer-note"></p></div><output id="timer-clock" class="timer-clock" aria-label="Отсчёт таймера"></output></div><p id="timer-warning" class="timer-note"></p><div class="timer-actions"><button id="timer-pause" class="button secondary" type="button">Пауза</button><button id="timer-extend" class="button secondary" type="button">＋ 5 минут</button><button id="timer-finish" class="button primary" type="button">Завершить и учесть</button><button id="timer-cancel" class="text-button" type="button">Отменить сеанс</button></div></div><div id="timer-idle" class="timer-idle" hidden><p>Выбери карточку работы или назови активность. Время учтётся после завершения.</p><button id="timer-break" class="button secondary" type="button">Начать перерыв</button><span id="timer-cycle" class="timer-note"></span></div><div id="timer-summary" class="timer-summary"></div><details class="timer-details"><summary>Статистика недели и норматив конкретной работы</summary><p id="timer-week" class="timer-note"></p><div id="timer-plans"></div><form id="timer-plan-form" class="timer-plan-form"><label>Работа<select id="timer-plan-ref" required></select></label><label>Часов в эту неделю<input id="timer-plan-hours" type="number" min="0.01" max="168" step="0.01" inputmode="decimal"></label><button class="button secondary" type="submit">Сохранить норматив</button></form><p class="timer-note">Пустое поле снимает норматив. В факт входит всё связанное время, включая ручные записи и импорт. Этот разрез не добавляет часы второй раз.</p><div id="timer-by-work"></div><details><summary>Сеансы таймера</summary><div class="timer-table-wrap"><table class="timer-table"><thead><tr><th>Начало</th><th>Работа</th><th>Состояние</th><th>Время</th><th>Помидорки</th></tr></thead><tbody id="timer-history"></tbody></table></div></details></details><p id="timer-backup" class="timer-note"></p>`;
+panel.innerHTML = `<div class="timer-heading"><div><p class="eyebrow">РАБОТА → ВРЕМЯ → НОРМАТИВ</p><h2>Фокус и время</h2></div><button class="button primary" id="timer-new" type="button">Запустить таймер</button></div><p class="timer-note"><a class="button secondary" href="/offline-work">Таймер на устройстве / Без сети</a> <span id="device-timer-badge">С локальным сохранением</span></p><p id="timer-status" class="timer-note" role="status">Загрузка…</p><div id="timer-active" hidden><div class="timer-current"><div><p id="timer-phase" class="eyebrow"></p><h3 id="timer-title"></h3><p id="timer-link" class="timer-note"></p></div><output id="timer-clock" class="timer-clock" aria-label="Отсчёт таймера"></output></div><p id="timer-warning" class="timer-note"></p><div class="timer-actions"><button id="timer-pause" class="button secondary" type="button">Пауза</button><button id="timer-extend" class="button secondary" type="button">＋ 5 минут</button><button id="timer-finish" class="button primary" type="button">Завершить и учесть</button><button id="timer-cancel" class="text-button" type="button">Отменить сеанс</button></div></div><div id="timer-idle" class="timer-idle" hidden><p>Выбери карточку работы или назови активность. Время учтётся после завершения.</p><button id="timer-break" class="button secondary" type="button">Начать перерыв</button><span id="timer-cycle" class="timer-note"></span></div><div id="timer-summary" class="timer-summary"></div><details class="timer-details"><summary>Статистика недели и норматив конкретной работы</summary><p id="timer-week" class="timer-note"></p><div id="timer-plans"></div><form id="timer-plan-form" class="timer-plan-form"><label>Работа<select id="timer-plan-ref" required></select></label><label>Часов в эту неделю<input id="timer-plan-hours" type="number" min="0.01" max="168" step="0.01" inputmode="decimal"></label><button class="button secondary" type="submit">Сохранить норматив</button></form><p class="timer-note">Пустое поле снимает норматив. В факт входит всё связанное время, включая ручные записи и импорт. Этот разрез не добавляет часы второй раз.</p><div id="timer-by-work"></div><details><summary>Сеансы таймера</summary><div class="timer-table-wrap"><table class="timer-table"><thead><tr><th>Начало</th><th>Работа</th><th>Состояние</th><th>Время</th><th>Помидорки</th><th>Наблюдение</th></tr></thead><tbody id="timer-history"></tbody></table></div></details></details><p id="timer-backup" class="timer-note"></p>`;
 if (!embedded) {if($('work-board'))$('work-board').after(panel);else ($('work-panel') ?? document.querySelector('main') ?? document.body).prepend(panel);}
 const ambience=!embedded?mountFocusAmbience(panel):null;
 const dialog = document.createElement('dialog'); dialog.id = 'timer-dialog'; dialog.className = 'modal timer-dialog';
@@ -18,10 +18,15 @@ if (!embedded) document.body.append(dialog);
 const finishDialog = document.createElement('dialog'); finishDialog.className = 'modal timer-dialog'; finishDialog.id = 'timer-finish-dialog';
 finishDialog.innerHTML = `<form id="timer-finish-form"><div class="modal-heading"><h2>Подтвердить время</h2><button id="timer-finish-close" class="icon-button" type="button" aria-label="Закрыть подтверждение">×</button></div><p class="timer-note">Проверь фактическое время. Паузы и время после конца помидорки уже исключены. Можно уменьшить факт, если отвлекался.</p><label class="field">Сколько секунд действительно работал<input id="timer-worked-seconds" type="number" min="0" max="86400" step="1" required></label><p id="timer-worked-label" class="timer-note"></p><p id="timer-finish-error" class="form-error" role="alert" hidden></p><div class="modal-footer"><button class="button primary" type="submit">Подтвердить и учесть</button></div></form>`;
 if (!embedded) document.body.append(finishDialog);
-const pill = document.createElement('button'); pill.id = 'timer-pill'; pill.className = 'timer-pill'; pill.type = 'button'; pill.hidden = true;
+const reviewField=document.createElement('label');reviewField.className='field';reviewField.innerHTML='Как прошла помидорка?<input id="timer-observation" type="text" maxlength="1000" placeholder="Что получилось, что отвлекало, что изменить">';
+$('timer-finish-form')?.querySelector('.modal-footer').before(reviewField);
+const pill = document.createElement('aside'); pill.id = 'timer-pill'; pill.className = 'timer-pill'; pill.hidden = true; pill.setAttribute('aria-label','Текущий фокус');
+pill.innerHTML='<div class="timer-widget-top"><span id="timer-widget-phase">ФОКУС</span><button id="timer-widget-collapse" type="button" aria-label="Свернуть карточку таймера" aria-expanded="true">−</button></div><button id="timer-widget-open" type="button" class="timer-widget-open" aria-label="Открыть фокус и время"><output id="timer-widget-clock" aria-label="Отсчёт текущего фокуса"></output><span id="timer-widget-title"></span></button><p id="timer-widget-status"></p><div class="timer-widget-actions"><button id="timer-widget-pause" type="button">Пауза</button><button id="timer-widget-finish" type="button">Учесть</button></div><a href="/focus" target="_blank" rel="noopener" class="timer-widget-window">Отдельное окно ↗</a>';
 if (!embedded) document.body.append(pill);
+const focusLink=document.createElement('a');focusLink.href='/focus';focusLink.target='_blank';focusLink.rel='noopener';focusLink.className='timer-window-link';focusLink.textContent='Отдельное окно ↗';panel.querySelector('.timer-heading')?.append(focusLink);
+if(!embedded){const openFocusWindow=event=>{const view=window.open('/focus','iw-focus','popup,width=560,height=900');if(view){view.opener=null;event.preventDefault();}};focusLink.addEventListener('click',openFocusWindow);pill.querySelector('.timer-widget-window').addEventListener('click',openFocusWindow);}
 async function get(url) { const response = await fetch(url, {cache:'no-store'}); const data = await response.json(); if (!response.ok) throw new Error(data.error ?? 'Не удалось прочитать таймер.'); return data; }
-function notice(message, error = false) { $('timer-status').textContent = message; $('timer-status').classList.toggle('timer-error',error); }
+function notice(message, error = false) { $('timer-status').textContent = message; $('timer-status').classList.toggle('timer-error',error); if(!embedded){$('timer-widget-status').textContent=error?message:state?.active?.status==='paused'?'Пауза · время не учитывается':'Сохраняется на ПК';pill.classList.toggle('timer-widget-error',error);} }
 function settings() { return { workMinutes:Number($('timer-work').value), shortBreakMinutes:Number($('timer-short').value), longBreakMinutes:Number($('timer-long').value), longBreakEvery:Number($('timer-every').value) }; }
 function now() { return Date.now() + serverOffset; }
 function elapsed(s) { const past = s.intervals.reduce((n,i) => n+i.end-i.start,0); const run = s.status === 'running' ? Math.max(0,now()-s.runningSince) : 0; return past + (s.mode === 'pomodoro' ? Math.min(run,Math.max(0,s.plannedMs-past)) : run); }
@@ -29,10 +34,13 @@ function tick() {
   if (!state?.active) return;
   const s = state.active, ms = elapsed(s), expired = s.mode === 'pomodoro' && ms >= s.plannedMs;
   const clock = duration((s.mode === 'pomodoro' ? Math.max(0,s.plannedMs-ms) : ms)/1000);
-  $('timer-clock').textContent = clock; pill.textContent = `${s.status === 'paused' ? 'Ⅱ' : '◷'} ${clock} · ${s.title}`;
+  $('timer-clock').textContent = clock; if(!embedded)$('timer-widget-clock').textContent=clock;
   window.dispatchEvent(new CustomEvent('rhythm:timer-tick',{detail:{clock,elapsedSeconds:ms/1000,active:s}}));
   $('timer-warning').textContent = s.status === 'paused' ? 'Пауза · время не учитывается' : expired ? 'Интервал закончился. Заверши, чтобы учесть время, или добавь 5 минут.' : `Учтено ${duration(ms/1000)} · отсчёт сохраняется на сервере`;
-  $('timer-pause').disabled = busy || (expired && s.status === 'paused');
+  $('timer-pause').disabled = busy || readOnly || (expired && s.status === 'paused');
+  if(!embedded)$('timer-widget-pause').disabled=$('timer-pause').disabled;
+  const promptKey=s.id+':'+s.plannedMs;
+  if(expired&&s.phase==='work'&&!document.hidden&&!readOnly&&!busy&&!finishDialog.open&&reviewKey!==promptKey){reviewKey=promptKey;beginFinish();}
   if (expired && s.status === 'running' && alarmId !== s.id) {
     alarmId = s.id;
     try { const audio = new (window.AudioContext ?? window.webkitAudioContext)(); const tone = audio.createOscillator(), gain = audio.createGain(); tone.connect(gain); gain.connect(audio.destination); gain.gain.value = 0.08; tone.frequency.value = 660; tone.start(); tone.stop(audio.currentTime+0.3); tone.onended=()=>void audio.close(); } catch {}
@@ -42,18 +50,21 @@ function tick() {
 function render() {
   const s = state.active;
   $('timer-active').hidden = !s; $('timer-idle').hidden = Boolean(s); $('timer-new').disabled = Boolean(s)||busy; pill.hidden = !s;
+  if(finishDialog.open&&s?.id!==finishSessionId){finishDialog.close();finishSessionId=null;}
   $('timer-cycle').textContent = `В цикле: ${state.cycleCount} · длинный перерыв после ${state.settings.longBreakEvery}`;
   $('timer-break').textContent = state.cycleCount >= state.settings.longBreakEvery ? `Длинный перерыв · ${state.settings.longBreakMinutes} мин` : `Начать перерыв · ${state.settings.shortBreakMinutes} мин`;
   if (s) {
     $('timer-title').textContent=s.title; $('timer-phase').textContent= s.phase === 'work' ? (s.mode === 'pomodoro' ? 'ПОМИДОРКА' : 'СЕКУНДОМЕР') : s.phase === 'long_break' ? 'ДЛИННЫЙ ПЕРЕРЫВ' : 'КОРОТКИЙ ПЕРЕРЫВ';
     $('timer-link').textContent=[entities.find(e=>e.ref===s.workRef)?.title, metrics.find(m=>m.id===s.metricId)?.title ?? (s.allocation==='outside'?'Вне нормативов':s.phase==='work'?'Требует разбора':'Перерыв'),s.workType].filter(Boolean).join(' · ');
     $('timer-pause').textContent=s.status==='paused'?'Продолжить':'Пауза'; $('timer-extend').hidden=s.mode!=='pomodoro'; $('timer-finish').textContent=s.phase==='work'?'Завершить и учесть':'Завершить перерыв';
+    if(!embedded){$('timer-widget-title').textContent=s.title;$('timer-widget-phase').textContent=s.status==='paused'?'ПАУЗА':s.phase==='work'?'ФОКУС':'ПЕРЕРЫВ';$('timer-widget-pause').textContent=$('timer-pause').textContent;$('timer-widget-finish').disabled=busy||readOnly;$('timer-widget-status').textContent=s.status==='paused'?'Время не учитывается':'Сохраняется на ПК';}
   }
+  if(!s)$('timer-clock').textContent=duration(state.settings.workMinutes*60);
   $('timer-summary').innerHTML=`<div><small>Работа за неделю</small><strong>${state.summary.workSeconds===null?'No Data':duration(state.summary.workSeconds)}</strong></div><div><small>Полные помидорки</small><strong>${state.summary.records?state.summary.pomodoros:'No Data'}</strong></div><div><small>Перерывы</small><strong>${state.sessions.some(s=>s.phase!=='work')?duration(state.summary.breakSeconds):'No Data'}</strong></div>`;
   $('timer-week').textContent=`${state.week} — ${state.end} · Ташкент, UTC+5`;
   $('timer-plans').innerHTML=state.plans.map(p=>`<div class="timer-plan"><strong>${esc(p.title)}</strong><span>${p.actual===null?'No Data':humanTime(p.actual*3600)} / ${humanTime(p.target*3600)} · ${p.percent===null?'No Data':p.percent+'%'}</span><progress max="100" value="${Math.min(100,p.percent??0)}" aria-label="${esc(p.title)}"></progress></div>`).join('')||'<p class="timer-note">Норматив конкретной работы: No Data</p>';
   $('timer-by-work').innerHTML='<h3>Куда ушло время таймера</h3>'+(state.byWork.map(w=>`<div class="timer-work-row"><span>${esc(w.title)}</span><strong>${duration(w.seconds)}</strong></div>`).join('')||'<p>No Data</p>');
-  $('timer-history').innerHTML=state.sessions.map(s=>`<tr><td>${esc(new Date(s.startedAt).toLocaleString('ru-RU',{timeZone:'Asia/Tashkent'}))}</td><td>${esc(s.title)}</td><td>${s.status==='cancelled'?'Отменён, не учтён':s.phase==='work'?'Учтён':'Перерыв'}</td><td>${duration(s.elapsedMs/1000)}</td><td>${s.completedPomodoros}</td></tr>`).join('')||'<tr><td colspan="5">No Data</td></tr>';
+  $('timer-history').innerHTML=state.sessions.map(s=>`<tr><td>${esc(new Date(s.startedAt).toLocaleString('ru-RU',{timeZone:'Asia/Tashkent'}))}</td><td>${esc(s.title)}</td><td>${s.status==='cancelled'?'Отменён, не учтён':s.phase==='work'?'Учтён':'Перерыв'}</td><td>${duration(s.elapsedMs/1000)}</td><td>${s.completedPomodoros}</td><td>${esc(s.observation||'No Data')}</td></tr>`).join('')||'<tr><td colspan="6">No Data</td></tr>';
   tick();
   if(!s) $('timer-clock').textContent=duration(state.settings.workMinutes*60);
   ambience?.update(state);
@@ -69,6 +80,7 @@ async function load() {
 async function act(action,input={}) {
   if(readOnly) { notice('Режим просмотра. Изменения доступны в рабочей версии.'); return false; }
   if (busy||!state) return false; busy=true;
+  if(!embedded){$('timer-widget-pause').disabled=true;$('timer-widget-finish').disabled=true;}
   for (const b of panel.querySelectorAll('button')) b.disabled=true;
   $('timer-start').disabled=true; $('timer-save-settings').disabled=true;
   const payload={action,input:{...input,week:state.week,expectedRevision:state.revision,requestId:crypto.randomUUID()}};
@@ -105,14 +117,17 @@ async function open(input={}) {
   $('timer-error').hidden=true; dialog.showModal();
 }
 function beginFinish() {
-  const s=state?.active; if(!s||busy) return;
+  const s=state?.active; if(!s||busy||readOnly) return;
   const ms=elapsed(s), past=s.intervals.reduce((n,i)=>n+i.end-i.start,0);
   const delayed=s.status==='running' && (s.mode==='pomodoro'?now()-s.runningSince-Math.max(0,s.plannedMs-past)>300000:ms>8*3600000);
-  if(s.phase==='work' && (delayed||ms>86400000)) { $('timer-worked-seconds').value=Math.min(86400,Math.floor(ms/1000)); $('timer-worked-seconds').max=Math.min(86400,Math.floor(ms/1000)); $('timer-worked-label').textContent='По отсчёту: '+duration(ms/1000); $('timer-finish-error').hidden=true; finishDialog.showModal(); }
+  if(s.phase==='work' && (s.mode==='pomodoro'||delayed||ms>86400000)) { if(finishSessionId!==s.id)$('timer-observation').value='';finishSessionId=s.id;finishDialog.querySelector('h2').textContent=s.mode==='pomodoro'?'Как прошла помидорка?':'Как прошла работа?';$('timer-worked-seconds').value=Math.min(86400,Math.floor(ms/1000)); $('timer-worked-seconds').max=Math.min(86400,Math.floor(ms/1000)); $('timer-worked-label').textContent='По отсчёту: '+duration(ms/1000); $('timer-finish-error').hidden=true; if(!finishDialog.open)finishDialog.showModal();$('timer-observation').focus(); }
   else void act('finish',{sessionId:s.id});
 }
 if(!embedded) {
-  $('timer-new').addEventListener('click',()=>void open()); pill.addEventListener('click',()=>{ window.dispatchEvent(new Event('rhythm:show-work')); panel.scrollIntoView({behavior:'smooth'}); });
+  $('timer-new').addEventListener('click',()=>void open()); $('timer-widget-open').addEventListener('click',()=>{ window.dispatchEvent(new Event('rhythm:show-work')); panel.scrollIntoView({behavior:'smooth'}); });
+  $('timer-widget-pause').addEventListener('click',()=>{if(state?.active)void act(state.active.status==='paused'?'resume':'pause',{sessionId:state.active.id});});
+  $('timer-widget-finish').addEventListener('click',beginFinish);
+  $('timer-widget-collapse').addEventListener('click',()=>{const compact=pill.classList.toggle('timer-widget-compact');$('timer-widget-collapse').textContent=compact?'+':'−';$('timer-widget-collapse').setAttribute('aria-expanded',String(!compact));$('timer-widget-collapse').setAttribute('aria-label',compact?'Развернуть карточку таймера':'Свернуть карточку таймера');});
   $('timer-close').addEventListener('click',()=>dialog.close()); $('timer-finish-close').addEventListener('click',()=>finishDialog.close());
   $('timer-preset').addEventListener('change',()=>{ const n=Number($('timer-preset').value); if(n) { $('timer-work').value=n; $('timer-short').value=n===25?5:10; $('timer-long').value=n===25?15:30; $('timer-every').value=4; } });
   $('timer-save-settings').addEventListener('click',async()=>{ if(await act('settings',{settings:settings()})) dialog.close(); });
@@ -124,7 +139,7 @@ if(!embedded) {
   $('timer-finish').addEventListener('click',beginFinish);
   $('timer-cancel').addEventListener('click',()=>{ if(state?.active && confirm('Отменить сеанс? Время не попадёт в норматив. Сеанс останется в истории.')) void act('cancel',{sessionId:state.active.id}); });
   $('timer-break').addEventListener('click',()=>void act('startBreak'));
-  $('timer-finish-form').addEventListener('submit',async event=>{ event.preventDefault(); if(!state?.active) { finishDialog.close(); notice('Сеанс уже завершён на другом устройстве.'); return; } if(await act('finish',{sessionId:state.active.id,workedSeconds:Number($('timer-worked-seconds').value)})) finishDialog.close(); });
+  $('timer-finish-form').addEventListener('submit',async event=>{ event.preventDefault(); if(!state?.active||state.active.id!==finishSessionId) { finishDialog.close(); notice('Сеанс уже изменён на другом устройстве.'); return; } if(await act('finish',{sessionId:finishSessionId,workedSeconds:Number($('timer-worked-seconds').value),observation:$('timer-observation').value})) finishDialog.close(); });
   $('timer-plan-ref').addEventListener('change',()=>{ $('timer-plan-hours').value=state.plans.find(p=>p.workRef===$('timer-plan-ref').value)?.target??''; });
   $('timer-plan-form').addEventListener('submit',event=>{ event.preventDefault(); void act('workTarget',{workRef:$('timer-plan-ref').value,hours:$('timer-plan-hours').value===''?null:Number($('timer-plan-hours').value)}); });
   window.addEventListener('rhythm:week-loaded',event=>{ week=event.detail.week; void load(); });
