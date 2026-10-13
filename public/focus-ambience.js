@@ -63,5 +63,5 @@ export function mountFocusAmbience(panel,{allowExpand=true}={}) {
   expand.addEventListener('click',()=>setExpanded(!panel.classList.contains('focus-screen')));
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&panel.classList.contains('focus-screen'))setExpanded(false);});
   window.addEventListener('pagehide',()=>{stop();void context?.close();});paint();
-  return {update:state=>{host.querySelector('#focus-scene-work').textContent=state.active?.title??'Выбери карточку работы';host.querySelector('#focus-scene-label').textContent=state.active?.status==='paused'?'ПАУЗА · ВРЕМЯ НЕ УЧИТЫВАЕТСЯ':state.active?'СЕЙЧАС В ФОКУСЕ':'ПРОСТРАНСТВО ДЛЯ ВАЖНОГО';}};
+  return {update:state=>{const active=state.active;host.querySelector('#focus-scene-work').textContent=active?(active.phase==='work'?(active.workRef?.startsWith('case:')?'Working on a problem: ':'Working on: '):'')+active.title:'Выбери карточку работы';host.querySelector('#focus-scene-label').textContent=active?.status==='paused'?'ПАУЗА · ВРЕМЯ НЕ УЧИТЫВАЕТСЯ':active?'СЕЙЧАС В ФОКУСЕ':'ПРОСТРАНСТВО ДЛЯ ВАЖНОГО';}};
 }

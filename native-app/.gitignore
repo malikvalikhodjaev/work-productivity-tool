@@ -1,0 +1,11 @@
+.dart_tool/
+.flutter-plugins*
+build/
+android/local.properties
+android/key.properties
+android/*.jks
+android/*.keystore
+android/.gradle/
+windows/flutter/ephemeral/
+*.sqlite*
+*.log

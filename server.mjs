@@ -83,7 +83,7 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.9.0', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.10.0', timezone: 'Asia/Tashkent' });
     if (req.method === 'GET' && url.pathname === '/api/reflection-hints') return json(res, 200, readReflectionHints(dataDir));
     if (req.method === 'GET' && url.pathname === '/api/timer') return json(res, 200, store.getTimer(url.searchParams.get('week') ?? undefined));
     if (req.method === 'GET' && url.pathname === '/api/timer/history') return json(res,200,store.getTimerHistory(url.searchParams.get('workRef')));
@@ -99,7 +99,20 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/timer') { const input = await body(req); return json(res, 200, store.mutateTimer(input.action, input.input)); }
     if (req.method === 'POST' && url.pathname === '/api/offline/connect') return json(res, 200, store.offlineContext((await body(req)).deviceId));
     if (req.method === 'POST' && url.pathname === '/api/offline/import') return json(res, 200, store.syncOffline(await body(req)));
+    if (req.method === 'POST' && url.pathname === '/api/native/command') {
+      const command = await body(req);
+      store.validateNativeDevice(command);
+      if (command.module === 'workspace') return json(res, 200, workspace.nativeMutate(command));
+      if (['portfolio','target','dailyNorm','dailyCheck'].includes(command.module)) return json(res, 200, store.nativeMutate(command));
+      if (command.module === 'problem') {
+        const problem = dailyProblems.nativeSave(command);
+        const linked = workspace.ensureProblemCase(problem, command.caseClientId);
+        return json(res, 200, { problem: { ...problem, caseRef: 'case:' + linked.case.id }, workspace: workspace.view() });
+      }
+      throw new Error('Неизвестный модуль приложения.');
+    }
     if (req.method === 'GET' && url.pathname === '/api/server-status') return json(res, 200, { hosting: 'computer', persistence: 'files', timezone: 'Asia/Tashkent', backup: backupStatus(dataDir), remote: remoteViewer.status() });
+    if (req.method === 'GET' && url.pathname === '/api/daily-norms') return json(res, 200, store.getDailyNorms());
     if (req.method === 'GET' && url.pathname === '/api/mobile-access') {
       const file = path.join(dataDir, 'cloud-view.json');
       const hosting = path.join(dataDir, 'hosting.json');
