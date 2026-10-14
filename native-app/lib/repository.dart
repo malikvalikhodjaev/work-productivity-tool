@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 
 import 'domain.dart';
 import 'local_database.dart';
+import 'pomodoro_plan.dart';
 
 class ApiFailure implements Exception {
   final String message;
@@ -153,6 +154,17 @@ class DashboardRepository extends ChangeNotifier {
             body: object(item['body']),
           );
           local.atomic(() {
+            if (item['route'] == '/api/offline/import' &&
+                object(response['receipt'])['status'] == 'accepted') {
+              final fact = pomodoroFact(
+                object(object(item['body'])['session']),
+              );
+              if (fact != null) {
+                final accepted = object(local.get('acceptedPomodoroFacts'));
+                accepted[fact['sessionId'].toString()] = fact;
+                local.set('acceptedPomodoroFacts', accepted);
+              }
+            }
             if (object(item['body'])['module'] == 'problem' &&
                 response['problem'] is Map) {
               final preferred = object(item['body'])['caseClientId'];
@@ -394,6 +406,70 @@ class DashboardRepository extends ChangeNotifier {
     }).toList();
   }
 
+  List<Json> get pomodoroRows {
+    final result = <String, Json>{
+      for (final n in rows(cache('dailyNorms')['pomodoroTargets']))
+        '${n['date']}:${n['workRef']}': n,
+    };
+    for (final draft in local.drafts.where(
+      (d) => d['entity'].toString().startsWith('pomodoro:'),
+    )) {
+      final n = object(draft['body']);
+      result['${n['date']}:${n['workRef']}'] = n;
+    }
+    return result.values.toList();
+  }
+
+  List<Json> get pomodoroFacts {
+    final facts = <String, Json>{
+      for (final f in object(
+        local.get('acceptedPomodoroFacts'),
+      ).values.whereType<Map>())
+        f['sessionId'].toString(): object(f),
+      for (final f in rows(cache('dailyNorms')['pomodoroFacts']))
+        f['sessionId'].toString(): f,
+    };
+    for (final session in rows(cache('timer')['sessions'])) {
+      final fact = pomodoroFact(session);
+      if (fact != null) facts[session['id'].toString()] = fact;
+    }
+    final confirmedIds = rows(cache('entries')['entries'])
+        .map((e) => e['timerSessionId'])
+        .toSet();
+    for (final queued in pending.where(
+      (q) => q['route'] == '/api/offline/import' && q['state'] != 'conflict',
+    )) {
+      final session = object(object(queued['body'])['session']);
+      final fact = pomodoroFact(session);
+      if (fact != null && !confirmedIds.contains(session['id'])) {
+        facts.putIfAbsent(
+          session['id'].toString(),
+          () => {...fact, 'pending': true},
+        );
+      }
+    }
+    return facts.values.toList();
+  }
+
+  List<Json> pomodoroTargetsForDate([String? date]) {
+    final day = date ?? today();
+    return pomodoroRows
+        .where((n) => n['date'] == day && n['target'] != null)
+        .map((n) {
+          final facts = pomodoroFacts
+              .where((f) => f['date'] == day && f['workRef'] == n['workRef'])
+              .toList();
+          return {
+            ...n,
+            'actualPomodoros': facts.length,
+            'pendingPomodoros': facts.where((f) => f['pending'] == true).length,
+          };
+        })
+        .toList();
+  }
+
+  bool get hasPomodoroPlan => pomodoroTargetsForDate().isNotEmpty;
+
   List<Json> get dailyChecks {
     final result = {
       for (final check in rows(cache('dailyNorms')['checks']))
@@ -530,6 +606,15 @@ class DashboardRepository extends ChangeNotifier {
               .where((r) => r['date'] == input['date'])
               .firstOrNull;
           input['expectedUpdatedAt'] = current?['updatedAt'];
+        case 'pomodoroTarget':
+          current = rows(cache('dailyNorms')['pomodoroTargets'])
+              .where(
+                (r) =>
+                    r['workRef'] == input['workRef'] &&
+                    r['date'] == input['date'],
+              )
+              .firstOrNull;
+          body['expectedUpdatedAt'] = current?['updatedAt'];
         case 'dailyNorm':
           current = rows(cache('dailyNorms')['norms'])
               .where((r) => r['workRef'] == input['workRef'])

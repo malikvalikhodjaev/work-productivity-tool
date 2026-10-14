@@ -42,8 +42,21 @@ class FocusService : Service() {
             channels(context)
             val prefs=context.getSharedPreferences(PREFS,MODE_PRIVATE)
             val data=JSONObject(prefs.getString("snapshot","{}") ?: "{}")
-            val title=if(timer)"Как прошла помидорка?" else "Сделал это?"
-            val body=if(timer)data.optJSONObject("active")?.optString("title") ?: "Запиши наблюдение и уточни минуты" else "Дневные нормативы ждут внимания · открой список"
+            val currentDate=date(System.currentTimeMillis())
+            val plans=data.optJSONArray("pomodoroTargets")?:JSONArray()
+            val counts=data.optJSONArray("pomodoroCounts")?:JSONArray()
+            val lines=mutableListOf<String>()
+            for(i in 0 until plans.length()) {
+                val n=plans.getJSONObject(i)
+                if(n.optString("date")!=currentDate||n.isNull("target"))continue
+                var actual=0
+                if(data.optString("today")==currentDate)for(j in 0 until counts.length()) {
+                    val c=counts.getJSONObject(j);if(c.optString("workRef")==n.optString("workRef"))actual=c.optInt("actualPomodoros")
+                }
+                lines.add("${n.optString("title")} — $actual/${n.optInt("target")}")
+            }
+            val title=if(timer)"Как прошла помидорка?" else if(data.optBoolean("planningReady")&&lines.isEmpty())"Вы поставили нормативы на день?" else "Сделал это?"
+            val body=if(timer)data.optJSONObject("active")?.optString("title") ?: "Запиши наблюдение и уточни минуты" else if(lines.isNotEmpty())lines.joinToString("\n") else "Открой настройки и задай норматив помидорок на сегодня"
             val notification=Notification.Builder(context,ALERTS).setSmallIcon(android.R.drawable.ic_lock_idle_alarm).setContentTitle(title).setContentText(body).setStyle(Notification.BigTextStyle().bigText(body)).setContentIntent(open(context,if(timer)"timer" else "norms")).setAutoCancel(true).build()
             context.getSystemService(NotificationManager::class.java).notify(if(timer)TIMER_ALERT else DAILY_ALERT,notification)
         }
@@ -91,6 +104,25 @@ class FocusService : Service() {
                     if(next==null||due<next!!)next=due
                     break
                 }
+            }
+            if(data.optBoolean("planningReady")) {
+                val plans=data.optJSONArray("pomodoroTargets")?:JSONArray()
+                val counts=data.optJSONArray("pomodoroCounts")?:JSONArray()
+                var hasPlan=false;var unfinished=false
+                for(i in 0 until plans.length()) {
+                    val n=plans.getJSONObject(i)
+                    if(n.optString("date")!=currentDate||n.isNull("target"))continue
+                    hasPlan=true;var actual=0
+                    if(data.optString("today")==currentDate)for(j in 0 until counts.length()) {
+                        val c=counts.getJSONObject(j);if(c.optString("workRef")==n.optString("workRef"))actual=c.optInt("actualPomodoros")
+                    }
+                    if(actual<n.optInt("target"))unfinished=true
+                }
+                val prefs=context.getSharedPreferences(PREFS,MODE_PRIVATE)
+                val hiddenPom=if(data.optString("today")==currentDate)data.optLong("pomodoroHiddenUntil")else 0L
+                val due=if(!hasPlan||unfinished)max(now+1000,max(hiddenPom,prefs.getLong("pomodoroReminder:$currentDate",0)))
+                    else Instant.ofEpochMilli(now).atOffset(ZoneOffset.ofHours(5)).toLocalDate().plusDays(1).atStartOfDay().toInstant(ZoneOffset.ofHours(5)).toEpochMilli()
+                if(next==null||due<next!!)next=due
             }
             alarm("norms",next)
         }

@@ -1,0 +1,68 @@
+import 'domain.dart';
+
+String pomodoroDate(int utcMs) => DateTime.fromMillisecondsSinceEpoch(
+  utcMs,
+  isUtc: true,
+).add(const Duration(hours: 5)).toIso8601String().substring(0, 10);
+String pomodoroShift(String date, int days) =>
+    DateTime.parse('${date}T12:00:00Z')
+        .add(Duration(days: days))
+        .toIso8601String()
+        .substring(0, 10);
+String pomodoroMonday(String date) =>
+    pomodoroShift(date, 1 - DateTime.parse('${date}T12:00:00Z').weekday);
+
+Json? pomodoroFact(Json session) {
+  if (session['status'] != 'finished' ||
+      session['phase'] != 'work' ||
+      session['mode'] != 'pomodoro' ||
+      session['completedPomodoros'] != 1 ||
+      session['syncResolution'] == 'excluded' ||
+      session['workRef'] == null) {
+    return null;
+  }
+  final stamp = DateTime.tryParse(session['finishedAt']?.toString() ?? '');
+  if (stamp == null) return null;
+  return {
+    'sessionId': session['id'],
+    'workRef': session['workRef'],
+    'date': pomodoroDate(stamp.millisecondsSinceEpoch),
+    'count': 1,
+  };
+}
+
+List<Json> pomodoroWeekRows(List<Json> targets, List<Json> facts, String week) {
+  final start = pomodoroMonday(week), end = pomodoroShift(start, 6);
+  final groups = <String, Json>{};
+  for (final n in targets.where(
+    (n) =>
+        n['target'] != null &&
+        n['date'].toString().compareTo(start) >= 0 &&
+        n['date'].toString().compareTo(end) <= 0,
+  )) {
+    final key = '${n['workRef']}\u0000${n['title']}';
+    final row = groups.putIfAbsent(
+      key,
+      () => {
+        'title': n['title'],
+        'workRef': n['workRef'],
+        'days': <Json>[],
+        'target': 0,
+        'actualPomodoros': 0,
+      },
+    );
+    final count = facts
+        .where((f) => f['date'] == n['date'] && f['workRef'] == n['workRef'])
+        .map((f) => f['sessionId'])
+        .toSet()
+        .length;
+    (row['days'] as List<Json>).add({
+      'date': n['date'],
+      'target': n['target'],
+      'actualPomodoros': count,
+    });
+    row['target'] = (row['target'] as int) + (n['target'] as int);
+    row['actualPomodoros'] = (row['actualPomodoros'] as int) + count;
+  }
+  return groups.values.toList();
+}

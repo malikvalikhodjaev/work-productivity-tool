@@ -42,6 +42,8 @@ assets['/alphas.css'] = ['alphas.css', 'text/css; charset=utf-8'];
 for (const [route, type] of [['/manifest.webmanifest','application/manifest+json'],['/service-worker.js','text/javascript; charset=utf-8'],['/mobile.js','text/javascript; charset=utf-8'],['/remote-view.js','text/javascript; charset=utf-8'],['/mobile.css','text/css; charset=utf-8'],['/offline.html','text/html; charset=utf-8'],['/offline.js','text/javascript; charset=utf-8'],['/icon-192.png','image/png'],['/icon-512.png','image/png'],['/icon-maskable-512.png','image/png']]) assets[route] = [route.slice(1), type];
 assets['/timer.js'] = ['timer.js', 'text/javascript; charset=utf-8'];
 assets['/timer.css'] = ['timer.css', 'text/css; charset=utf-8'];
+assets['/pomodoro-plans.js'] = ['pomodoro-plans.js', 'text/javascript; charset=utf-8'];
+assets['/pomodoro-plans.css'] = ['pomodoro-plans.css', 'text/css; charset=utf-8'];
 assets['/focus'] = ['focus.html', 'text/html; charset=utf-8'];
 assets['/focus-window.css'] = ['focus-window.css', 'text/css; charset=utf-8'];
 assets['/writing-editor.js'] = ['writing-editor.js', 'text/javascript; charset=utf-8'];
@@ -83,7 +85,7 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.10.0', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.11.0', timezone: 'Asia/Tashkent' });
     if (req.method === 'GET' && url.pathname === '/api/reflection-hints') return json(res, 200, readReflectionHints(dataDir));
     if (req.method === 'GET' && url.pathname === '/api/timer') return json(res, 200, store.getTimer(url.searchParams.get('week') ?? undefined));
     if (req.method === 'GET' && url.pathname === '/api/timer/history') return json(res,200,store.getTimerHistory(url.searchParams.get('workRef')));
@@ -103,7 +105,7 @@ const server = http.createServer(async (req, res) => {
       const command = await body(req);
       store.validateNativeDevice(command);
       if (command.module === 'workspace') return json(res, 200, workspace.nativeMutate(command));
-      if (['portfolio','target','dailyNorm','dailyCheck'].includes(command.module)) return json(res, 200, store.nativeMutate(command));
+      if (['portfolio','target','dailyNorm','dailyCheck','pomodoroTarget'].includes(command.module)) return json(res, 200, store.nativeMutate(command));
       if (command.module === 'problem') {
         const problem = dailyProblems.nativeSave(command);
         const linked = workspace.ensureProblemCase(problem, command.caseClientId);
@@ -112,7 +114,8 @@ const server = http.createServer(async (req, res) => {
       throw new Error('Неизвестный модуль приложения.');
     }
     if (req.method === 'GET' && url.pathname === '/api/server-status') return json(res, 200, { hosting: 'computer', persistence: 'files', timezone: 'Asia/Tashkent', backup: backupStatus(dataDir), remote: remoteViewer.status() });
-    if (req.method === 'GET' && url.pathname === '/api/daily-norms') return json(res, 200, store.getDailyNorms());
+    if (req.method === 'GET' && url.pathname === '/api/daily-norms') return json(res, 200, store.getDailyNorms(url.searchParams.get('date') ?? undefined, url.searchParams.get('week') ?? undefined));
+    if (req.method === 'POST' && url.pathname === '/api/pomodoro-plan') return json(res, 200, store.nativeMutate({ ...(await body(req)), module: 'pomodoroTarget', action: 'save' }));
     if (req.method === 'GET' && url.pathname === '/api/mobile-access') {
       const file = path.join(dataDir, 'cloud-view.json');
       const hosting = path.join(dataDir, 'hosting.json');

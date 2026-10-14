@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart' as q;
 import 'package:path/path.dart' as p;
@@ -15,6 +16,7 @@ import 'forms.dart';
 import 'local_database.dart';
 import 'reminders.dart';
 import 'repository.dart';
+import 'pomodoro_widgets.dart';
 import 'writing_screen.dart';
 import 'reflection_hints.dart';
 import 'data_table.dart';
@@ -111,6 +113,8 @@ class _DashboardHomeState extends State<DashboardHome>
       trayReady = false,
       exiting = false;
   String? reviewShown;
+  String planningDate = today();
+  bool planEntryPending = true;
   static const sections = [
     'Показатели',
     'Проекты',
@@ -194,6 +198,7 @@ class _DashboardHomeState extends State<DashboardHome>
   Future<void> show() async {
     await background.show();
     foreground = true;
+    planEntryPending = true;
   }
 
   Future<void> openNotification(String screen) async {
@@ -207,7 +212,11 @@ class _DashboardHomeState extends State<DashboardHome>
     if (!mounted || dialogOpen || Navigator.of(context).canPop()) return;
     if (screen == 'norms') {
       final due = dueNorms();
-      if (due.isNotEmpty) await showNorms(due);
+      if (planningDue(force: true)) {
+        await showPlanningQuestion(force: true);
+      } else if (due.isNotEmpty || repo.hasPomodoroPlan) {
+        await showNorms(due);
+      }
     } else if (screen == 'timer' && repo.active != null) {
       final s = repo.active!;
       if (s['mode'] == 'pomodoro' && elapsedMs(s, repo.now) >= s['plannedMs']) {
@@ -219,7 +228,10 @@ class _DashboardHomeState extends State<DashboardHome>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     foreground = state == AppLifecycleState.resumed;
-    if (foreground) unawaited(repo.synchronize());
+    if (foreground) {
+      planEntryPending = true;
+      unawaited(repo.synchronize());
+    }
   }
 
   @override
@@ -230,11 +242,13 @@ class _DashboardHomeState extends State<DashboardHome>
   @override
   void onWindowRestore() {
     foreground = true;
+    planEntryPending = true;
   }
 
   @override
   void onWindowClose() async {
     if (exiting) return;
+    if (!await showPlanningQuestion(force: true)) return;
     if (trayReady) {
       foreground = false;
       await windowManager.hide();
@@ -244,6 +258,8 @@ class _DashboardHomeState extends State<DashboardHome>
   }
 
   Future<void> exitApp() async {
+    if (!await showPlanningQuestion(force: true)) return;
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
@@ -298,9 +314,85 @@ class _DashboardHomeState extends State<DashboardHome>
       }
     }
     if (!dialogOpen && !Navigator.of(context).canPop()) {
+      if (planningDate != today()) {
+        planningDate = today();
+        planEntryPending = true;
+      }
+      if ((foreground || (widget.backgroundEnabled && Platform.isWindows)) &&
+          planningDue(force: planEntryPending)) {
+        unawaited(showPlanningQuestion(force: planEntryPending));
+        return;
+      }
+      planEntryPending = false;
       final due = dueNorms();
-      if (due.isNotEmpty) unawaited(showNorms(due));
+      if (due.isNotEmpty || pomodoroReminderDue()) unawaited(showNorms(due));
     }
+  }
+
+  bool planningDue({bool force = false}) =>
+      repo.cache('dailyNorms').isNotEmpty &&
+      !repo.hasPomodoroPlan &&
+      (force ||
+          DateTime.now().millisecondsSinceEpoch >=
+              (repo.local.get('pomodoroReminder:${today()}') as int? ?? 0));
+
+  bool pomodoroReminderDue() =>
+      repo.pomodoroTargetsForDate().any(
+        (n) => n['actualPomodoros'] < n['target'],
+      ) &&
+      DateTime.now().millisecondsSinceEpoch >=
+          (repo.local.get('pomodoroReminder:${today()}') as int? ?? 0);
+
+  Future<bool> showPlanningQuestion({bool force = false}) async {
+    if (!planningDue(force: force)) return true;
+    if (dialogOpen || Navigator.of(context).canPop()) return false;
+    dialogOpen = true;
+    planEntryPending = false;
+    bool wasHidden = false, previousPin = false;
+    if (widget.backgroundEnabled && Platform.isWindows) {
+      wasHidden =
+          !await windowManager.isVisible() || await windowManager.isMinimized();
+      previousPin = await windowManager.isAlwaysOnTop();
+      await windowManager.setAlwaysOnTop(true);
+      await background.show();
+      foreground = true;
+    }
+    if (!mounted) return false;
+    final setup = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Вы поставили нормативы на день?'),
+        content: const Text(
+          'На сегодня нет ни одного норматива помидорок. Укажи название, карточку работы и число помидорок. Вопрос исчезнет, когда сохранён хотя бы один норматив на сегодня.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Позже · через час'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Поставить норматив'),
+          ),
+        ],
+      ),
+    );
+    repo.local.set(
+      'pomodoroReminder:${today()}',
+      DateTime.now().millisecondsSinceEpoch + 3600000,
+    );
+    dialogOpen = false;
+    planEntryPending = false;
+    if (widget.backgroundEnabled && Platform.isWindows) {
+      await windowManager.setAlwaysOnTop(previousPin);
+      if (wasHidden && setup != true) {
+        foreground = false;
+        await windowManager.hide();
+      }
+    }
+    if (setup == true && mounted) await settings();
+    if (widget.backgroundEnabled) await background.update();
+    return setup != true;
   }
 
   List<Json> dueNorms() {
@@ -328,7 +420,7 @@ class _DashboardHomeState extends State<DashboardHome>
     bool wasHidden = false;
     bool previousPin = false;
     bool choseFocus = false;
-    if (Platform.isWindows) {
+    if (widget.backgroundEnabled && Platform.isWindows) {
       wasHidden =
           !await windowManager.isVisible() || await windowManager.isMinimized();
       previousPin = await windowManager.isAlwaysOnTop();
@@ -351,6 +443,18 @@ class _DashboardHomeState extends State<DashboardHome>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text('Дневные нормативы · повтор каждый час'),
+                  const SizedBox(height: 18),
+                  ListenableBuilder(
+                    listenable: repo,
+                    builder: (c, _) => PomodoroChecklist(
+                      repo: repo,
+                      focus: (ref, title) async {
+                        choseFocus = true;
+                        Navigator.pop(c);
+                        await startTimer(ref: ref, title: title);
+                      },
+                    ),
+                  ),
                   const SizedBox(height: 18),
                   for (final norm in due)
                     Padding(
@@ -437,15 +541,19 @@ class _DashboardHomeState extends State<DashboardHome>
       );
     }
     repo.local.set('reminderHidden', hidden);
+    repo.local.set(
+      'pomodoroReminder:${today()}',
+      DateTime.now().millisecondsSinceEpoch + 3600000,
+    );
     dialogOpen = false;
-    if (Platform.isWindows) {
+    if (widget.backgroundEnabled && Platform.isWindows) {
       await windowManager.setAlwaysOnTop(previousPin);
       if (wasHidden && !choseFocus) {
         foreground = false;
         await windowManager.hide();
       }
     }
-    await background.update();
+    if (widget.backgroundEnabled) await background.update();
   }
 
   Future<void> setDailyNorm(String ref, String title) async {
@@ -780,6 +888,12 @@ class _DashboardHomeState extends State<DashboardHome>
                 '${(elapsedMs(s, repo.now) / 60000).toStringAsFixed(1)} мин · ${repo.isLocal ? 'таймер устройства' : 'общий сеанс'}',
                 style: const TextStyle(color: Colors.white70),
               ),
+            const SizedBox(height: 18),
+            PomodoroChecklist(
+              repo: repo,
+              compact: true,
+              focus: (ref, title) => startTimer(ref: ref, title: title),
+            ),
             const SizedBox(height: 18),
             Wrap(
               spacing: 10,
@@ -1670,6 +1784,13 @@ class _DashboardHomeState extends State<DashboardHome>
             child: const Text('Открыть список'),
           ),
         ),
+        PomodoroChecklist(
+          repo: repo,
+          focus: (ref, title) => startTimer(ref: ref, title: title),
+        ),
+        const SizedBox(height: 12),
+        PomodoroWeek(repo: repo),
+        const SizedBox(height: 12),
         ...repo.dailyNorms.map(
           (n) => ListTile(
             title: Text(n['title'].toString()),
@@ -2023,6 +2144,8 @@ class _DashboardHomeState extends State<DashboardHome>
       'Сеансы таймера': repo.cache('timer')['sessions'],
       'Сеансы устройства': repo.local.get('localHistory'),
       'Нормы дня': repo.dailyNorms,
+      'План помидорок по датам': repo.pomodoroRows,
+      'Факты помидорок': repo.pomodoroFacts,
       'Отметки дня': repo.dailyChecks,
       'Цели': repo.entities('goals', 'goal'),
       'Финансовые операции': repo.cache('finance')['transactions'],
@@ -2175,6 +2298,47 @@ class _DashboardHomeState extends State<DashboardHome>
   }
 
   Future<void> settings() async {
+    await showDialog<void>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Настройки · нормативы на день'),
+        content: SizedBox(
+          width: 700,
+          child: SingleChildScrollView(
+            child: ListenableBuilder(
+              listenable: repo,
+              builder: (c, _) => Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  PomodoroChecklist(
+                    repo: repo,
+                    focus: (ref, title) async {
+                      Navigator.pop(c);
+                      await startTimer(ref: ref, title: title);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  PomodoroWeek(repo: repo),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: connectionSettings,
+            child: const Text('Сервер и разрешения'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> connectionSettings() async {
     await editFields(
       context,
       title: 'Подключение и фон',
@@ -2189,135 +2353,148 @@ class _DashboardHomeState extends State<DashboardHome>
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text(
-        'Indicators & Work Dashboard',
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+  Widget build(BuildContext context) => PopScope(
+    canPop: !Platform.isAndroid,
+    onPopInvokedWithResult: (didPop, result) async {
+      if (!didPop &&
+          Platform.isAndroid &&
+          await showPlanningQuestion(force: true)) {
+        await SystemNavigator.pop();
+      }
+    },
+    child: Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Indicators & Work Dashboard',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        ),
+        actions: [
+          IconButton(
+            onPressed: repo.syncing ? null : repo.synchronize,
+            icon: Icon(repo.online ? Icons.sync : Icons.cloud_off_outlined),
+            tooltip: repo.status,
+          ),
+          IconButton(
+            onPressed: settings,
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Настройки и нормативы',
+          ),
+        ],
       ),
-      actions: [
-        IconButton(
-          onPressed: repo.syncing ? null : repo.synchronize,
-          icon: Icon(repo.online ? Icons.sync : Icons.cloud_off_outlined),
-          tooltip: repo.status,
-        ),
-        IconButton(
-          onPressed: settings,
-          icon: const Icon(Icons.settings_outlined),
-          tooltip: 'Сервер и разрешения',
-        ),
-      ],
-    ),
-    body: LayoutBuilder(
-      builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 950 && !focusMode;
-        final page = focusMode
-            ? focusCard()
-            : [
-                indicatorsPage,
-                projectsPage,
-                workPage,
-                () => WritingScreen(repo: repo),
-                dataPage,
-              ][section]();
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (wide)
-              SizedBox(
-                width: 220,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 16),
-                      for (var i = 0; i < sections.length; i++)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: FilledButton.tonal(
-                            onPressed: () => setState(() => section = i),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: section == i
-                                  ? const Color(0xffdfe7e1)
-                                  : Colors.transparent,
-                              alignment: Alignment.centerLeft,
-                              minimumSize: const Size(double.infinity, 48),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(icons[i], size: 20),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    sections[i],
-                                    overflow: TextOverflow.ellipsis,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 950 && !focusMode;
+          final page = focusMode
+              ? focusCard()
+              : [
+                  indicatorsPage,
+                  projectsPage,
+                  workPage,
+                  () => WritingScreen(repo: repo),
+                  dataPage,
+                ][section]();
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (wide)
+                SizedBox(
+                  width: 220,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 16),
+                        for (var i = 0; i < sections.length; i++)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: FilledButton.tonal(
+                              onPressed: () => setState(() => section = i),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: section == i
+                                    ? const Color(0xffdfe7e1)
+                                    : Colors.transparent,
+                                alignment: Alignment.centerLeft,
+                                minimumSize: const Size(double.infinity, 48),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(icons[i], size: 20),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      sections[i],
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
+                        const Spacer(),
+                        Text(
+                          repo.status,
+                          maxLines: 4,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xff727780),
+                          ),
                         ),
-                      const Spacer(),
-                      Text(
-                        repo.status,
-                        maxLines: 4,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xff727780),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'I&W · Native 0.1.0',
+                          style: TextStyle(fontSize: 11),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'I&W · Native 0.1.0',
-                        style: TextStyle(fontSize: 11),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.all(wide ? 28 : 16),
-                children: [
-                  if (!wide && !focusMode)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Text(
-                        repo.status,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xff727780),
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.all(wide ? 28 : 16),
+                  children: [
+                    if (!wide && !focusMode)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Text(
+                          repo.status,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xff727780),
+                          ),
                         ),
                       ),
-                    ),
-                  page,
-                  if (!focusMode && section != 3) ...[
-                    const SizedBox(height: 26),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 480),
-                        child: focusCard(),
+                    page,
+                    if (!focusMode && section != 3) ...[
+                      const SizedBox(height: 26),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 480),
+                          child: focusCard(),
+                        ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
-        );
-      },
-    ),
-    bottomNavigationBar: MediaQuery.sizeOf(context).width < 950 && !focusMode
-        ? NavigationBar(
-            selectedIndex: section,
-            onDestinationSelected: (value) => setState(() => section = value),
-            destinations: [
-              for (var i = 0; i < sections.length; i++)
-                NavigationDestination(icon: Icon(icons[i]), label: sections[i]),
             ],
-          )
-        : null,
+          );
+        },
+      ),
+      bottomNavigationBar: MediaQuery.sizeOf(context).width < 950 && !focusMode
+          ? NavigationBar(
+              selectedIndex: section,
+              onDestinationSelected: (value) => setState(() => section = value),
+              destinations: [
+                for (var i = 0; i < sections.length; i++)
+                  NavigationDestination(
+                    icon: Icon(icons[i]),
+                    label: sections[i],
+                  ),
+              ],
+            )
+          : null,
+    ),
   );
   @override
   void dispose() {

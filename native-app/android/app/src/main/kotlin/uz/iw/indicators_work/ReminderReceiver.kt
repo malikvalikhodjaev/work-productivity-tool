@@ -17,6 +17,7 @@ class ReminderReceiver:BroadcastReceiver(){
             val hidden=snapshot.optJSONObject("hidden")?:JSONObject()
             val norms=snapshot.optJSONArray("norms")
             val now=System.currentTimeMillis()
+            prefs.edit().putLong("pomodoroReminder:${FocusService.date(now)}",now+3600000).apply()
             if(norms!=null)for(i in 0 until norms.length()){val norm=norms.getJSONObject(i);hidden.put(FocusService.date(now)+":"+norm.optString("workRef"),now+1000)}
             snapshot.put("hidden",hidden);prefs.edit().putString("snapshot",snapshot.toString()).apply()
         }
