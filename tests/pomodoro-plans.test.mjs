@@ -14,7 +14,7 @@ function fixture() {
   const options = { now: () => clock, validateWorkRef: r => { if (r !== ref) throw Error('Unknown work'); return r; }, getEntities: () => [{ref, title:'Другое имя работы'}] };
   let store = createStore(file, options);
   return { file, get store() { return store; }, advance(s) { clock += s * 1000; }, reopen() { store = createStore(file, options); },
-    command(target, expectedUpdatedAt = null, extra = {}) { return { module:'pomodoroTarget', action:'save', requestId:randomUUID(), expectedUpdatedAt, input:{workRef:ref, date, title:'  Чтение · 我的规范  ', target, ...extra} }; },
+    command(target, expectedUpdatedAt = null, extra = {}) { return { module:'pomodoroTarget', action:'save', requestId:randomUUID(), expectedUpdatedAt, input:{workRef:ref, date, title:'  Чтение · 我的规范  ', target, repeat:'once', ...extra} }; },
     timer(action, input = {}) { return store.mutateTimer(action, { ...input, week:date, requestId:randomUUID(), expectedRevision:store.getTimer(date).revision }); } };
 }
 
@@ -57,5 +57,44 @@ test('Invalid counts and dates leave the original file and receipts unchanged', 
   for (const target of [0,-1,1.5,1441,'10']) assert.throws(()=>f.store.nativeMutate(f.command(target)),/Норма/);
   const missing=f.command(1); delete missing.input.target; assert.throws(()=>f.store.nativeMutate(missing),/Норма/);
   assert.throws(()=>f.store.nativeMutate(f.command(1,null,{date:'2026-02-30'})),/дату/);
+  assert.equal(readFileSync(f.file,'utf8'),before);
+});
+
+test('Recurring daily targets survive midnight and restart indefinitely without copying yesterday facts', () => {
+  const f=fixture(), command=f.command(10,null,{repeat:'daily'});
+  f.store.nativeMutate(command);f.store.nativeMutate(command);f.reopen();
+  for(const day of ['2026-10-16','2026-11-15','2036-10-15']){
+    const view=f.store.getDailyNorms(day).pomodoroPlan;
+    assert.equal(view.hasPlan,true);assert.equal(view.targets[0].title,command.input.title);
+    assert.equal(view.targets[0].target,10);assert.equal(view.targets[0].actualPomodoros,0);
+  }
+  assert.equal(f.store.getDailyNorms('2026-10-14').pomodoroPlan.hasPlan,false);
+  assert.equal(JSON.parse(readFileSync(f.file,'utf8')).pomodoroTargets.length,1);
+});
+
+test('Editing and removing recurring plans changes future days while preserving past plans and facts', () => {
+  const f=fixture();f.store.nativeMutate(f.command(10,null,{repeat:'daily'}));
+  f.store.nativeMutate(f.command(2,null,{date:'2026-10-17',repeat:'daily'}));
+  f.store.nativeMutate(f.command(null,null,{date:'2026-10-19',repeat:'daily'}));f.reopen();
+  assert.equal(f.store.getDailyNorms('2026-10-16').pomodoroPlan.targets[0].target,10);
+  assert.equal(f.store.getDailyNorms('2026-10-18').pomodoroPlan.targets[0].target,2);
+  assert.equal(f.store.getDailyNorms('2036-10-15').pomodoroPlan.hasPlan,false);
+  assert.equal(f.store.getDailyNorms('2026-10-18').pomodoroWeek.rows[0].target,24);
+});
+
+test('Legacy dated plans remain dated and a recurring replacement does not rewrite their original records', () => {
+  const legacy={workRef:ref,date:'2026-10-14',title:'  Мой норматив  ',target:10};
+  const recurring={...legacy,date:'2026-10-16',repeat:'daily'};
+  const original=structuredClone(legacy), data={pomodoroTargets:[legacy,recurring]};
+  assert.equal(pomodoroPlanView(data,'2026-10-15').pomodoroPlan.hasPlan,false);
+  assert.equal(pomodoroPlanView(data,'2026-10-17').pomodoroPlan.targets[0].target,10);
+  assert.deepEqual(legacy,original);
+});
+
+test('New commands default to daily and invalid repeat values preserve the source', () => {
+  const f=fixture(), c=f.command(1);delete c.input.repeat;
+  f.store.nativeMutate(c);assert.equal(f.store.getDailyNorms('2036-10-15').pomodoroPlan.hasPlan,true);
+  const before=readFileSync(f.file,'utf8');
+  assert.throws(()=>f.store.nativeMutate(f.command(1,null,{repeat:'sometimes',date:'2026-10-16'})),/Повтор/);
   assert.equal(readFileSync(f.file,'utf8'),before);
 });

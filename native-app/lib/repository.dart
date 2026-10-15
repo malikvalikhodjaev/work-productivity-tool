@@ -372,6 +372,9 @@ class DashboardRepository extends ChangeNotifier {
     if (serverId == null) {
       throw StateError('Сначала подключи приложение к своему серверу.');
     }
+    if (module == 'pomodoroTarget') {
+      input = {...input, 'repeat': input['repeat'] ?? 'daily'};
+    }
     final projected =
         draft ??
         {
@@ -575,19 +578,16 @@ class DashboardRepository extends ChangeNotifier {
 
   List<Json> pomodoroTargetsForDate([String? date]) {
     final day = date ?? today();
-    return pomodoroRows
-        .where((n) => n['date'] == day && n['target'] != null)
-        .map((n) {
-          final facts = pomodoroFacts
-              .where((f) => f['date'] == day && f['workRef'] == n['workRef'])
-              .toList();
-          return {
-            ...n,
-            'actualPomodoros': facts.length,
-            'pendingPomodoros': facts.where((f) => f['pending'] == true).length,
-          };
-        })
-        .toList();
+    return pomodoroTargetsOn(pomodoroRows, day).map((n) {
+      final facts = pomodoroFacts
+          .where((f) => f['date'] == day && f['workRef'] == n['workRef'])
+          .toList();
+      return {
+        ...n,
+        'actualPomodoros': facts.length,
+        'pendingPomodoros': facts.where((f) => f['pending'] == true).length,
+      };
+    }).toList();
   }
 
   bool get hasPomodoroPlan => pomodoroTargetsForDate().isNotEmpty;

@@ -33,6 +33,17 @@ class FocusService : Service() {
             manager.createNotificationChannel(NotificationChannel(ALERTS,"Помидорки и дневные нормативы",NotificationManager.IMPORTANCE_HIGH))
         }
         fun date(now: Long) = Instant.ofEpochMilli(now).atOffset(ZoneOffset.ofHours(5)).toLocalDate().toString()
+        fun pomodoroPlans(data: JSONObject, day: String): JSONArray {
+            val rows=data.optJSONArray("pomodoroTargets")?:JSONArray()
+            val selected=linkedMapOf<String,JSONObject>()
+            for(i in 0 until rows.length()) {
+                val row=rows.getJSONObject(i);val start=row.optString("date");val ref=row.optString("workRef")
+                if(start!=day&&!(row.optString("repeat")=="daily"&&start<=day))continue
+                val previous=selected[ref]
+                if(previous==null||start>previous.optString("date"))selected[ref]=row
+            }
+            return JSONArray().apply {for(row in selected.values)if(!row.isNull("target"))put(JSONObject(row.toString()).put("date",day))}
+        }
         fun elapsed(s: JSONObject, now: Long): Long {
             var past = 0L
             val intervals = s.optJSONArray("intervals") ?: JSONArray()
@@ -67,7 +78,7 @@ class FocusService : Service() {
             val prefs=context.getSharedPreferences(PREFS,MODE_PRIVATE)
             val data=JSONObject(prefs.getString("snapshot","{}") ?: "{}")
             val currentDate=date(System.currentTimeMillis())
-            val plans=data.optJSONArray("pomodoroTargets")?:JSONArray()
+            val plans=pomodoroPlans(data,currentDate)
             val counts=data.optJSONArray("pomodoroCounts")?:JSONArray()
             val lines=mutableListOf<String>()
             for(i in 0 until plans.length()) {
@@ -135,7 +146,7 @@ class FocusService : Service() {
                 }
             }
             if(data.optBoolean("planningReady")) {
-                val plans=data.optJSONArray("pomodoroTargets")?:JSONArray()
+                val plans=pomodoroPlans(data,currentDate)
                 val counts=data.optJSONArray("pomodoroCounts")?:JSONArray()
                 var hasPlan=false;var unfinished=false
                 for(i in 0 until plans.length()) {

@@ -9,20 +9,20 @@ let data, entities = [], selectedWeek = '', loading = false, submitting = false,
 let promptedDay = '', nextPrompt = 0, entryPending = true;
 const host = document.createElement('section');
 host.className = 'pomodoro-settings'; host.id = 'pomodoro-settings';
-host.innerHTML = `<header class="pom-header"><div><p class="eyebrow">ДНЕВНОЙ ПЛАН</p><h2>Нормативы помидорок</h2></div><button type="button" class="button primary" data-pom-add>＋ Норматив на день</button></header><p class="pom-note">Название — выполнено / запланировано. Счётчик обновляется после учёта полной рабочей помидорки.</p><div data-pom-list></div><p class="pom-status" role="status"></p><details class="pom-week"><summary>Статистика помидорок за неделю</summary><div class="pom-week-nav"><button type="button" class="button secondary" data-pom-week="-7" aria-label="Предыдущая неделя">←</button><span id="pom-week-label"></span><button type="button" class="button secondary" data-pom-week="7" aria-label="Следующая неделя">→</button><button type="button" class="button secondary" data-pom-week="today">Текущая</button></div><div id="pom-week-table" class="pom-table-scroll"></div></details>`;
+host.innerHTML = `<header class="pom-header"><div><p class="eyebrow">ДНЕВНОЙ ПЛАН</p><h2>Нормативы помидорок</h2></div><button type="button" class="button primary" data-pom-add>＋ Ежедневный норматив</button></header><p class="pom-note">Название — выполнено / запланировано. Счётчик обновляется после учёта полной рабочей помидорки.</p><div data-pom-list></div><p class="pom-status" role="status"></p><details class="pom-week"><summary>Статистика помидорок за неделю</summary><div class="pom-week-nav"><button type="button" class="button secondary" data-pom-week="-7" aria-label="Предыдущая неделя">←</button><span id="pom-week-label"></span><button type="button" class="button secondary" data-pom-week="7" aria-label="Следующая неделя">→</button><button type="button" class="button secondary" data-pom-week="today">Текущая</button></div><div id="pom-week-table" class="pom-table-scroll"></div></details>`;
 document.getElementById('timer-panel')?.insertAdjacentElement('afterend', host);
 const floating = document.createElement('aside'); floating.className = 'pomodoro-floating'; floating.setAttribute('aria-label', 'Чек-лист помидорок на сегодня');
-floating.innerHTML = '<header class="pom-header"><strong>Помидорки · сегодня</strong><button type="button" data-pom-settings aria-label="Настройки дневных норм">⚙</button></header><div data-pom-list></div><button type="button" class="pom-text-button" data-pom-add>＋ Норматив на день</button>';
+floating.innerHTML = '<header class="pom-header"><strong>Помидорки · сегодня</strong><button type="button" data-pom-settings aria-label="Настройки дневных норм">⚙</button></header><div data-pom-list></div><button type="button" class="pom-text-button" data-pom-add>＋ Ежедневный норматив</button>';
 if (!embedded && !document.body.classList.contains('focus-window')) document.body.append(floating);
 const editor = document.createElement('dialog'); editor.className = 'modal pom-editor'; editor.id = 'pomodoro-editor';
-editor.innerHTML = `<form><div class="modal-heading"><h2>Норматив помидорок на день</h2><button type="button" class="icon-button" data-pom-close aria-label="Закрыть норматив">×</button></div><label class="field">Дата<input name="date" type="date" required></label><label class="field">Работа / задача / кейс<select name="workRef" required></select></label><label class="field">Название норматива<input name="title" maxlength="240" required></label><label class="field">Помидорок за день<input name="target" type="number" min="1" max="1440" step="1" inputmode="numeric" required></label><p class="pom-note">Фокус запускается по выбранной работе. Норма относится к указанной дате.</p><p class="form-error" role="alert"></p><div class="modal-footer"><button type="button" class="button secondary" id="pom-remove">Снять норматив</button><button type="submit" class="button primary">Сохранить</button></div></form>`;
+editor.innerHTML = `<form><div class="modal-heading"><h2>Ежедневный норматив помидорок</h2><button type="button" class="icon-button" data-pom-close aria-label="Закрыть норматив">×</button></div><label class="field">Действует с<input name="date" type="date" required></label><label class="field">Работа / задача / кейс<select name="workRef" required></select></label><label class="field">Название норматива<input name="title" maxlength="240" required></label><label class="field">Помидорок за день<input name="target" type="number" min="1" max="1440" step="1" inputmode="numeric" required></label><p class="pom-note">Фокус запускается по выбранной работе. Ежедневно, без срока окончания — пока не изменишь или не снимешь.</p><p class="form-error" role="alert"></p><div class="modal-footer"><button type="button" class="button secondary" id="pom-remove">Снять норматив</button><button type="submit" class="button primary">Сохранить</button></div></form>`;
 document.body.append(editor);
 const form = editor.querySelector('form'), field = name => form.elements.namedItem(name);
 const prompt = document.createElement('dialog'); prompt.className = 'modal pom-planning-prompt';
-prompt.innerHTML = '<h2>Вы поставили нормативы на день?</h2><p>На сегодня ещё нет плана помидорок. Задай хотя бы один норматив — этот вопрос перестанет появляться до следующего дня.</p><div class="modal-footer"><button type="button" class="button secondary" id="pom-later">Позже · напомнить через час</button><button type="button" class="button primary" data-pom-add>Задать норматив</button></div>';
+prompt.innerHTML = '<h2>Вы поставили нормативы на день?</h2><p>На сегодня ещё нет плана помидорок. Задай хотя бы один ежедневный норматив — он будет повторяться каждый день, пока ты его не снимешь.</p><div class="modal-footer"><button type="button" class="button secondary" id="pom-later">Позже · напомнить через час</button><button type="button" class="button primary" data-pom-add>Задать норматив</button></div>';
 document.body.append(prompt);
 const settings = document.createElement('dialog'); settings.className = 'modal pom-settings-dialog';
-settings.innerHTML = '<div class="modal-heading"><h2>Настройки · помидорки на сегодня</h2><button type="button" class="icon-button" data-pom-settings-close aria-label="Закрыть настройки">×</button></div><div data-pom-list></div><div class="modal-footer"><button type="button" class="button secondary" data-pom-stats>Статистика недели</button><button type="button" class="button primary" data-pom-add>＋ Норматив на день</button></div>';
+settings.innerHTML = '<div class="modal-heading"><h2>Настройки · помидорки на сегодня</h2><button type="button" class="icon-button" data-pom-settings-close aria-label="Закрыть настройки">×</button></div><div data-pom-list></div><div class="modal-footer"><button type="button" class="button secondary" data-pom-stats>Статистика недели</button><button type="button" class="button primary" data-pom-add>＋ Ежедневный норматив</button></div>';
 document.body.append(settings);
 
 async function api(route, body) {
@@ -60,7 +60,7 @@ async function load() {
 }
 function previous() { return data?.pomodoroTargets?.find(t => t.date === field('date').value && t.workRef === field('workRef').value); }
 function fillPrevious() {
-  const row=previous(); expected=row?.updatedAt ?? null;
+  const exact=previous(), row=exact??data?.pomodoroPlan.targets.find(t=>t.workRef===field('workRef').value&&t.repeat==='daily'&&t.sourceDate<=field('date').value); expected=exact?.updatedAt ?? null;
   field('title').value = row?.title ?? entities.find(e=>e.ref===field('workRef').value)?.title ?? '';
   field('target').value = row?.target ?? 1;
   document.getElementById('pom-remove').hidden = !row || row.target == null;
@@ -80,7 +80,7 @@ async function edit(ref) {
 }
 async function save(remove = false) {
   if (submitting || (!remove && !form.reportValidity())) return;
-  const input={date:field('date').value,workRef:field('workRef').value,title:field('title').value,target:remove?null:Number(field('target').value)};
+  const input={date:field('date').value,workRef:field('workRef').value,title:field('title').value,target:remove?null:Number(field('target').value),repeat:'daily'};
   const content=JSON.stringify({input,expectedUpdatedAt:expected});
   if (!retryBody || retryBody.content!==content) retryBody={content,command:{input,expectedUpdatedAt:expected,requestId:crypto.randomUUID()}};
   submitting=true; for(const b of form.querySelectorAll('button'))b.disabled=true;

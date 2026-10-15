@@ -36,7 +36,7 @@ Future<bool> editPomodoroTarget(
       .toList();
   return editFields(
     context,
-    title: 'Норматив помидорок на день',
+    title: 'Ежедневный норматив помидорок',
     initial: {
       'date': previous?['date'] ?? today(),
       'workRef': previous?['workRef'] ?? ref ?? entities.first['ref'],
@@ -44,7 +44,7 @@ Future<bool> editPomodoroTarget(
       'target': previous?['target'] ?? 1,
     },
     fields: [
-      const FieldSpec('date', 'Дата · YYYY-MM-DD'),
+      const FieldSpec('date', 'Действует с · YYYY-MM-DD'),
       FieldSpec(
         'workRef',
         'Работа / задача / кейс',

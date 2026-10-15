@@ -31,10 +31,35 @@ Json? pomodoroFact(Json session) {
   };
 }
 
+List<Json> pomodoroTargetsOn(List<Json> records, String date) {
+  final selected = <String, Json>{};
+  for (final row in records) {
+    final start = row['date'].toString();
+    if (start != date &&
+        !(row['repeat'] == 'daily' && start.compareTo(date) <= 0)) {
+      continue;
+    }
+    final previous = selected[row['workRef']];
+    if (previous == null || start.compareTo(previous['date'].toString()) > 0) {
+      selected[row['workRef'].toString()] = row;
+    }
+  }
+  return selected.values
+      .where((n) => n['target'] != null)
+      .map(
+        (n) => <String, dynamic>{...n, 'sourceDate': n['date'], 'date': date},
+      )
+      .toList();
+}
+
 List<Json> pomodoroWeekRows(List<Json> targets, List<Json> facts, String week) {
   final start = pomodoroMonday(week), end = pomodoroShift(start, 6);
   final groups = <String, Json>{};
-  for (final n in targets.where(
+  final effective = [
+    for (var i = 0; i < 7; i++)
+      ...pomodoroTargetsOn(targets, pomodoroShift(start, i)),
+  ];
+  for (final n in effective.where(
     (n) =>
         n['target'] != null &&
         n['date'].toString().compareTo(start) >= 0 &&

@@ -71,7 +71,7 @@ class TimerOverlay(private val context: Context) {
         title?.text = leisureCaption + (if (active.optString("phase") != "work") "Перерыв: "
             else if (active.optString("workRef").startsWith("case:")) "Working on a problem: " else "Working on: ") + active.optString("title")
         val date = FocusService.date(now)
-        val rows = snapshot.optJSONArray("pomodoroTargets")
+        val rows = FocusService.pomodoroPlans(snapshot,date)
         val counts = snapshot.optJSONArray("pomodoroCounts")
         val day = snapshot.optString("pomodoroDay", snapshot.optString("today"))
         val lines = mutableListOf<String>()
