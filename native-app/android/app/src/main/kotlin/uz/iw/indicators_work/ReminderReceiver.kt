@@ -10,7 +10,7 @@ class ReminderReceiver:BroadcastReceiver(){
         if(intent.getStringExtra("kind")=="timer"){
             val active=snapshot.optJSONObject("active")?:return
             val key=active.optString("id")+":"+active.optLong("plannedMs")
-            if(prefs.getString("alerted","")!=key){prefs.edit().putString("alerted",key).apply();FocusService.alert(context,true)}
+            if(!FocusService.appVisible&&prefs.getString("alerted","")!=key){prefs.edit().putString("alerted",key).apply();FocusService.alert(context,true)}
         }else if(intent.getStringExtra("kind")=="leisure"){
             FocusService.alertLeisure(context,snapshot)
         }else if(intent.action==Intent.ACTION_BOOT_COMPLETED){FocusService.schedule(context,snapshot);return}

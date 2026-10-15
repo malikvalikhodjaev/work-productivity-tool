@@ -64,11 +64,11 @@ class FocusService : Service() {
             if(active.getJSONObject("leisure").optLong("until")>now)return
             val prefs=context.getSharedPreferences(PREFS,MODE_PRIVATE)
             if(prefs.getString("leisureAlerted",null)==key)return
-            prefs.edit().putString("leisureAlerted",key).apply()
             if(appVisible)return
+            prefs.edit().putString("leisureAlerted",key).apply()
             channels(context)
             val message=active.optString("title")+" · рабочий таймер на паузе"
-            val notification=Notification.Builder(context,ALERTS).setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            val notification=Notification.Builder(context,TimerRingtones.channel(context,data.optString("timerRingtone"))).setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
                 .setContentTitle("Вернуться к работе?").setContentText(message)
                 .setContentIntent(open(context,"leisure")).setAutoCancel(true).build()
             context.getSystemService(NotificationManager::class.java).notify(LEISURE_ALERT,notification)
@@ -77,6 +77,7 @@ class FocusService : Service() {
             channels(context)
             val prefs=context.getSharedPreferences(PREFS,MODE_PRIVATE)
             val data=JSONObject(prefs.getString("snapshot","{}") ?: "{}")
+            if(timer&&appVisible)return
             val currentDate=date(System.currentTimeMillis())
             val plans=pomodoroPlans(data,currentDate)
             val counts=data.optJSONArray("pomodoroCounts")?:JSONArray()
@@ -92,11 +93,12 @@ class FocusService : Service() {
             }
             val title=if(timer)"Как прошла помидорка?" else if(data.optBoolean("planningReady")&&lines.isEmpty())"Вы поставили нормативы на день?" else "Сделал это?"
             val body=if(timer)data.optJSONObject("active")?.optString("title") ?: "Запиши наблюдение и уточни минуты" else if(lines.isNotEmpty())lines.joinToString("\n") else "Открой настройки и задай норматив помидорок на сегодня"
-            val notification=Notification.Builder(context,ALERTS).setSmallIcon(android.R.drawable.ic_lock_idle_alarm).setContentTitle(title).setContentText(body).setStyle(Notification.BigTextStyle().bigText(body)).setContentIntent(open(context,if(timer)"timer" else "norms")).setAutoCancel(true).build()
+            val notification=Notification.Builder(context,if(timer)TimerRingtones.channel(context,data.optString("timerRingtone"))else ALERTS).setSmallIcon(android.R.drawable.ic_lock_idle_alarm).setContentTitle(title).setContentText(body).setStyle(Notification.BigTextStyle().bigText(body)).setContentIntent(open(context,if(timer)"timer" else "norms")).setAutoCancel(true).build()
             context.getSystemService(NotificationManager::class.java).notify(if(timer)TIMER_ALERT else DAILY_ALERT,notification)
         }
         fun schedule(context: Context, data: JSONObject) {
             channels(context)
+            TimerRingtones.channel(context,data.optString("timerRingtone"))
             val manager=context.getSystemService(AlarmManager::class.java)
             fun alarm(kind: String, at: Long?) {
                 val intent=PendingIntent.getBroadcast(context,kind.hashCode(),Intent(context,ReminderReceiver::class.java).putExtra("kind",kind),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)

@@ -55,6 +55,21 @@ class MainActivity:FlutterActivity(){
                         result.success(true)
                     }
                     "overlayAllowed"->{result.success(Settings.canDrawOverlays(this))}
+                    "ringtoneSettings"->{
+                        val channelId=TimerRingtones.channel(this,call.arguments as? String)
+                        startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,packageName).putExtra(Settings.EXTRA_CHANNEL_ID,channelId))
+                        result.success(true)
+                    }
+                    "claimTimerSound"->{
+                        val arguments=call.arguments as Map<*,*>
+                        val name=if(arguments["kind"]=="leisure")"leisureAlerted"else"alerted"
+                        val key=arguments["key"] as String
+                        require(key.isNotEmpty()&&key.length<=200)
+                        val prefs=getSharedPreferences(FocusService.PREFS,MODE_PRIVATE)
+                        val fresh=prefs.getString(name,null)!=key
+                        if(fresh)prefs.edit().putString(name,key).apply()
+                        result.success(fresh)
+                    }
                     "overlayPermission"->{
                         val settings=Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName"))
                         if(settings.resolveActivity(packageManager)!=null)startActivity(settings)

@@ -9,12 +9,14 @@ import 'package:window_manager/window_manager.dart';
 import 'domain.dart';
 import 'repository.dart';
 import 'desktop_timer_window.dart';
+import 'timer_ringtones.dart';
 
 class BackgroundRuntime {
   static const channel = MethodChannel('iw/background');
   final DashboardRepository repo;
   final AudioPlayer audio = AudioPlayer();
   final AudioPlayer alarm = AudioPlayer();
+  final AudioPlayer preview = AudioPlayer();
   tray.TrayIcon? trayIcon;
   tray.Menu? menu;
   String? previous;
@@ -99,6 +101,7 @@ class BackgroundRuntime {
     final volume = (repo.local.get('volume') as num? ?? .2).toDouble();
     final payload = {
       'active': s,
+      'timerRingtone': validRingtone(repo.local.get('timerRingtone')),
       'dailyProblem': {
         'date': today(),
         'loaded': repo.todayProblemLoaded,
@@ -153,9 +156,41 @@ class BackgroundRuntime {
     previous = next;
   }
 
-  Future<void> notifyTimer() async {
-    if (Platform.isWindows) await alarm.play(AssetSource('audio/alarm.wav'));
+  Future<void> notifyTimer({bool foreground = true}) async {
+    if (Platform.isAndroid && foreground) {
+      final session = repo.active;
+      if (session == null) return;
+      final resting = inLeisure(session);
+      final fresh = await channel.invokeMethod<bool>('claimTimerSound', {
+        'kind': resting ? 'leisure' : 'timer',
+        'key': resting
+            ? leisureKey(session)
+            : '${session['id']}:${session['plannedMs']}',
+      });
+      if (fresh != true) return;
+    }
+    if (Platform.isWindows || (Platform.isAndroid && foreground)) {
+      await alarm.stop();
+      await alarm.setVolume(
+        validRingtoneVolume(repo.local.get('timerRingtoneVolume')),
+      );
+      await alarm.play(
+        AssetSource(ringtoneAsset(repo.local.get('timerRingtone'))),
+      );
+    }
   }
+
+  Future<void> previewRingtone(String id, double volume) async {
+    await preview.stop();
+    await preview.setVolume(validRingtoneVolume(volume));
+    await preview.play(AssetSource(ringtoneAsset(id)));
+  }
+
+  Future<void> stopRingtonePreview() => preview.stop();
+  Future<void> ringtoneSystemSettings() => channel.invokeMethod(
+    'ringtoneSettings',
+    validRingtone(repo.local.get('timerRingtone')),
+  );
 
   Future<bool> exactAlarmAllowed() async => Platform.isAndroid
       ? (await channel.invokeMethod<bool>('exactAlarmAllowed') ?? false)
@@ -210,6 +245,7 @@ class BackgroundRuntime {
     if (Platform.isAndroid) channel.setMethodCallHandler(null);
     await audio.dispose();
     await alarm.dispose();
+    await preview.dispose();
     trayIcon?.setVisible(false);
   }
 }

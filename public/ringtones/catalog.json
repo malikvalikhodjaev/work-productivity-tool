@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "default": "bip_bip",
+  "ringtones": [
+    {
+      "id": "bip_bip",
+      "title": "Бип-бип",
+      "description": "Две пары коротких мягких импульсов"
+    },
+    {
+      "id": "sonar",
+      "title": "Сонар",
+      "description": "Три округлых сигнала с паузами"
+    },
+    {
+      "id": "glass",
+      "title": "Стекло",
+      "description": "Светлый звон из трёх нот"
+    },
+    {
+      "id": "marimba",
+      "title": "Маримба",
+      "description": "Четыре тёплые деревянные ноты"
+    },
+    {
+      "id": "orbit",
+      "title": "Орбита",
+      "description": "Спокойный восходящий и ответный мотив"
+    },
+    {
+      "id": "warm_bell",
+      "title": "Тёплый колокол",
+      "description": "Два мягких удара с затуханием"
+    },
+    {
+      "id": "classic",
+      "title": "Прежний сигнал",
+      "description": "Короткий однотонный сигнал"
+    }
+  ]
+}

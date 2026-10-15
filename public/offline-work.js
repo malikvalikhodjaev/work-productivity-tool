@@ -2,6 +2,7 @@ import { createDeviceStore } from './offline-store.js';
 import { sessionView } from './timer-core.js';
 import { syncDevice } from './offline-engine.js';
 import {mountFocusAmbience} from './focus-ambience.js';
+import {mountTimerRingtones,playTimerRingtone} from './timer-ringtones.js';
 
 const $ = id => document.getElementById(id), store = createDeviceStore();
 const channel = 'BroadcastChannel' in window ? new BroadcastChannel('indicators-work-device') : null;
@@ -10,6 +11,7 @@ let state, syncing = false, acting = false, status = 'Локальное хра�
 const esc = value => String(value ?? '').replace(/[&<>"']/g,c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const duration = ms => { const s = Math.floor(Math.max(0,ms)/1000); return [Math.floor(s/3600),Math.floor(s/60)%60,s%60].map(n=>String(n).padStart(2,'0')).join(':'); };
 const ambience=mountFocusAmbience(document.querySelector('main'),{allowExpand:false});$('clock').textContent='00:25:00';
+mountTimerRingtones(document.querySelector('main'));
 const stamp = value => new Date(value).toLocaleString('ru-RU',{timeZone:'Asia/Tashkent'});
 const message = value => { $('message').textContent = value; $('message').hidden = !value; };
 const active = () => state?.timer.sessions.find(s=>s.id===state.timer.activeId);
@@ -80,9 +82,9 @@ function tick() {
   if(resting(s)){
     $('active-note').textContent=`Leisure до ${stamp(s.leisure.until)} · работа на паузе · отдых ${(view.leisureMs/60000).toFixed(1)} мин`;
     const key=`${s.id}:${s.leisure.start}:${s.leisure.until}`;
-    if(view.leisureRemainingMs===0&&!document.hidden&&!readOnly&&!acting&&!document.querySelector('dialog[open]')&&leisurePromptKey!==key){leisurePromptKey=key;returnSessionId=s.id;$('leisure-title').textContent=s.title;returnDialog.showModal();}
+    if(view.leisureRemainingMs===0&&!document.hidden&&!readOnly&&!acting&&!document.querySelector('dialog[open]')&&leisurePromptKey!==key){leisurePromptKey=key;returnSessionId=s.id;$('leisure-title').textContent=s.title;void playTimerRingtone().catch(()=>{});returnDialog.showModal();}
   }
-  if(view.expired&&alarmId!==s.id) { alarmId=s.id; try { if(Notification.permission==='granted') new Notification('I&W · Интервал завершён',{body:s.title}); } catch {} }
+  if(view.expired&&alarmId!==s.id) { alarmId=s.id;void playTimerRingtone().catch(()=>{}); try { if(Notification.permission==='granted') new Notification('I&W · Интервал завершён',{body:s.title,silent:true}); } catch {} }
   const key=s.id+':'+s.plannedMs;
   if(view.expired&&s.phase==='work'&&!document.hidden&&!readOnly&&!acting&&!$('finish-dialog').open&&reviewKey!==key){reviewKey=key;beginFinish();}
 }

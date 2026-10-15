@@ -1,0 +1,7 @@
+.timer-ringtones{margin:12px 0;padding:14px 16px;border:1px solid #dfe5df;border-radius:14px;background:#fff;color:#202823}
+.timer-ringtones summary{cursor:pointer;font-weight:600;list-style-position:outside;margin-left:12px}
+.timer-ringtones label{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:14px 0;font-size:13px}
+.timer-ringtones select{flex:1;min-width:150px;padding:9px;border:1px solid #d8dfd9;border-radius:9px;background:#fff;font:inherit}
+.timer-ringtones input[type=range]{flex:1;min-width:150px;accent-color:#23674f}
+.timer-ringtone-actions{display:flex;flex-wrap:wrap;gap:8px}
+.timer-ringtones .timer-note{line-height:1.5;font-size:12px;color:#647168}

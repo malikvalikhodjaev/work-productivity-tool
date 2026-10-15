@@ -25,6 +25,7 @@ import 'timer_command_notice.dart';
 import 'daily_problem_banner.dart';
 import 'project_review.dart';
 import 'leisure.dart';
+import 'timer_ringtones.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -174,7 +175,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.9',
+        'clientVersion': '0.1.10',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -344,7 +345,9 @@ class _DashboardHomeState extends State<DashboardHome>
       final key = '${s['id']}:${s['plannedMs']}';
       if (repo.local.get('alerted') != key) {
         repo.local.set('alerted', key);
-        unawaited(background.notifyTimer());
+        if (widget.backgroundEnabled) {
+          unawaited(background.notifyTimer(foreground: foreground));
+        }
         if (widget.backgroundEnabled && Platform.isWindows && !foreground) {
           unawaited(show());
         }
@@ -383,7 +386,9 @@ class _DashboardHomeState extends State<DashboardHome>
       if (widget.backgroundEnabled && Platform.isWindows && !foreground) {
         await show();
       }
-      if (widget.backgroundEnabled) unawaited(background.notifyTimer());
+      if (widget.backgroundEnabled) {
+        unawaited(background.notifyTimer(foreground: foreground));
+      }
       if (mounted) await safe(() => askLeisureReturn(context, repo));
     } finally {
       dialogOpen = false;
@@ -902,6 +907,24 @@ class _DashboardHomeState extends State<DashboardHome>
     );
   }
 
+  Future<void> ringtoneSettings() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => TimerRingtoneLibrary(
+        repo: repo,
+        preview: background.previewRingtone,
+        stop: background.stopRingtonePreview,
+        changed: () {
+          if (mounted) setState(() {});
+          if (widget.backgroundEnabled) unawaited(background.update());
+        },
+        systemSettings: Platform.isAndroid
+            ? background.ringtoneSystemSettings
+            : null,
+      ),
+    );
+  }
+
   Future<void> startBreak() async {
     final count = !repo.online
         ? repo.local.get('localPomodoroCount') as int? ?? 0
@@ -1103,6 +1126,18 @@ class _DashboardHomeState extends State<DashboardHome>
                 label: const Text(
                   'Настройки таймера',
                   style: TextStyle(color: Colors.white70),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: ringtoneSettings,
+                icon: const Icon(
+                  Icons.music_note_outlined,
+                  color: Colors.white70,
+                  size: 18,
+                ),
+                label: Text(
+                  'Сигнал таймера · ${timerRingtones[validRingtone(repo.local.get('timerRingtone'))]!.$1}',
+                  style: const TextStyle(color: Colors.white70),
                 ),
               ),
               Wrap(
@@ -2507,6 +2542,12 @@ class _DashboardHomeState extends State<DashboardHome>
               builder: (c, _) => Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  ListTile(
+                    leading: const Icon(Icons.music_note_outlined),
+                    title: const Text('Библиотека рингтонов'),
+                    subtitle: const Text('Выбрать и прослушать сигнал таймера'),
+                    onTap: ringtoneSettings,
+                  ),
                   if (Platform.isAndroid) ...[
                     SwitchListTile(
                       title: const Text('Малое окно таймера'),
@@ -2721,7 +2762,7 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'I&W · Native 0.1.9',
+                          'I&W · Native 0.1.10',
                           style: TextStyle(fontSize: 11),
                         ),
                       ],
