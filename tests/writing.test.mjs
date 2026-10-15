@@ -46,6 +46,32 @@ test('Поиск находит мысль внутри текста; сводк
   const f=fixture();f.store.save(f.packet({status:'published',document:{ops:[{insert:'A'.repeat(400)+'\nНеизвестное место\n'}]}}));f.store.save(f.packet({title:'Другое',status:'published',date:'2026-09-12'}));
   const result=f.store.view('неизвестное');assert.equal(result.entries.length,1);assert.equal(result.entries[0].document,undefined);assert.equal(result.months.length,2);
 });
+
+test('Удаление сохраняет последний текст и историю одной записью; повтор и восстановление не теряют правки',()=>{
+  const f=fixture(),first=f.store.save(f.packet()).entry;
+  const latest={ops:[{insert:'Последняя несохранённая мысль · 思考\n',attributes:{bold:true}}]};
+  const packet=f.packet({id:first.id,expectedRevision:1,action:'saveAndTrash',title:'Перед удалением',document:latest});
+  const removed=f.store.save(packet).entry;
+  assert.ok(removed.trashedAt);assert.deepEqual(removed.document,latest);
+  assert.deepEqual(removed.revisions[0].document,document);
+  f.reopen();assert.equal(f.store.save(packet).duplicate,true);
+  const restored=f.store.save(f.packet({id:first.id,expectedRevision:2,action:'restore'})).entry;
+  assert.equal(restored.trashedAt,null);assert.equal(restored.title,'Перед удалением');assert.deepEqual(restored.document,latest);
+  const raw=fs.readFileSync(f.file,'utf8');
+  assert.throws(()=>f.store.save({...packet,requestId:randomUUID()}),e=>e.status===409);
+  assert.equal(fs.readFileSync(f.file,'utf8'),raw);
+});
+
+test('Новый локальный черновик можно удалить и восстановить; неверный документ не попадает в корзину',()=>{
+  const f=fixture(),packet=f.packet({action:'saveAndTrash'});
+  const removed=f.store.save(packet).entry;
+  assert.equal(removed.revision,1);assert.equal(f.store.view().counts.trash,1);
+  assert.deepEqual(removed.document,document);
+  const raw=fs.readFileSync(f.file,'utf8');
+  assert.throws(()=>f.store.save(f.packet({action:'saveAndTrash',document:{ops:[{insert:{image:'bad'}}]}})));
+  assert.equal(fs.readFileSync(f.file,'utf8'),raw);
+  assert.equal(f.store.save(f.packet({id:removed.id,expectedRevision:1,action:'restore'})).entry.trashedAt,null);
+});
 test('Черновики разных вкладок сохраняются независимо; подтверждение старой версии не удаляет новые правки',async()=>{
   const factory=new IDBFactory(),a=createWritingDraftStore(factory),b=createWritingDraftStore(factory),record={key:'tab-a:post',token:'1:1',savedAt:'2026-10-13T10:00:00Z',content:{document}};
   await a.put(record);await b.put({...record,key:'tab-b:post'});await a.put({...record,token:'1:2'});await b.removeIf(record.key,'1:1');assert.equal((await a.list()).length,2);

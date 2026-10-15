@@ -952,21 +952,93 @@ class DashboardRepository extends ChangeNotifier {
     }
   }
 
-  void saveWriting(Json article) {
+  List<Json> get writingEntries {
+    final entries = <String, Json>{};
+    void merge(Json article) {
+      final id = article['id'].toString();
+      final original = cache('writing:$id');
+      final previous = entries[id];
+      final metadata =
+          (original['revision'] as int? ?? 0) >=
+              (previous?['revision'] as int? ?? 0)
+          ? {...?previous, ...original}
+          : previous!;
+      entries[id] = {
+        ...metadata,
+        ...article,
+        'trashedAt': metadata.containsKey('trashedAt')
+            ? metadata['trashedAt']
+            : article['trashedAt'],
+      };
+    }
+
+    for (final article in rows(cache('writing')['entries'])) {
+      merge(article);
+    }
+    for (final draft in local.drafts.where(
+      (d) => d['entity'].toString().startsWith('composer:'),
+    )) {
+      merge(object(draft['body']));
+    }
+    for (final draft in local.drafts.where(
+      (d) => d['entity'].toString().startsWith('writing:'),
+    )) {
+      final article = object(draft['body']);
+      entries[article['id'].toString()] = {
+        ...?entries[article['id'].toString()],
+        ...article,
+      };
+    }
+    return entries.values.toList();
+  }
+
+  void saveWriting(Json article, {bool trash = false}) {
     final archive = cache('writing')['instanceId'];
     if (archive == null) throw StateError('Сначала загрузи архив с сервера.');
     final original = cache('writing:${article['id']}');
-    local.enqueue('writing:${article['id']}', '/api/writing', {
-      'action': 'save',
-      'requestId': uuid.v4(),
-      'instanceId': archive,
-      'id': article['id'],
-      'expectedRevision': original['revision'] ?? 0,
-      'title': article['title'],
-      'date': article['date'],
-      'status': article['status'],
-      'document': article['document'],
-    }, draft: article);
+    local.enqueue(
+      'writing:${article['id']}',
+      '/api/writing',
+      {
+        'action': trash ? 'saveAndTrash' : 'save',
+        'requestId': uuid.v4(),
+        'instanceId': archive,
+        'id': article['id'],
+        'expectedRevision': original['revision'] ?? 0,
+        'title': article['title'],
+        'date': article['date'],
+        'status': article['status'],
+        'document': article['document'],
+      },
+      draft: {
+        ...article,
+        'trashedAt': trash ? DateTime.now().toUtc().toIso8601String() : null,
+      },
+    );
+    notifyListeners();
+    unawaited(synchronize());
+  }
+
+  void restoreWriting(String id) {
+    if (pending.any((p) => p['entity'] == 'writing:$id')) {
+      throw StateError('Дождись синхронизации удаления перед восстановлением.');
+    }
+    final original = cache('writing:$id');
+    if (original['trashedAt'] == null) {
+      throw StateError('Сначала загрузи удалённую запись с сервера.');
+    }
+    local.enqueue(
+      'writing:$id',
+      '/api/writing',
+      {
+        'action': 'restore',
+        'requestId': uuid.v4(),
+        'instanceId': cache('writing')['instanceId'],
+        'id': id,
+        'expectedRevision': original['revision'],
+      },
+      draft: {...original, 'trashedAt': null},
+    );
     notifyListeners();
     unawaited(synchronize());
   }

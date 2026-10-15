@@ -43,12 +43,20 @@ class _WritingScreenState extends State<WritingScreen> {
   String mode = 'draft';
   final title = TextEditingController();
   final date = TextEditingController(text: today());
+  final editorFocus = FocusNode(debugLabel: 'Essay editor');
+  final editorScroll = ScrollController();
   q.QuillController controller = q.QuillController.basic();
   Timer? debounce;
   StreamSubscription<q.DocChange>? changesSubscription;
   bool converting = false;
   String status = '';
+  bool showTrash = false;
   DashboardRepository get repo => widget.repo;
+  bool get inTrash =>
+      selected != null &&
+      repo.writingEntries.any(
+        (entry) => entry['id'] == selected && entry['trashedAt'] != null,
+      );
   void open(Json article) {
     debounce?.cancel();
     if (selected != null) persistDraft();
@@ -120,7 +128,9 @@ class _WritingScreenState extends State<WritingScreen> {
     }, toServer: true),
   };
   void persistDraft() {
-    if (selected != null) repo.local.keepDraft('composer:$selected', article());
+    if (selected != null && !inTrash) {
+      repo.local.keepDraft('composer:$selected', article());
+    }
   }
 
   void changed() {
@@ -138,23 +148,21 @@ class _WritingScreenState extends State<WritingScreen> {
     controller.dispose();
     title.dispose();
     date.dispose();
+    editorFocus.dispose();
+    editorScroll.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final source = rows(repo.cache('writing')['entries'])
-        .where((a) => a['trashedAt'] == null)
+    final source = repo.writingEntries
+        .where((a) => (a['trashedAt'] != null) == showTrash)
         .toList();
-    final ids = source.map((a) => a['id']).toSet();
-    for (final draft in repo.local.drafts.where(
-      (d) =>
-          d['entity'].toString().startsWith('composer:') ||
-          d['entity'].toString().startsWith('writing:'),
-    )) {
-      final a = object(draft['body']);
-      if (ids.add(a['id'])) source.add(a);
-    }
+    final trashed = inTrash;
+    controller.readOnly = trashed;
+    final pendingWriting = repo.pending.any(
+      (p) => p['entity'] == 'writing:$selected',
+    );
     source.sort(
       (a, b) =>
           (b['date'] ?? '').toString().compareTo((a['date'] ?? '').toString()),
@@ -163,8 +171,10 @@ class _WritingScreenState extends State<WritingScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         FilledButton.icon(
-          onPressed: () =>
-              open({'id': uuid.v4(), 'date': today(), 'status': 'draft'}),
+          onPressed: () {
+            showTrash = false;
+            open({'id': uuid.v4(), 'date': today(), 'status': 'draft'});
+          },
           icon: const Icon(Icons.add),
           label: const Text('Новая запись'),
         ),
@@ -174,12 +184,28 @@ class _WritingScreenState extends State<WritingScreen> {
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
         TextButton(
-          onPressed: () => setState(() => month = null),
+          onPressed: () => setState(() {
+            month = null;
+            showTrash = false;
+          }),
           child: const Text('Все записи'),
+        ),
+        TextButton.icon(
+          onPressed: () => setState(() {
+            month = null;
+            showTrash = true;
+          }),
+          icon: const Icon(Icons.delete_outline),
+          label: Text(
+            'Корзина · ${repo.writingEntries.where((a) => a['trashedAt'] != null).length}',
+          ),
         ),
         ...rows(repo.cache('writing')['months']).map(
           (m) => TextButton(
-            onPressed: () => setState(() => month = m['month'].toString()),
+            onPressed: () => setState(() {
+              month = m['month'].toString();
+              showTrash = false;
+            }),
             child: Text('${m['month']} · ${m['count']}'),
           ),
         ),
@@ -212,6 +238,7 @@ class _WritingScreenState extends State<WritingScreen> {
             children: [
               TextField(
                 controller: title,
+                readOnly: trashed,
                 onChanged: (_) => persistDraft(),
                 decoration: const InputDecoration(labelText: 'Тема записи'),
                 maxLength: 300,
@@ -221,6 +248,7 @@ class _WritingScreenState extends State<WritingScreen> {
                   Expanded(
                     child: TextField(
                       controller: date,
+                      readOnly: trashed,
                       onChanged: (_) => persistDraft(),
                       decoration: const InputDecoration(
                         labelText: 'Дата · YYYY-MM-DD',
@@ -237,45 +265,49 @@ class _WritingScreenState extends State<WritingScreen> {
                         child: Text('Публикация'),
                       ),
                     ],
-                    onChanged: (value) {
-                      setState(() => mode = value!);
-                      persistDraft();
-                    },
+                    onChanged: trashed
+                        ? null
+                        : (value) {
+                            setState(() => mode = value!);
+                            persistDraft();
+                          },
                   ),
                 ],
               ),
-              Wrap(
-                children: [
-                  for (var level = 1; level <= 4; level++)
+              if (!trashed)
+                Wrap(
+                  children: [
+                    for (var level = 1; level <= 4; level++)
+                      TextButton(
+                        onPressed: () => controller.formatSelection(
+                          q.Attribute.fromKeyValue('header', level),
+                        ),
+                        child: Text('H$level'),
+                      ),
                     TextButton(
                       onPressed: () => controller.formatSelection(
-                        q.Attribute.fromKeyValue('header', level),
+                        q.Attribute.fromKeyValue('header', null),
                       ),
-                      child: Text('H$level'),
+                      child: const Text('Текст'),
                     ),
-                  TextButton(
-                    onPressed: () => controller.formatSelection(
-                      q.Attribute.fromKeyValue('header', null),
-                    ),
-                    child: const Text('Текст'),
-                  ),
-                ],
-              ),
-              q.QuillSimpleToolbar(
-                controller: controller,
-                config: const q.QuillSimpleToolbarConfig(
-                  showFontFamily: false,
-                  showFontSize: false,
-                  showColorButton: false,
-                  showBackgroundColorButton: false,
-                  showHeaderStyle: false,
-                  showCodeBlock: false,
-                  showListCheck: false,
-                  showSubscript: false,
-                  showSuperscript: false,
-                  showSearchButton: false,
+                  ],
                 ),
-              ),
+              if (!trashed)
+                q.QuillSimpleToolbar(
+                  controller: controller,
+                  config: const q.QuillSimpleToolbarConfig(
+                    showFontFamily: false,
+                    showFontSize: false,
+                    showColorButton: false,
+                    showBackgroundColorButton: false,
+                    showHeaderStyle: false,
+                    showCodeBlock: false,
+                    showListCheck: false,
+                    showSubscript: false,
+                    showSuperscript: false,
+                    showSearchButton: false,
+                  ),
+                ),
               const SizedBox(height: 10),
               Container(
                 constraints: const BoxConstraints(minHeight: 320),
@@ -287,6 +319,8 @@ class _WritingScreenState extends State<WritingScreen> {
                 ),
                 child: q.QuillEditor.basic(
                   controller: controller,
+                  focusNode: editorFocus,
+                  scrollController: editorScroll,
                   config: const q.QuillEditorConfig(
                     placeholder: 'Пиши свободно. Что сейчас требует внимания?',
                     embedBuilders: [DividerBuilder()],
@@ -294,27 +328,58 @@ class _WritingScreenState extends State<WritingScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Row(
+              Wrap(
+                spacing: 14,
+                runSpacing: 8,
                 children: [
                   FilledButton(
-                    onPressed: () {
-                      try {
-                        persistDraft();
-                        repo.saveWriting(article());
-                        setState(
-                          () => status =
-                              'Сохранено локально · отправка в очереди',
-                        );
-                      } catch (e) {
-                        setState(() => status = e.toString());
-                      }
-                    },
+                    onPressed: trashed
+                        ? null
+                        : () {
+                            try {
+                              persistDraft();
+                              repo.saveWriting(article());
+                              setState(
+                                () => status =
+                                    'Сохранено локально · отправка в очереди',
+                              );
+                            } catch (e) {
+                              setState(() => status = e.toString());
+                            }
+                          },
                     child: const Text('Сохранить'),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(child: Text(status)),
+                  OutlinedButton.icon(
+                    onPressed: pendingWriting
+                        ? null
+                        : () {
+                            try {
+                              if (trashed) {
+                                repo.restoreWriting(selected!);
+                              } else {
+                                persistDraft();
+                                repo.saveWriting(article(), trash: true);
+                              }
+                              editorFocus.unfocus();
+                              setState(
+                                () => status = trashed
+                                    ? 'Восстановление сохранено локально · отправка в очереди'
+                                    : 'В корзине · запись можно восстановить',
+                              );
+                            } catch (e) {
+                              setState(() => status = e.toString());
+                            }
+                          },
+                    icon: Icon(trashed ? Icons.restore : Icons.delete_outline),
+                    label: Text(trashed ? 'Восстановить' : 'Удалить запись'),
+                  ),
                 ],
               ),
+              if (status.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(status),
+                ),
               const SizedBox(height: 18),
               ReflectionHints(repo: repo),
             ],
