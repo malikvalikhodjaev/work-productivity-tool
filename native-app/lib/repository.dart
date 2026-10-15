@@ -44,6 +44,11 @@ class DashboardRepository extends ChangeNotifier {
   };
   String get base =>
       (local.get('baseUrl') ?? 'http://localhost:8787').toString();
+  void setTimerOnMinimize(bool enabled) {
+    local.set('timerOnMinimize', enabled);
+    notifyListeners();
+  }
+
   String? get serverId => local.get('serverId') as String?;
   String get deviceId => local.get('deviceId') as String;
   Json cache(String key) => local.snapshot(key);

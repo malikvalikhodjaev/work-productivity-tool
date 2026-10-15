@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'domain.dart';
 import 'repository.dart';
+import 'desktop_timer_window.dart';
 
 class BackgroundRuntime {
   static const channel = MethodChannel('iw/background');
@@ -17,11 +18,13 @@ class BackgroundRuntime {
   tray.TrayIcon? trayIcon;
   tray.Menu? menu;
   String? previous;
+  DesktopTimerWindow? desktop;
   BackgroundRuntime(this.repo);
   Future<void> initialize({
     required Future<void> Function() show,
     required Future<void> Function() exit,
     required Future<void> Function(String) open,
+    required void Function() windowChanged,
   }) async {
     if (Platform.isAndroid) {
       channel.setMethodCallHandler((call) async {
@@ -34,6 +37,10 @@ class BackgroundRuntime {
     }
     if (Platform.isWindows) {
       await windowManager.ensureInitialized();
+      desktop = DesktopTimerWindow(
+        NativeDesktopWindow(),
+        changed: windowChanged,
+      );
       await windowManager.setMinimumSize(const Size(380, 540));
       await windowManager.setTitle('Indicators & Work Dashboard');
       trayIcon = tray.TrayIcon.create();
@@ -67,6 +74,14 @@ class BackgroundRuntime {
         if (event is tray.MenuItemClickedEvent) exit();
       });
       menu!.addItem(open);
+      final hide = tray.MenuItem.createWithLabelAndType(
+        'Скрыть таймер в трей',
+        tray.MenuItemType.normal,
+      )!;
+      hide.addListener((event) {
+        if (event is tray.MenuItemClickedEvent) desktop?.hide();
+      });
+      menu!.addItem(hide);
       menu!.addSeparator();
       menu!.addItem(quit);
       trayIcon!.setContextMenu(menu!);
@@ -138,10 +153,19 @@ class BackgroundRuntime {
 
   Future<void> show() async {
     if (Platform.isWindows) {
-      await windowManager.show();
-      await windowManager.restore();
-      await windowManager.focus();
+      await desktop?.showDashboard();
     }
+  }
+
+  Future<bool> showCompactTimer() async {
+    if (!Platform.isWindows ||
+        desktop == null ||
+        repo.active == null ||
+        repo.local.get('timerOnMinimize') == false) {
+      return false;
+    }
+    await desktop!.minimize(active: true, enabled: true);
+    return desktop!.compact;
   }
 
   Future<void> focusMode(bool value) async {

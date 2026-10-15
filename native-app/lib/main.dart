@@ -20,6 +20,7 @@ import 'pomodoro_widgets.dart';
 import 'writing_screen.dart';
 import 'reflection_hints.dart';
 import 'data_table.dart';
+import 'compact_timer.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -158,11 +159,15 @@ class _DashboardHomeState extends State<DashboardHome>
         show: show,
         exit: exitApp,
         open: openNotification,
+        windowChanged: () {
+          if (mounted) setState(() {});
+        },
       );
       trayReady = Platform.isWindows;
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
+        'clientVersion': '0.1.3',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -229,7 +234,7 @@ class _DashboardHomeState extends State<DashboardHome>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     foreground = state == AppLifecycleState.resumed;
     if (foreground) {
-      planEntryPending = true;
+      if (background.desktop?.transitioning != true) planEntryPending = true;
       unawaited(repo.synchronize());
     }
   }
@@ -237,18 +242,33 @@ class _DashboardHomeState extends State<DashboardHome>
   @override
   void onWindowMinimize() {
     foreground = false;
+    if (!exiting && !dialogOpen) {
+      unawaited(keepTimerVisible());
+    }
+  }
+
+  Future<void> keepTimerVisible() async {
+    try {
+      if (await background.showCompactTimer()) foreground = true;
+    } catch (error) {
+      message('Не удалось показать таймер: $error');
+    }
   }
 
   @override
   void onWindowRestore() {
     foreground = true;
-    planEntryPending = true;
+    if (background.desktop?.transitioning != true) planEntryPending = true;
   }
 
   @override
   void onWindowClose() async {
     if (exiting) return;
     if (!await showPlanningQuestion(force: true)) return;
+    if (await background.showCompactTimer()) {
+      foreground = true;
+      return;
+    }
     if (trayReady) {
       foreground = false;
       await windowManager.hide();
@@ -775,6 +795,7 @@ class _DashboardHomeState extends State<DashboardHome>
   }
 
   Future<void> changeFocus(bool value) async {
+    if (background.desktop?.compact == true) await background.show();
     setState(() => focusMode = value);
     await background.focusMode(value);
   }
@@ -826,12 +847,7 @@ class _DashboardHomeState extends State<DashboardHome>
   Widget focusCard() {
     final s = repo.active;
     final theme = (repo.local.get('theme') ?? 'green').toString();
-    final colors = {
-      'green': const Color(0xff243b30),
-      'evening': const Color(0xff40394f),
-      'desert': const Color(0xff826246),
-      'lofi': const Color(0xff343e57),
-    };
+    const colors = focusColors;
     return Container(
       padding: const EdgeInsets.all(26),
       decoration: BoxDecoration(
@@ -2310,6 +2326,15 @@ class _DashboardHomeState extends State<DashboardHome>
               builder: (c, _) => Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (Platform.isWindows)
+                    SwitchListTile(
+                      title: const Text('Таймер при сворачивании'),
+                      subtitle: const Text(
+                        'Показывать активный сеанс небольшим окном поверх остальных окон',
+                      ),
+                      value: repo.local.get('timerOnMinimize') != false,
+                      onChanged: repo.setTimerOnMinimize,
+                    ),
                   PomodoroChecklist(
                     repo: repo,
                     focus: (ref, title) async {
@@ -2364,25 +2389,69 @@ class _DashboardHomeState extends State<DashboardHome>
     },
     child: Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Indicators & Work Dashboard',
+        title: Text(
+          background.desktop?.compact == true
+              ? 'I&W · Фокус'
+              : 'Indicators & Work Dashboard',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         actions: [
-          IconButton(
-            onPressed: repo.syncing ? null : repo.synchronize,
-            icon: Icon(repo.online ? Icons.sync : Icons.cloud_off_outlined),
-            tooltip: repo.status,
-          ),
-          IconButton(
-            onPressed: settings,
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Настройки и нормативы',
-          ),
+          if (background.desktop?.compact == true) ...[
+            IconButton(
+              onPressed: show,
+              icon: const Icon(Icons.dashboard_outlined),
+              tooltip: 'Все разделы',
+            ),
+            IconButton(
+              onPressed: () async {
+                foreground = false;
+                await background.desktop?.hide();
+              },
+              icon: const Icon(Icons.visibility_off_outlined),
+              tooltip: 'Скрыть таймер в трей',
+            ),
+          ] else ...[
+            IconButton(
+              onPressed: repo.syncing ? null : repo.synchronize,
+              icon: Icon(repo.online ? Icons.sync : Icons.cloud_off_outlined),
+              tooltip: repo.status,
+            ),
+            IconButton(
+              onPressed: settings,
+              icon: const Icon(Icons.settings_outlined),
+              tooltip: 'Настройки и нормативы',
+            ),
+          ],
         ],
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
+          if (background.desktop?.compact == true) {
+            return ListView(
+              padding: const EdgeInsets.all(12),
+              children: [
+                CompactTimer(
+                  session: repo.active,
+                  now: repo.now,
+                  theme: (repo.local.get('theme') ?? 'green').toString(),
+                  pause: () => safe(
+                    () => repo.timerAction(
+                      repo.active?['status'] == 'paused' ? 'resume' : 'pause',
+                    ),
+                  ),
+                  finish: () async {
+                    await show();
+                    if (mounted) await finishTimer();
+                  },
+                  checklist: PomodoroChecklist(
+                    repo: repo,
+                    compact: true,
+                    focus: (ref, title) => startTimer(ref: ref, title: title),
+                  ),
+                ),
+              ],
+            );
+          }
           final wide = constraints.maxWidth >= 950 && !focusMode;
           final page = focusMode
               ? focusCard()
@@ -2441,7 +2510,7 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'I&W · Native 0.1.0',
+                          'I&W · Native 0.1.3',
                           style: TextStyle(fontSize: 11),
                         ),
                       ],
@@ -2481,7 +2550,10 @@ class _DashboardHomeState extends State<DashboardHome>
           );
         },
       ),
-      bottomNavigationBar: MediaQuery.sizeOf(context).width < 950 && !focusMode
+      bottomNavigationBar:
+          MediaQuery.sizeOf(context).width < 950 &&
+              !focusMode &&
+              background.desktop?.compact != true
           ? NavigationBar(
               selectedIndex: section,
               onDestinationSelected: (value) => setState(() => section = value),
