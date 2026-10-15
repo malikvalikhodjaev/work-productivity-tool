@@ -9,6 +9,44 @@ import 'package:indicators_work/repository.dart';
 import 'package:indicators_work/main.dart';
 
 void main() {
+  testWidgets('an old Leisure can be rescheduled after several days', (
+    tester,
+  ) async {
+    final db = LocalDatabase(':memory:')..set('serverId', 'owner');
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final session = changeLocalSession(
+      newLocalSession(title: 'Долгий отдых', now: now - 3 * 86400000),
+      'leisure',
+      now - 3 * 86400000 + 60000,
+      leisureUntil: now - 3 * 86400000 + 900000,
+    );
+    db.set('localActive', session);
+    final repo = DashboardRepository(db);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => chooseLeisure(context, repo),
+              child: const Text('Изменить Leisure'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Изменить Leisure'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Начать отдых'));
+    await tester.pumpAndSettle();
+    expect(object(repo.active?['leisure'])['until'], greaterThan(now));
+    expect(
+      object(repo.active?['leisure'])['start'],
+      object(session['leisure'])['start'],
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    repo.dispose();
+  });
   test(
     'Leisure survives reconstruction and never adds work without manual return',
     () {
