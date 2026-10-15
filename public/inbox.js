@@ -35,7 +35,15 @@ async function save(action){if(!current||saving||readonly)return;saving=true;but
   finally{saving=false;buttons();}
 }
 async function refresh(){if(loading)return;loading=true;try{data=await request('/api/inbox');list();if(current&&!dirty&&!saving){current=data.entries.find(e=>e.id===current.id)??null;if(current)review();}error('');}catch(e){error(e.message);}finally{loading=false;}}
-async function botStatus(){const s=await request('/api/telegram');$('inbox-bot-status').innerHTML=`<p class="inbox-connection">${s.paired?'✓ Твой Telegram подключён':s.configured?'Осталось связать твой Telegram-аккаунт':'Бот ещё не подключён'}${s.username?' · @'+esc(s.username):''}</p>${s.pairingUrl?`<a class="button primary" href="${esc(s.pairingUrl)}" target="_blank" rel="noopener noreferrer">Связать мой Telegram ↗</a><p class="section-note">Одноразовая ссылка действует 15 минут. Нажми Start в Telegram.</p>`:s.configured&&!s.paired?'<button type="button" data-bot-action="pair" class="button secondary">Обновить ссылку привязки</button>':''}${s.configured?`<button type="button" class="text-button" data-bot-action="${s.enabled?'pause':'resume'}">${s.enabled?'Приостановить приём':'Возобновить приём'}</button>`:''}${s.lastError?`<p class="form-error">${esc(s.lastError)}</p>`:''}`;}
+async function botStatus(){
+  const s=await request('/api/telegram');
+  $('inbox-bot-status').innerHTML=`<p class="inbox-connection">${s.paired?'✓ Твой Telegram подключён':s.configured?'Осталось связать твой Telegram-аккаунт':'Бот ещё не подключён'}${s.username?' · @'+esc(s.username):''}</p>${s.pairingUrl?`<a class="button primary" href="${esc(s.pairingUrl)}" target="_blank" rel="noopener noreferrer">Связать мой Telegram ↗</a><p class="section-note">Одноразовая ссылка действует 15 минут. Нажми Start в Telegram.</p>`:s.configured&&!s.paired?'<button type="button" data-bot-action="pair" class="button secondary">Обновить ссылку привязки</button>':''}${s.configured?`<button type="button" class="text-button" data-bot-action="${s.enabled?'pause':'resume'}">${s.enabled?'Приостановить приём':'Возобновить приём'}</button>`:''}${s.lastError?`<p class="form-error">${esc(s.lastError)}</p>`:''}`;
+  if(s.pairingUrl){
+    const hint=document.createElement('p');hint.className='section-note';hint.textContent='Если ссылка не передала код, отправь боту эту команду:';
+    const command=document.createElement('code');command.className='inbox-pair-command';command.textContent='/start '+new URL(s.pairingUrl).searchParams.get('start');
+    $('inbox-bot-status').append(hint,command);
+  }
+}
 function download(value,name){const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 $('inbox-toggle').onclick=()=>{$('inbox-body').hidden=!$('inbox-body').hidden;if(!$('inbox-body').hidden)void refresh();};
 $('inbox-settings').onclick=()=>{setup.showModal();void botStatus().catch(e=>{$('inbox-bot-error').textContent=e.message;$('inbox-bot-error').hidden=false;});};
