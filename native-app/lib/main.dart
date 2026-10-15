@@ -169,7 +169,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.4',
+        'clientVersion': '0.1.5',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -687,6 +687,10 @@ class _DashboardHomeState extends State<DashboardHome>
   }
 
   Future<void> startTimer({String title = '', String? ref, Json? item}) async {
+    if (ref != null) {
+      await safe(() => repo.focusWork(ref: ref, title: title, item: item));
+      return;
+    }
     if (repo.active != null) {
       message('Уже есть активный сеанс. Сначала заверши его.');
       return;
@@ -697,10 +701,8 @@ class _DashboardHomeState extends State<DashboardHome>
       'metricId': item?['metricId'] ?? '',
       'allocation': item?['allocation'] ?? 'unclassified',
       'workType': item?['workType'] ?? '',
-      'mode': 'pomodoro',
-      'strategy': repo.online && repo.local.draft(ref ?? '') == null
-          ? 'shared'
-          : 'local',
+      'mode': repo.timerMode,
+      'strategy': repo.timerStrategy,
     };
     final metricOptions = {
       '': 'Без часового норматива',
@@ -712,6 +714,8 @@ class _DashboardHomeState extends State<DashboardHome>
     await editFields(
       context,
       title: 'Начать фокус',
+      submitLabel: '▶ Запустить',
+      progressLabel: 'Запускаю…',
       initial: initial,
       fields: [
         const FieldSpec('title', 'Что делаю'),
@@ -757,7 +761,7 @@ class _DashboardHomeState extends State<DashboardHome>
           for (final key in timerDefaults.keys) key: input[key],
         };
         validateSettings(settings);
-        repo.local.set('timerSettings', settings);
+        repo.setFocusPreferences(input);
         final start = {
           'title': input['title'],
           'workRef': ref,
@@ -808,6 +812,42 @@ class _DashboardHomeState extends State<DashboardHome>
     if (background.desktop?.compact == true) await background.show();
     setState(() => focusMode = value);
     await background.focusMode(value);
+  }
+
+  Future<void> focusSettings() async {
+    await editFields(
+      context,
+      title: 'Настройки таймера',
+      initial: {
+        ...repo.settings,
+        'mode': repo.timerMode,
+        'strategy': repo.timerStrategy,
+      },
+      fields: const [
+        FieldSpec(
+          'strategy',
+          'Учёт',
+          options: {
+            'shared': 'Общий таймер · нужна связь с сервером',
+            'local': 'Таймер устройства · работает без связи',
+          },
+        ),
+        FieldSpec(
+          'mode',
+          'Режим',
+          options: {'pomodoro': 'Помидорка', 'stopwatch': 'Секундомер'},
+        ),
+        FieldSpec('workMinutes', 'Помидорка · минут', integer: true),
+        FieldSpec('shortBreakMinutes', 'Перерыв · минут', integer: true),
+        FieldSpec('longBreakMinutes', 'Длинный перерыв · минут', integer: true),
+        FieldSpec(
+          'longBreakEvery',
+          'Длинный перерыв после помидорок',
+          integer: true,
+        ),
+      ],
+      save: (input) async => repo.setFocusPreferences(input),
+    );
   }
 
   Future<void> startBreak() async {
@@ -928,7 +968,7 @@ class _DashboardHomeState extends State<DashboardHome>
                 if (s == null) ...[
                   FilledButton(
                     onPressed: () => startTimer(),
-                    child: const Text('Начать фокус'),
+                    child: const Text('Новая активность'),
                   ),
                   TextButton(
                     onPressed: () => safe(startBreak),
@@ -971,6 +1011,14 @@ class _DashboardHomeState extends State<DashboardHome>
               ],
             ),
             const SizedBox(height: 14),
+            TextButton.icon(
+              onPressed: focusSettings,
+              icon: const Icon(Icons.tune, color: Colors.white70, size: 18),
+              label: const Text(
+                'Настройки таймера',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
             Wrap(
               spacing: 8,
               children: [
@@ -2544,7 +2592,7 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'I&W · Native 0.1.4',
+                          'I&W · Native 0.1.5',
                           style: TextStyle(fontSize: 11),
                         ),
                       ],

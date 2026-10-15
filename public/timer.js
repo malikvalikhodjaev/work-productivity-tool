@@ -156,9 +156,15 @@ if(!embedded) {
   void load(); void context().catch(error=>notice(error.message,true));
   void get('/api/server-status').then(s=>{ $('timer-backup').textContent=s.backup.lastSuccess?'Резервная копия: '+new Date(s.backup.lastSuccess).toLocaleString('ru-RU',{timeZone:'Asia/Tashkent'}) : 'Резервная копия: No Data'; }).catch(()=>{});
 }
-document.addEventListener('click',event=>{ const button=event.target.closest('[data-timer-work]'); if(button) void open({workRef:button.dataset.timerWork,title:button.dataset.timerTitle}); });
-window.addEventListener('rhythm:timer-work',event=>void open(event.detail));
-window.addEventListener('message',event=>{ if(event.origin===location.origin&&event.source===$('alpha-modeler-frame')?.contentWindow&&event.data?.type==='rhythm:timer-work') void open(event.data.work); });
+async function playOrOpen(input={}) {
+  if(readOnly)return false;
+  if(embedded){parent.postMessage({type:'rhythm:timer-work',work:input},location.origin);return false;}
+  if(typeof input.title==='string'&&input.title.trim())return focusWork({...input,title:input.title.slice(0,300)});
+  return open(input);
+}
+document.addEventListener('click',event=>{ const button=event.target.closest('[data-timer-work]'); if(button) void playOrOpen({workRef:button.dataset.timerWork,title:button.dataset.timerTitle}); });
+window.addEventListener('rhythm:timer-work',event=>void playOrOpen(event.detail));
+window.addEventListener('message',event=>{ if(event.origin===location.origin&&event.source===$('alpha-modeler-frame')?.contentWindow&&event.data?.type==='rhythm:timer-work') void playOrOpen(event.data.work); });
 async function focusWork(input) {
   if(readOnly||embedded||busy)return false;
   await load();if(!state)return false;
@@ -167,6 +173,6 @@ async function focusWork(input) {
     notice(state.active.workRef===input.workRef?'Эта работа уже в фокусе.':'Сейчас в фокусе другая работа. Заверши её или отмени перед переключением.',true);
     return false;
   }
-  return act('start',{title:input.title,workRef:input.workRef,metricId:input.metricId??null,allocation:input.allocation??'unclassified',workType:input.workType??'',mode:input.mode??'pomodoro',settings:state.settings});
+  return act('start',{title:input.title,workRef:input.workRef??null,metricId:input.metricId??null,allocation:input.allocation??'unclassified',workType:input.workType??'',mode:input.mode??'pomodoro',settings:state.settings});
 }
 window.rhythmTimer={open,focus:focusWork,pause:async workRef=>{await load();if(state?.active?.workRef===workRef&&state.active.status==='running')return act('pause',{sessionId:state.active.id});return false;},finish:beginFinish,getState:()=>state,plan:async workRef=>{if(readOnly)return;await load();await context();$('timer-plan-ref').value=workRef;$('timer-plan-hours').value=state.plans.find(p=>p.workRef===workRef)?.target??'';const details=panel.querySelector('.timer-details');details.open=true;details.scrollIntoView({behavior:'smooth',block:'start'});}};

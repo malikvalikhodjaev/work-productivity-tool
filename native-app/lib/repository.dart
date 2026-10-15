@@ -22,6 +22,7 @@ class DashboardRepository extends ChangeNotifier {
   final http.Client _http;
   Timer? _poll;
   bool syncing = false, online = false;
+  bool focusStarting = false;
   String status = 'Локальное хранилище готово';
   DashboardRepository(this.local, {http.Client? client})
     : _http = client ?? http.Client();
@@ -72,6 +73,80 @@ class DashboardRepository extends ChangeNotifier {
   Json get settings => object(
     local.get('timerSettings') ?? cache('timer')['settings'] ?? timerDefaults,
   );
+  String get timerStrategy =>
+      (local.get('timerStrategy') ?? 'shared').toString();
+  String get timerMode => (local.get('timerMode') ?? 'pomodoro').toString();
+
+  void setFocusPreferences(Json input) {
+    final nextSettings = {
+      for (final key in timerDefaults.keys) key: input[key],
+    };
+    validateSettings(nextSettings);
+    if (!['shared', 'local'].contains(input['strategy']) ||
+        !['pomodoro', 'stopwatch'].contains(input['mode'])) {
+      throw ArgumentError('Выбери режим и источник учёта таймера.');
+    }
+    local.atomic(() {
+      local.set('timerSettings', nextSettings);
+      local.set('timerStrategy', input['strategy']);
+      local.set('timerMode', input['mode']);
+    });
+    notifyListeners();
+  }
+
+  Future<void> focusWork({
+    required String ref,
+    required String title,
+    Json? item,
+  }) async {
+    if (focusStarting) return;
+    focusStarting = true;
+    notifyListeners();
+    try {
+      final s = active;
+      if (s != null) {
+        if (s['workRef'] != ref) {
+          throw StateError(
+            'Сейчас в фокусе другая работа. Сначала заверши её.',
+          );
+        }
+        if (s['status'] == 'paused') await timerAction('resume');
+        return;
+      }
+      final known = rows(cache('workspace')['entities'])
+          .where((e) => e['ref'] == ref)
+          .firstOrNull;
+      final source = item ?? local.draft(ref) ?? known ?? <String, dynamic>{};
+      if (title.trim().isEmpty) throw ArgumentError('Сначала назови работу.');
+      if (timerStrategy == 'shared' &&
+          local.draft(ref) != null &&
+          known == null) {
+        throw StateError(
+          'Новая карточка ещё не отправлена на сервер. Синхронизируй её или выбери таймер устройства в настройках.',
+        );
+      }
+      final input = {
+        'title': title,
+        'workRef': ref,
+        'metricId': source['metricId'],
+        'allocation': source['metricId'] != null
+            ? 'assigned'
+            : source['allocation'] ?? 'unclassified',
+        'workType': source['workType'] ?? '',
+        'mode': timerMode,
+        'settings': settings,
+      };
+      if (timerStrategy == 'local') {
+        startLocal(input);
+      } else {
+        await sharedAction('start', input);
+      }
+    } finally {
+      focusStarting = false;
+      notifyListeners();
+    }
+  }
+
   void startPolling() {
     _poll?.cancel();
     _poll = Timer.periodic(

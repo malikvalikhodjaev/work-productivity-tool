@@ -25,6 +25,8 @@ Future<bool> editFields(
   required List<FieldSpec> fields,
   required Future<void> Function(Json) save,
   void Function(Json)? draft,
+  String submitLabel = 'Сохранить',
+  String progressLabel = 'Сохраняю…',
 }) async {
   final controllers = {
     for (final field in fields)
@@ -158,7 +160,7 @@ Future<bool> editFields(
                       });
                     }
                   },
-            child: Text(saving ? 'Сохраняю…' : 'Сохранить'),
+            child: Text(saving ? progressLabel : submitLabel),
           ),
         ],
       ),
