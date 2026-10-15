@@ -19,5 +19,18 @@
 .timer-widget-compact #timer-widget-title,.timer-widget-compact #timer-widget-status,.timer-widget-compact .timer-widget-actions,.timer-widget-compact .timer-widget-window{display:none}
 .timer-window-link{font-size:12px;white-space:nowrap;color:#66786d;text-decoration:none}
 .focus-screen-active #timer-pill{display:none!important}
+.timer-pill{max-height:calc(100dvh - 32px);overflow-y:auto}
+.timer-widget-checklist{margin-top:16px;padding-top:12px;border-top:1px solid #ffffff20}
+.timer-widget-checklist .pom-header{font-size:11px;gap:6px;letter-spacing:0;color:#dfeade}
+.timer-widget-checklist .pom-header>button{color:#dfeade}
+.timer-widget-checklist .pom-checklist{max-height:170px;margin:8px 0 0}
+.timer-widget-checklist .pom-checklist li{gap:6px;padding:8px 0;border-color:#ffffff15}
+.timer-widget-checklist .pom-name{font-size:12px;color:#e2ebe5}
+.timer-widget-checklist .pom-count{font-size:13px;color:#fff}
+.timer-widget-checklist .pom-checklist button{font-size:12px;color:#d5e5d9;padding:4px}
+.timer-widget-checklist .pom-done .pom-count,.timer-widget-checklist .pom-done .pom-check{color:#bde6a9}
+.timer-widget-checklist .pom-empty{font-size:12px;color:#bbd0c0;margin:6px 0 0}
+.timer-widget-compact .timer-widget-checklist{display:none}
+.has-active-timer .pomodoro-floating{display:none}
 @media(max-width:600px){.timer-pill{width:200px;min-height:210px;padding:14px;border-radius:20px}#timer-widget-clock{font-size:46px}.timer-widget-compact{width:150px;min-height:0}}
 .timer-widget-top #timer-widget-size{margin-left:auto}.timer-widget-wide{width:360px;min-height:350px;padding:24px}.timer-widget-wide:not(.timer-widget-compact) #timer-widget-clock{font-size:88px}.timer-widget-wide #timer-widget-title{font-size:15px;-webkit-line-clamp:3}.timer-widget-wide .timer-widget-actions{margin-top:18px}.timer-widget-compact{width:168px;min-height:0;padding:12px 14px}.timer-widget-compact #timer-widget-clock{font-size:34px}.timer-widget-top{letter-spacing:1px;flex-wrap:wrap}@media(max-width:600px){.timer-widget-wide{width:min(320px,calc(100vw - 32px));min-height:300px}.timer-widget-wide:not(.timer-widget-compact) #timer-widget-clock{font-size:72px}.timer-widget-compact{width:160px;min-height:0}}

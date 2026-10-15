@@ -23,6 +23,11 @@ $('timer-finish-form')?.querySelector('.modal-footer').before(reviewField);
 const pill = document.createElement('aside'); pill.id = 'timer-pill'; pill.className = 'timer-pill'; pill.hidden = true; pill.setAttribute('aria-label','Текущий фокус');
 pill.innerHTML='<div class="timer-widget-top"><span id="timer-widget-phase">Working on</span><button id="timer-widget-size" type="button" aria-label="Сделать таймер шире" aria-pressed="false">⤢</button><button id="timer-widget-collapse" type="button" aria-label="Свернуть карточку таймера" aria-expanded="true">−</button></div><button id="timer-widget-open" type="button" class="timer-widget-open" aria-label="Открыть фокус и время"><output id="timer-widget-clock" aria-label="Отсчёт текущего фокуса"></output><span id="timer-widget-title"></span></button><p id="timer-widget-status"></p><div class="timer-widget-actions"><button id="timer-widget-pause" type="button">Пауза</button><button id="timer-widget-finish" type="button">Учесть</button></div><a href="/focus" target="_blank" rel="noopener" class="timer-widget-window">Отдельное окно ↗</a>';
 if (!embedded) document.body.append(pill);
+const widgetChecklist = document.createElement('section');
+widgetChecklist.className = 'timer-widget-checklist';
+widgetChecklist.setAttribute('aria-label', 'Общий чек-лист помидорок на сегодня');
+widgetChecklist.innerHTML = '<header class="pom-header"><strong>Помидорки · сегодня</strong><button type="button" data-pom-settings aria-label="Настройки дневных норм">⚙</button></header><div data-pom-list><p class="pom-empty">Загрузка плана…</p></div>';
+pill.querySelector('.timer-widget-window').before(widgetChecklist);
 const focusLink=document.createElement('a');focusLink.href='/focus';focusLink.target='_blank';focusLink.rel='noopener';focusLink.className='timer-window-link';focusLink.textContent='Отдельное окно ↗';panel.querySelector('.timer-heading')?.append(focusLink);
 if(!embedded){const openFocusWindow=event=>{const view=window.open('/focus','iw-focus','popup,width=560,height=900');if(view){view.opener=null;event.preventDefault();}};focusLink.addEventListener('click',openFocusWindow);pill.querySelector('.timer-widget-window').addEventListener('click',openFocusWindow);}
 async function get(url) { const response = await fetch(url, {cache:'no-store'}); const data = await response.json(); if (!response.ok) throw new Error(data.error ?? 'Не удалось прочитать таймер.'); return data; }
@@ -50,6 +55,7 @@ function tick() {
 function render() {
   const s = state.active;
   $('timer-active').hidden = !s; $('timer-idle').hidden = Boolean(s); $('timer-new').disabled = Boolean(s)||busy; pill.hidden = !s;
+  document.body.classList.toggle('has-active-timer', Boolean(s));
   if(finishDialog.open&&s?.id!==finishSessionId){finishDialog.close();finishSessionId=null;}
   $('timer-cycle').textContent = `В цикле: ${state.cycleCount} · длинный перерыв после ${state.settings.longBreakEvery}`;
   $('timer-break').textContent = state.cycleCount >= state.settings.longBreakEvery ? `Длинный перерыв · ${state.settings.longBreakMinutes} мин` : `Начать перерыв · ${state.settings.shortBreakMinutes} мин`;

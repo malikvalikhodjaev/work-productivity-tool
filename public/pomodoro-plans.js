@@ -1,4 +1,6 @@
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+import './timer.js';
+
 const today = () => new Date(Date.now() + 5 * 3600000).toISOString().slice(0, 10);
 const shift = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 const readOnly = Boolean(document.querySelector('meta[name="dashboard-access"][content="viewer"]'));

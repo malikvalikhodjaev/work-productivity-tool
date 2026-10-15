@@ -24,6 +24,8 @@ class FocusService : Service() {
         const val ONGOING = 101
         const val TIMER_ALERT = 102
         const val DAILY_ALERT = 103
+        @Volatile var appVisible = false
+        @Volatile var running = false
         fun channels(context: Context) {
             val manager = context.getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(NotificationChannel(CHANNEL,"Таймер в фоне",NotificationManager.IMPORTANCE_LOW))
@@ -50,7 +52,7 @@ class FocusService : Service() {
                 val n=plans.getJSONObject(i)
                 if(n.optString("date")!=currentDate||n.isNull("target"))continue
                 var actual=0
-                if(data.optString("today")==currentDate)for(j in 0 until counts.length()) {
+                if(data.optString("pomodoroDay",data.optString("today"))==currentDate)for(j in 0 until counts.length()) {
                     val c=counts.getJSONObject(j);if(c.optString("workRef")==n.optString("workRef"))actual=c.optInt("actualPomodoros")
                 }
                 lines.add("${n.optString("title")} — $actual/${n.optInt("target")}")
@@ -113,7 +115,7 @@ class FocusService : Service() {
                     val n=plans.getJSONObject(i)
                     if(n.optString("date")!=currentDate||n.isNull("target"))continue
                     hasPlan=true;var actual=0
-                    if(data.optString("today")==currentDate)for(j in 0 until counts.length()) {
+                    if(data.optString("pomodoroDay",data.optString("today"))==currentDate)for(j in 0 until counts.length()) {
                         val c=counts.getJSONObject(j);if(c.optString("workRef")==n.optString("workRef"))actual=c.optInt("actualPomodoros")
                     }
                     if(actual<n.optInt("target"))unfinished=true
@@ -133,9 +135,13 @@ class FocusService : Service() {
     private var playing: String?=null
     private var snapshot=JSONObject()
     private var count=0
-    private var fetching=false
+    @Volatile private var fetching=false
+    private var destroyed=false
+    private lateinit var overlay: TimerOverlay
     private val tick=object:Runnable{
         override fun run(){
+            if(destroyed)return
+            overlay.update(snapshot)
             val active=snapshot.optJSONObject("active")
             val offset=if(snapshot.optBoolean("local"))0L else snapshot.optLong("serverOffset")
             var title="Indicators & Work Dashboard"
@@ -152,11 +158,11 @@ class FocusService : Service() {
             }
             val notification=Notification.Builder(this@FocusService,CHANNEL).setSmallIcon(android.R.drawable.ic_lock_idle_alarm).setContentTitle(title).setContentText(detail).setStyle(Notification.BigTextStyle().bigText(detail)).setContentIntent(open(this@FocusService,"timer")).setOngoing(true).setOnlyAlertOnce(true).build()
             getSystemService(NotificationManager::class.java).notify(ONGOING,notification)
-            if(++count%30==0&&!snapshot.optBoolean("local")&&active!=null)pollTimer()
+            if(++count%30==0&&active!=null)pollTimer()
             handler.postDelayed(this,1000)
         }
     }
-    override fun onCreate(){super.onCreate();channels(this)}
+    override fun onCreate(){super.onCreate();running=true;channels(this);overlay=TimerOverlay(this)}
     override fun onStartCommand(intent: Intent?,flags: Int,startId: Int): Int {
         val prefs=getSharedPreferences(PREFS,MODE_PRIVATE)
         val value=intent?.getStringExtra("snapshot")?:prefs.getString("snapshot","{}")?:"{}"
@@ -183,15 +189,37 @@ class FocusService : Service() {
         if(fetching)return
         fetching=true
         val url=snapshot.optString("serverUrl")
+        val localAtRequest=snapshot.optBoolean("local")
         network.execute{
             try{
-                val connection=URL("$url/api/timer").openConnection();connection.connectTimeout=7000;connection.readTimeout=7000;connection.setRequestProperty("Origin",url)
-                val text=connection.getInputStream().bufferedReader().use{it.readText()}
-                val state=JSONObject(text)
-                handler.post{if(snapshot.optBoolean("local")||state.optLong("revision")<snapshot.optLong("timerRevision"))return@post;snapshot.put("active",state.optJSONObject("active"));snapshot.put("timerRevision",state.optLong("revision"));if(state.has("serverNow"))snapshot.put("serverOffset",Instant.parse(state.getString("serverNow")).toEpochMilli()-System.currentTimeMillis());getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString("snapshot",snapshot.toString()).apply();schedule(this,snapshot);if(snapshot.optJSONObject("active")==null&&snapshot.optString("sound","").let{it.isEmpty()||it=="null"}){stopForeground(STOP_FOREGROUND_REMOVE);stopSelf()}}
-            }catch(_:Exception){}finally{fetching=false}
+                val state=if(!localAtRequest){
+                    val connection=URL("$url/api/timer").openConnection();connection.connectTimeout=7000;connection.readTimeout=7000;connection.setRequestProperty("Origin",url)
+                    JSONObject(connection.getInputStream().bufferedReader().use{it.readText()})
+                }else null
+                val plans=try {
+                    val request=URL("$url/api/daily-norms").openConnection()
+                    request.connectTimeout=7000;request.readTimeout=7000;request.setRequestProperty("Origin",url)
+                    JSONObject(request.getInputStream().bufferedReader().use{it.readText()})
+                }catch(_:Exception){null}
+                handler.post{
+                    if(destroyed||snapshot.optBoolean("local")!=localAtRequest||snapshot.optString("serverUrl")!=url)return@post
+                    if(state!=null&&state.optLong("revision")>=snapshot.optLong("timerRevision")){
+                        snapshot.put("active",state.optJSONObject("active"));snapshot.put("timerRevision",state.optLong("revision"))
+                        if(state.has("serverNow"))snapshot.put("serverOffset",Instant.parse(state.getString("serverNow")).toEpochMilli()-System.currentTimeMillis())
+                    }
+                    if(!snapshot.optBoolean("planLocalChanges")&&plans!=null){
+                        snapshot.put("pomodoroTargets",plans.optJSONArray("pomodoroTargets"))
+                        snapshot.put("pomodoroCounts",plans.optJSONObject("pomodoroPlan")?.optJSONArray("targets"))
+                        snapshot.put("pomodoroDay",plans.optString("today"))
+                    }
+                    snapshot.put("planOnline",plans!=null)
+                    getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString("snapshot",snapshot.toString()).apply()
+                    schedule(this,snapshot);overlay.update(snapshot)
+                    if(snapshot.optJSONObject("active")==null&&snapshot.optString("sound","").let{it.isEmpty()||it=="null"}){stopForeground(STOP_FOREGROUND_REMOVE);stopSelf()}
+                }
+            }catch(_:Exception){handler.post{if(!destroyed&&snapshot.optString("serverUrl")==url)snapshot.put("planOnline",false)}}finally{fetching=false}
         }
     }
-    override fun onDestroy(){handler.removeCallbacks(tick);network.shutdownNow();player?.release();super.onDestroy()}
+    override fun onDestroy(){destroyed=true;running=false;handler.removeCallbacksAndMessages(null);network.shutdownNow();overlay.remove();player?.release();super.onDestroy()}
     override fun onBind(intent:Intent?):IBinder?=null
 }

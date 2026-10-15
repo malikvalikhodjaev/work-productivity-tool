@@ -108,6 +108,19 @@ class BackgroundRuntime {
       'norms': repo.dailyNorms,
       'pomodoroTargets': repo.pomodoroRows,
       'pomodoroCounts': repo.pomodoroTargetsForDate(),
+      'pomodoroDay': today(),
+      'overlayEnabled': repo.local.get('androidOverlayEnabled') != false,
+      'planOnline': repo.online,
+      'planLocalChanges':
+          repo.pomodoroFacts.any(
+            (f) => f['date'] == today() && f['pending'] == true,
+          ) ||
+          repo.local.drafts.any(
+            (d) => d['entity'].toString().startsWith('pomodoro:'),
+          ) ||
+          repo.pending.any(
+            (q) => object(q['body'])['module'] == 'pomodoroTarget',
+          ),
       'planningReady': repo.cache('dailyNorms').isNotEmpty,
       'pomodoroHiddenUntil': repo.local.get('pomodoroReminder:${today()}') ?? 0,
       'checks': repo.dailyChecks,
@@ -117,7 +130,6 @@ class BackgroundRuntime {
     };
     final next = jsonEncode(payload);
     if (next == previous) return;
-    previous = next;
     if (Platform.isAndroid) {
       await channel.invokeMethod('update', payload);
     } else if (Platform.isWindows) {
@@ -132,6 +144,7 @@ class BackgroundRuntime {
         await audio.stop();
       }
     }
+    previous = next;
   }
 
   Future<void> notifyTimer() async {
@@ -143,6 +156,14 @@ class BackgroundRuntime {
       : true;
   Future<void> requestPermissions() async {
     if (Platform.isAndroid) await channel.invokeMethod('permissions');
+  }
+
+  Future<bool> overlayAllowed() async => Platform.isAndroid
+      ? (await channel.invokeMethod<bool>('overlayAllowed') ?? false)
+      : false;
+
+  Future<void> requestOverlayPermission() async {
+    if (Platform.isAndroid) await channel.invokeMethod('overlayPermission');
   }
 
   Future<void> shareExport(String path) async {

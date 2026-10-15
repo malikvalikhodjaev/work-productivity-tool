@@ -105,6 +105,7 @@ class _DashboardHomeState extends State<DashboardHome>
     with WidgetsBindingObserver, WindowListener {
   DashboardRepository get repo => widget.repo;
   late BackgroundRuntime background;
+  final overlayAllowed = ValueNotifier(false);
   Timer? ticker;
   int section = 0;
   bool focusMode = false,
@@ -164,10 +165,11 @@ class _DashboardHomeState extends State<DashboardHome>
         },
       );
       trayReady = Platform.isWindows;
+      if (Platform.isAndroid) await refreshOverlayPermission();
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.3',
+        'clientVersion': '0.1.4',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -234,9 +236,17 @@ class _DashboardHomeState extends State<DashboardHome>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     foreground = state == AppLifecycleState.resumed;
     if (foreground) {
+      if (widget.backgroundEnabled && Platform.isAndroid) {
+        unawaited(refreshOverlayPermission());
+      }
       if (background.desktop?.transitioning != true) planEntryPending = true;
       unawaited(repo.synchronize());
     }
+  }
+
+  Future<void> refreshOverlayPermission() async {
+    final allowed = await background.overlayAllowed();
+    if (mounted) overlayAllowed.value = allowed;
   }
 
   @override
@@ -2322,10 +2332,34 @@ class _DashboardHomeState extends State<DashboardHome>
           width: 700,
           child: SingleChildScrollView(
             child: ListenableBuilder(
-              listenable: repo,
+              listenable: Listenable.merge([repo, overlayAllowed]),
               builder: (c, _) => Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (Platform.isAndroid) ...[
+                    SwitchListTile(
+                      title: const Text('Малое окно таймера'),
+                      subtitle: Text(
+                        overlayAllowed.value
+                            ? 'При активном таймере показывать поверх других приложений'
+                            : 'Для показа нужно разрешение Android «Поверх других приложений»',
+                      ),
+                      value: repo.local.get('androidOverlayEnabled') != false,
+                      onChanged: (value) async {
+                        repo.setAndroidOverlayEnabled(value);
+                        if (value && !overlayAllowed.value) {
+                          await background.requestOverlayPermission();
+                        }
+                      },
+                    ),
+                    if (!overlayAllowed.value &&
+                        repo.local.get('androidOverlayEnabled') != false)
+                      TextButton.icon(
+                        onPressed: background.requestOverlayPermission,
+                        icon: const Icon(Icons.open_in_new),
+                        label: const Text('Разрешить показ поверх приложений'),
+                      ),
+                  ],
                   if (Platform.isWindows)
                     SwitchListTile(
                       title: const Text('Таймер при сворачивании'),
@@ -2510,7 +2544,7 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'I&W · Native 0.1.3',
+                          'I&W · Native 0.1.4',
                           style: TextStyle(fontSize: 11),
                         ),
                       ],
@@ -2573,6 +2607,7 @@ class _DashboardHomeState extends State<DashboardHome>
     ticker?.cancel();
     repo.removeListener(changed);
     WidgetsBinding.instance.removeObserver(this);
+    overlayAllowed.dispose();
     if (widget.backgroundEnabled && Platform.isWindows) {
       windowManager.removeListener(this);
     }

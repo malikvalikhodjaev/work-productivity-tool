@@ -16,6 +16,32 @@ import androidx.core.content.FileProvider
 
 class MainActivity:FlutterActivity(){
     private var bridge:MethodChannel?=null
+    private fun updateBackground(payload:JSONObject){
+        val saved=getSharedPreferences(FocusService.PREFS,MODE_PRIVATE).getString("snapshot",null)?.let{JSONObject(it)}
+        if(saved!=null&&!payload.optBoolean("local")&&!saved.optBoolean("local")&&
+            saved.optString("serverUrl")==payload.optString("serverUrl")&&saved.optLong("timerRevision")>payload.optLong("timerRevision")){
+            payload.put("active",saved.optJSONObject("active"))
+            payload.put("timerRevision",saved.optLong("timerRevision"))
+            payload.put("serverOffset",saved.optLong("serverOffset"))
+        }
+        getSharedPreferences(FocusService.PREFS,MODE_PRIVATE).edit().putString("snapshot",payload.toString()).apply()
+        FocusService.schedule(this,payload)
+        val sound=payload.optString("sound","")
+        if(payload.optJSONObject("active")!=null||(sound.isNotEmpty()&&sound!="null")){
+            if(FocusService.appVisible||FocusService.running){
+                val service=Intent(this,FocusService::class.java).putExtra("snapshot",payload.toString())
+                startForegroundService(service)
+            }
+        }else{stopService(Intent(this,FocusService::class.java))}
+    }
+    override fun onStart(){
+        super.onStart();FocusService.appVisible=true
+        val prefs=getSharedPreferences(FocusService.PREFS,MODE_PRIVATE)
+        prefs.edit().remove("overlayDismissedSession").apply()
+        val snapshot=prefs.getString("snapshot",null)
+        if(snapshot!=null)updateBackground(JSONObject(snapshot))
+    }
+    override fun onStop(){FocusService.appVisible=false;super.onStop()}
     override fun configureFlutterEngine(engine:FlutterEngine){
         super.configureFlutterEngine(engine)
         FocusService.channels(this)
@@ -25,13 +51,14 @@ class MainActivity:FlutterActivity(){
                 when(call.method){
                     "update"->{
                         val payload=JSONObject(call.arguments as Map<*,*>)
-                        getSharedPreferences(FocusService.PREFS,MODE_PRIVATE).edit().putString("snapshot",payload.toString()).apply()
-                        FocusService.schedule(this,payload)
-                        val sound=payload.optString("sound","")
-                        if(payload.optJSONObject("active")!=null||(sound.isNotEmpty()&&sound!="null")){
-                            val service=Intent(this,FocusService::class.java).putExtra("snapshot",payload.toString())
-                            if(Build.VERSION.SDK_INT>=26)startForegroundService(service)else startService(service)
-                        }else{stopService(Intent(this,FocusService::class.java))}
+                        updateBackground(payload)
+                        result.success(true)
+                    }
+                    "overlayAllowed"->{result.success(Settings.canDrawOverlays(this))}
+                    "overlayPermission"->{
+                        val settings=Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName"))
+                        if(settings.resolveActivity(packageManager)!=null)startActivity(settings)
+                        else startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
                         result.success(true)
                     }
                     "shareExport"->{

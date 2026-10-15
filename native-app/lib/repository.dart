@@ -49,6 +49,11 @@ class DashboardRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setAndroidOverlayEnabled(bool enabled) {
+    local.set('androidOverlayEnabled', enabled);
+    notifyListeners();
+  }
+
   String? get serverId => local.get('serverId') as String?;
   String get deviceId => local.get('deviceId') as String;
   Json cache(String key) => local.snapshot(key);
