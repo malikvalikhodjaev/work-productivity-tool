@@ -30,6 +30,9 @@ test('Inbox HTTP supports native offline commands and authenticated range playba
   const saved=await post('/api/native/command',command);assert.equal(saved.status,200);assert.equal(saved.body.inbox.entries[0].status,'reviewed');assert.equal(saved.body.writing.counts.drafts,1);
   assert.equal((await post('/api/native/command',command)).body.duplicate,true);
   assert.equal((await post('/api/native/command',{...command,deviceId:randomUUID(),requestId:randomUUID()})).status,409);
+  const longNotes='模型'.repeat(13000);
+  const large=await post('/api/native/command',{...command,requestId:randomUUID(),action:'save',expectedUpdatedAt:saved.body.item.updatedAt,input:{id:voice.id,notes:longNotes}});
+  assert.equal(large.status,200);assert.equal(large.body.item.notes,longNotes);
   const audio='/api/inbox/'+voice.id+'/audio',range=await fetch(origin+audio,{headers:{Range:'bytes=0-3'}});assert.equal(range.status,206);assert.equal(await range.text(),'OggS');assert.equal(range.headers.get('Content-Range'),'bytes 0-3/15');
   const headers={Host:'desktop.example.ts.net','Tailscale-User-Login':'owner@example.test',Origin:remote,Range:'bytes=4-8'};
   const proxy=await remoteGet(`http://127.0.0.1:${viewerPort}`+audio,headers);assert.equal(proxy.status,206);assert.equal(proxy.text,'hello');
