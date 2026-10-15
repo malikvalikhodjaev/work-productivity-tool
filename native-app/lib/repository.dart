@@ -40,6 +40,7 @@ class DashboardRepository extends ChangeNotifier {
     'ratings': '/api/indicator-ratings',
     'finance': '/api/finance',
     'dailyNorms': '/api/daily-norms',
+    'inbox': '/api/inbox',
   };
   String get base =>
       (local.get('baseUrl') ?? 'http://localhost:8787').toString();
@@ -181,10 +182,18 @@ class DashboardRepository extends ChangeNotifier {
               'portfolio',
               'dashboard',
               'dailyNorms',
+              'inbox',
+              'writing',
+              'writingExport',
             ]) {
               if (response[key] is Map) {
                 local.capture(key, object(response[key]));
               }
+            }
+            for (final article in rows(
+              object(response['writingExport'])['entries'],
+            )) {
+              local.capture('writing:${article['id']}', article);
             }
             if (item['route'] == '/api/writing' && response['entry'] is Map) {
               local.capture(
@@ -615,6 +624,14 @@ class DashboardRepository extends ChangeNotifier {
               )
               .firstOrNull;
           body['expectedUpdatedAt'] = current?['updatedAt'];
+        case 'inbox':
+          current = rows(cache('inbox')['entries'])
+              .where((r) => r['id'] == input['id'])
+              .firstOrNull;
+          if (current == null) {
+            throw StateError('Входящая мысль не найдена. Исходник сохранён.');
+          }
+          body['expectedUpdatedAt'] = current['updatedAt'];
         case 'dailyNorm':
           current = rows(cache('dailyNorms')['norms'])
               .where((r) => r['workRef'] == input['workRef'])

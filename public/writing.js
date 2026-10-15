@@ -60,3 +60,4 @@ $('writing-copy').addEventListener('click',async()=>{await persistLocal();const 
 mountReflectionHints($('writing-reflection'), {defaultTopic:'feynman'});
 window.addEventListener('rhythm:writing-opened',()=>void initialize());window.addEventListener('online',()=>{if(opened&&dirty)void save();});window.addEventListener('beforeunload',e=>{if(dirty&&!localSafe){e.preventDefault();e.returnValue='';}});document.addEventListener('visibilitychange',()=>{if(document.hidden&&dirty)void persistLocal();else if(!document.hidden&&opened&&dirty)void save();});
 if(location.hash.startsWith('#writing'))void initialize();
+window.addEventListener('rhythm:inbox-writing',async e=>{await initialize();if(!await flush())return;await refreshIndex();await openPost(e.detail.id);window.dispatchEvent(new Event('rhythm:writing-saved'));});

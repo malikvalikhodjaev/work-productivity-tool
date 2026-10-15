@@ -6,6 +6,7 @@ import 'package:flutter_quill/flutter_quill.dart' as q;
 import 'domain.dart';
 import 'repository.dart';
 import 'reflection_hints.dart';
+import 'inbox_widget.dart';
 
 Json editorDocument(Json source, {bool toServer = false}) => {
   'ops': rows(source['ops']).map((op) {
@@ -318,25 +319,35 @@ class _WritingScreenState extends State<WritingScreen> {
               ReflectionHints(repo: repo),
             ],
           );
-    return LayoutBuilder(
-      builder: (context, size) => size.maxWidth > 850
-          ? Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(width: 230, child: archive),
-                const SizedBox(width: 28),
-                Expanded(child: editor),
-              ],
-            )
-          : Column(
-              children: [
-                ExpansionTile(
-                  title: const Text('Архив записей'),
-                  children: [archive],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InboxWidget(
+          repo: repo,
+          openWriting: (id) => open(repo.cache('writing:$id')),
+        ),
+        const SizedBox(height: 18),
+        LayoutBuilder(
+          builder: (context, size) => size.maxWidth > 850
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(width: 230, child: archive),
+                    const SizedBox(width: 28),
+                    Expanded(child: editor),
+                  ],
+                )
+              : Column(
+                  children: [
+                    ExpansionTile(
+                      title: const Text('Архив записей'),
+                      children: [archive],
+                    ),
+                    editor,
+                  ],
                 ),
-                editor,
-              ],
-            ),
+        ),
+      ],
     );
   }
 }

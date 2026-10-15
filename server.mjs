@@ -13,6 +13,8 @@ import { createReferenceStore } from './lib/references.mjs';
 import { createRemoteViewer } from './lib/remote-view.mjs';
 import { backupData, backupStatus } from './lib/backup.mjs';
 import { createWritingStore } from './lib/writing.mjs';
+import {createInboxStore} from './lib/inbox.mjs';
+import {createTelegramBot} from './lib/telegram-bot.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.DASHBOARD_PORT ?? 8787);
@@ -25,6 +27,8 @@ const dailyProblems = createDailyProblemStore(path.join(dataDir, 'daily-problems
 const dailyResults = createDailyResultStore(path.join(dataDir, 'daily-results.json'), { validateWorkRef: workspace.validateRef });
 const references = createReferenceStore(path.join(dataDir, 'references.json'));
 const writing = createWritingStore(path.join(dataDir, 'writing.json'));
+const inbox = createInboxStore(path.join(dataDir, 'inbox.json'), {writing});
+const telegram = createTelegramBot({file:path.join(dataDir,'telegram-bot.json'),inbox});
 const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/projects.js': ['projects.js', 'text/javascript; charset=utf-8'], '/overview.js': ['overview.js', 'text/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8'], '/projects.css': ['projects.css', 'text/css; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
 assets['/workspace.js'] = ['workspace.js', 'text/javascript; charset=utf-8'];
 assets['/workspace.css'] = ['workspace.css', 'text/css; charset=utf-8'];
@@ -47,6 +51,8 @@ assets['/pomodoro-plans.css'] = ['pomodoro-plans.css', 'text/css; charset=utf-8'
 assets['/focus'] = ['focus.html', 'text/html; charset=utf-8'];
 assets['/focus-window.css'] = ['focus-window.css', 'text/css; charset=utf-8'];
 assets['/writing-editor.js'] = ['writing-editor.js', 'text/javascript; charset=utf-8'];
+assets['/inbox.js'] = ['inbox.js', 'text/javascript; charset=utf-8'];
+assets['/inbox.css'] = ['inbox.css', 'text/css; charset=utf-8'];
 assets['/focus-youtube.js'] = ['focus-youtube.js', 'text/javascript; charset=utf-8'];
 assets['/offline-work'] = ['offline.html', 'text/html; charset=utf-8'];
 for (const name of ['timer-core.js','offline-store.js','offline-work.js','offline-engine.js','device-banner.js']) assets['/' + name] = [name, 'text/javascript; charset=utf-8'];
@@ -68,7 +74,7 @@ async function body(req) {
   let bytes = 0;
   for await (const part of req) {
     bytes += part.length;
-    if (bytes > (req.url==='/api/writing'?1024*1024:['/api/finance/import', '/api/alphas/import'].includes(req.url) ? 4 * 1024 * 1024 : 65536)) throw new Error('Запрос слишком большой.');
+    if (bytes > (['/api/writing','/api/inbox','/api/native/command'].includes(req.url)?1024*1024:['/api/finance/import', '/api/alphas/import'].includes(req.url) ? 4 * 1024 * 1024 : 65536)) throw new Error('Запрос слишком большой.');
     parts.push(part);
   }
   const value = JSON.parse(Buffer.concat(parts).toString('utf8'));
@@ -85,7 +91,28 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.11.0', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.12.0', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/inbox') return json(res, 200, inbox.view());
+    if (req.method === 'GET' && url.pathname === '/api/inbox/export') return json(res, 200, inbox.exportData());
+    if (req.method === 'POST' && url.pathname === '/api/inbox') return json(res, 200, inbox.mutate(await body(req)));
+    if (req.method === 'GET' && url.pathname === '/api/telegram') return json(res, 200, telegram.status());
+    if (req.method === 'POST' && url.pathname === '/api/telegram') {
+      const input=await body(req);
+      return json(res, 200, input.action==='configure'?await telegram.configure(input):telegram.control(input.action));
+    }
+    if (['GET','HEAD'].includes(req.method) && /^\/api\/inbox\/[a-f0-9-]{36}\/audio$/.test(url.pathname)) {
+      const audio=inbox.audioFile(url.pathname.split('/')[3]),bytes=readFileSync(audio.path),size=bytes.length;
+      const range=req.headers.range?.match(/^bytes=(\d*)-(\d*)$/);
+      let start=0,end=size-1;
+      if(range) {
+        if(range[1]){start=Number(range[1]);end=range[2]?Number(range[2]):size-1;}
+        else if(range[2])start=Math.max(0,size-Number(range[2]));
+        if(start>=size||start>end){res.writeHead(416,{'Content-Range':`bytes */${size}`});return res.end();}
+        end=Math.min(end,size-1);
+      }
+      res.writeHead(range?206:200,{'Content-Type':audio.mime,'Cache-Control':'no-store','Accept-Ranges':'bytes','Content-Length':Math.max(0,end-start+1),...(range?{'Content-Range':`bytes ${start}-${end}/${size}`}:{})});
+      return res.end(req.method==='HEAD'?undefined:bytes.subarray(start,end+1));
+    }
     if (req.method === 'GET' && url.pathname === '/api/reflection-hints') return json(res, 200, readReflectionHints(dataDir));
     if (req.method === 'GET' && url.pathname === '/api/timer') return json(res, 200, store.getTimer(url.searchParams.get('week') ?? undefined));
     if (req.method === 'GET' && url.pathname === '/api/timer/history') return json(res,200,store.getTimerHistory(url.searchParams.get('workRef')));
@@ -104,6 +131,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/native/command') {
       const command = await body(req);
       store.validateNativeDevice(command);
+      if (command.module === 'inbox') return json(res, 200, inbox.mutate(command));
       if (command.module === 'workspace') return json(res, 200, workspace.nativeMutate(command));
       if (['portfolio','target','dailyNorm','dailyCheck','pomodoroTarget'].includes(command.module)) return json(res, 200, store.nativeMutate(command));
       if (command.module === 'problem') {
@@ -225,11 +253,11 @@ const server = http.createServer(async (req, res) => {
     if (error.kind) return json(res, error.status ?? 400, { error: error.message, kind: error.kind, details: error.details });
     const systemError = error.code || (!(error instanceof SyntaxError) && /ENOENT|EACCES|EPERM/.test(error.message));
     if (systemError) console.error(error);
-    json(res, error.status === 409 ? 409 : systemError ? 500 : 400, { error: systemError ? 'Не удалось сохранить или прочитать данные. Повтори попытку.' : error instanceof SyntaxError ? 'Некорректный JSON.' : error.message });
+    json(res, systemError ? 500 : error.status ?? 400, { error: systemError ? 'Не удалось сохранить или прочитать данные. Повтори попытку.' : error instanceof SyntaxError ? 'Некорректный JSON.' : error.message });
   }
 });
 let backupInterval;
 const saveBackup = () => { try { backupData(dataDir); } catch (error) { console.error('Резервная копия: ' + error.message); } };
-server.listen(port, process.env.DASHBOARD_BIND ?? '127.0.0.1', () => { remoteViewer.start(); saveBackup(); backupInterval = setInterval(saveBackup, 15 * 60 * 1000); backupInterval.unref(); console.log(`Indicators & Work Dashboard: http://127.0.0.1:${port}\nДанные: ${dataDir}\nЗакрытый шлюз: 127.0.0.1:${viewerPort}`); });
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { clearInterval(backupInterval); saveBackup(); remoteViewer.server.close(); server.close(() => process.exit(0)); });
+server.listen(port, process.env.DASHBOARD_BIND ?? '127.0.0.1', () => { remoteViewer.start(); telegram.start(); saveBackup(); backupInterval = setInterval(saveBackup, 15 * 60 * 1000); backupInterval.unref(); console.log(`Indicators & Work Dashboard: http://127.0.0.1:${port}\nДанные: ${dataDir}\nЗакрытый шлюз: 127.0.0.1:${viewerPort}`); });
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { clearInterval(backupInterval); telegram.stop(); saveBackup(); remoteViewer.server.close(); server.close(() => process.exit(0)); });
 server.on('error', error => { console.error(error.code === 'EADDRINUSE' ? `Порт ${port} занят. Открой http://127.0.0.1:${port} или задай DASHBOARD_PORT.` : error); process.exitCode = 1; });
