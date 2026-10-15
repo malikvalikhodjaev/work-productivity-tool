@@ -46,7 +46,8 @@ try {
         $taskLog = Join-Path $taskBuild 'android-build.log'
         $taskCacheFlags = @()
         if (-not $Online) { $taskCacheFlags += '--offline' }
-        & $taskGradle --no-daemon @taskCacheFlags '-Dorg.gradle.vfs.watch=false' '-Pandroid.injected.build.abi=arm64-v8a' '-Ptarget-platform=android-arm64' '-Ptarget=lib/main.dart' '-Ptree-shake-icons=true' assembleRelease *> $taskLog
+        # AGP otherwise marks an APK with an injected ABI as test-only.
+        & $taskGradle --no-daemon @taskCacheFlags '-Dorg.gradle.vfs.watch=false' '-Pandroid.injected.build.abi=arm64-v8a' '-Pandroid.injected.testOnly=false' '-Ptarget-platform=android-arm64' '-Ptarget=lib/main.dart' '-Ptree-shake-icons=true' assembleRelease *> $taskLog
         $taskExit = $LASTEXITCODE
         Get-Content -LiteralPath $taskLog -Tail 24
         if ($taskExit -ne 0) { throw "Android build failed; see $taskLog" }
@@ -54,4 +55,10 @@ try {
 } finally { Pop-Location }
 $taskApk = Join-Path $taskBuild 'build\app\outputs\flutter-apk\app-release.apk'
 if (-not (Test-Path -LiteralPath $taskApk -PathType Leaf)) { throw 'Release APK was not generated.' }
+$taskAapt = Join-Path $env:ANDROID_HOME 'build-tools\36.0.0\aapt.exe'
+$taskApkManifest = & $taskAapt dump xmltree $taskApk AndroidManifest.xml 2>&1
+if ($LASTEXITCODE -ne 0) { throw 'Release APK manifest could not be verified.' }
+if ($taskApkManifest -match 'android:(testOnly|debuggable).*0xffffffff') {
+    throw 'Release APK must not be test-only or debuggable.'
+}
 [pscustomobject]@{apk=$taskApk;sha256=(Get-FileHash -LiteralPath $taskApk -Algorithm SHA256).Hash} | ConvertTo-Json
