@@ -619,7 +619,14 @@ class DashboardRepository extends ChangeNotifier {
     try {
       if (timerPending) await _recoverTimerCommand();
       final current = active;
-      if (['pause', 'resume', 'extend', 'finish', 'cancel'].contains(action)) {
+      if ([
+        'pause',
+        'resume',
+        'extend',
+        'finish',
+        'cancel',
+        'leisure',
+      ].contains(action)) {
         if (current == null || current['id'] != input['sessionId']) {
           throw StateError(
             'Этот сеанс уже завершён или изменён. Таймер обновлён.',
@@ -915,6 +922,7 @@ class DashboardRepository extends ChangeNotifier {
     String action, {
     String observation = '',
     int? workedSeconds,
+    int? leisureUntil,
   }) async {
     final s = active;
     if (s == null) return;
@@ -925,6 +933,7 @@ class DashboardRepository extends ChangeNotifier {
         now,
         observation: observation,
         workedSeconds: workedSeconds,
+        leisureUntil: leisureUntil,
       );
       if (['finish', 'cancel'].contains(action)) {
         local.finishLocal(changed, serverId);
@@ -938,6 +947,7 @@ class DashboardRepository extends ChangeNotifier {
         'sessionId': s['id'],
         if (action == 'finish') 'observation': observation,
         'workedSeconds': ?workedSeconds,
+        'leisureUntil': ?leisureUntil,
       });
     }
   }

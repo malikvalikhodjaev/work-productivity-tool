@@ -28,17 +28,39 @@ export function timerState(value) {
     if (!s.id || !['work','short_break','long_break'].includes(s.phase) || !['pomodoro','stopwatch'].includes(s.mode) || !['running','paused','finished','cancelled'].includes(s.status) || !Array.isArray(s.intervals) || s.intervals.some(i => !Number.isFinite(i.start) || !Number.isFinite(i.end) || i.end < i.start) || !Number.isFinite(Date.parse(s.startedAt)) || (s.status === 'running' && !Number.isFinite(s.runningSince))) fail('Некорректный сеанс таймера. Исходник сохранён.');
     timerSettings(s.settings);
     if ((s.mode === 'pomodoro' && (!Number.isInteger(s.plannedMs) || s.plannedMs < 60000 || s.plannedMs > 14400000)) || !Number.isInteger(s.completedPomodoros) || s.completedPomodoros < 0 || !Array.isArray(s.events)) fail('Некорректный план сеанса. Исходник сохранён.');
+    validateLeisure(s);
   }
   if (new Set(value.sessions.map(s => s.id)).size !== value.sessions.length) fail('Повторяющийся сеанс таймера. Исходник сохранён.');
   return structuredClone(value);
 }
 const savedMs = s => s.intervals.reduce((sum, i) => sum + i.end - i.start, 0);
+export function validateLeisure(s) {
+  const spans=s.leisureIntervals??[];
+  if(!Array.isArray(spans)||spans.length>1000)fail('Некорректная история Leisure. Исходник сохранён.');
+  let previous=Date.parse(s.startedAt);
+  const limit=s.finishedAt?Date.parse(s.finishedAt):Infinity;
+  for(const span of spans){
+    if(!Number.isSafeInteger(span.start)||!Number.isSafeInteger(span.end)||span.start<previous||span.end<span.start||span.end>limit||!Number.isSafeInteger(span.plannedUntil)||span.plannedUntil<=span.start||s.intervals.some(i=>i.start<span.end&&span.start<i.end))fail('Некорректный интервал Leisure. Исходник сохранён.');
+    previous=span.end;
+  }
+  if(s.leisure!=null){
+    const l=s.leisure;
+    if(s.phase!=='work'||s.status!=='paused'||!Number.isSafeInteger(l.start)||!Number.isSafeInteger(l.until)||l.start<previous||l.until<=l.start||s.intervals.some(i=>i.end>l.start))fail('Некорректный активный Leisure. Исходник сохранён.');
+  }
+}
+function endLeisure(s,now){
+  if(!s.leisure)return;
+  if(now<s.leisure.start)fail('Проверь часы: окончание Leisure раньше его начала.');
+  s.leisureIntervals=[...(s.leisureIntervals??[]),{start:s.leisure.start,end:now,plannedUntil:s.leisure.until}];
+  s.leisure=null;
+}
 export function sessionView(s, now) {
   const past = savedMs(s);
   const pending = s.status === 'running' ? Math.max(0, now - s.runningSince) : 0;
   const elapsedMs = past + (s.mode === 'pomodoro' ? Math.min(pending, Math.max(0, s.plannedMs - past)) : pending);
   const remainingMs = s.mode === 'pomodoro' ? Math.max(0, s.plannedMs - elapsedMs) : null;
-  return { ...s, elapsedMs, remainingMs, expired: s.status === 'running' && remainingMs === 0,
+  const leisureMs=(s.leisureIntervals??[]).reduce((sum,i)=>sum+i.end-i.start,0)+(s.leisure?Math.max(0,now-s.leisure.start):0);
+  return { ...s, elapsedMs, remainingMs, leisureMs, leisureRemainingMs:s.leisure?Math.max(0,s.leisure.until-now):null, expired: s.status === 'running' && remainingMs === 0,
     needsConfirmation: s.status === 'running' && (s.mode === 'pomodoro' ? now - (s.runningSince + Math.max(0, s.plannedMs - past)) > 300000 : elapsedMs > 8 * 3600000) };
 }
 function closeInterval(s, now) {
@@ -117,14 +139,21 @@ export function changeTimer(value, action, input, { now = Date.now(), validateWo
       workType: workType.trim() || null, settings, plannedMs: mode === 'pomodoro' ? duration * 60000 : null,
       startedAt: stamp, updatedAt: stamp, runningSince: now, intervals: [], completedPomodoros: 0, events: [{ action, at: stamp, elapsedSeconds:0 }] };
     timer.sessions.push(s); timer.activeId = s.id;
-  } else if (['pause','resume','extend','finish','cancel'].includes(action)) {
+  } else if (['pause','resume','extend','finish','cancel','leisure'].includes(action)) {
     if (!active || active.id !== input.sessionId) conflict('Активный сеанс уже изменён или завершён.');
-    if (action === 'pause') {
+    if(action==='leisure'){
+      if(active.phase!=='work')fail('Leisure доступен из рабочего сеанса.');
+      if(!Number.isSafeInteger(input.leisureUntil)||input.leisureUntil<=now||input.leisureUntil>now+86400000)fail('Выбери время окончания Leisure в следующие 24 часа.');
+      if(active.mode==='pomodoro'&&sessionView(active,now).elapsedMs>=active.plannedMs)fail('Сначала учти истёкшую помидорку или продли её.');
+      closeInterval(active,now);active.status='paused';
+      active.leisure={start:active.leisure?.start??now,until:input.leisureUntil};
+    } else if (action === 'pause') {
       if (active.status !== 'running') conflict('Сеанс уже на паузе.');
       closeInterval(active, now); active.status = 'paused';
     } else if (action === 'resume') {
       if (active.status !== 'paused') conflict('Сеанс уже запущен.');
       if (active.mode === 'pomodoro' && savedMs(active) >= active.plannedMs) fail('Интервал истёк. Продли план или заверши сеанс.');
+      endLeisure(active,now);
       active.status = 'running'; active.runningSince = now;
     } else if (action === 'extend') {
       if (active.mode !== 'pomodoro') fail('Секундомер не имеет ограниченного плана.');
@@ -135,6 +164,7 @@ export function changeTimer(value, action, input, { now = Date.now(), validateWo
     } else {
       if(action==='finish'&&input.observation!==undefined&&(typeof input.observation!=='string'||input.observation.length>1000||/[\r\n]/.test(input.observation)))fail('Наблюдение: одна строка до 1000 символов.');
       closeInterval(active, now);
+      endLeisure(active,now);
       if (input.workedSeconds !== undefined) {
         if (!Number.isInteger(input.workedSeconds) || input.workedSeconds < 0 || input.workedSeconds * 1000 > savedMs(active) || input.workedSeconds > 86400) fail('Уточнённый факт должен быть от 0 до учтённой длительности, не более 24 часов.');
         active.intervals = trimIntervals(active.intervals, input.workedSeconds * 1000);
@@ -152,7 +182,7 @@ export function changeTimer(value, action, input, { now = Date.now(), validateWo
       }
       active.entryIds = entries.map(e => e.id); timer.activeId = null;
     }
-    active.updatedAt = stamp; active.events.push({ action, at: stamp, elapsedSeconds:sessionView(active,now).elapsedMs/1000, ...(input.workedSeconds === undefined ? {} : { workedSeconds: input.workedSeconds }) });
+    active.updatedAt = stamp; active.events.push({ action, at: stamp, elapsedSeconds:sessionView(active,now).elapsedMs/1000, ...(input.workedSeconds === undefined ? {} : { workedSeconds: input.workedSeconds }), ...(action==='leisure'?{leisureUntil:input.leisureUntil}:{}) });
   } else fail('Неизвестное действие таймера.');
   timer.revision++;
   timer.requests.push({ id: input.requestId, signature });
@@ -163,6 +193,9 @@ export function changeTimer(value, action, input, { now = Date.now(), validateWo
 export function timerView(value, { now = Date.now(), entries, week, end, entities = [] }) {
   const timer = timerState(value);
   const active = timer.sessions.find(s => s.id === timer.activeId);
+  const leisureSpans=timer.sessions.filter(s=>s.status!=='cancelled').flatMap(s=>[...(s.leisureIntervals??[]),...(s.leisure?[{start:s.leisure.start,end:Math.max(s.leisure.start,now)}]:[])]);
+  const leisureFrom=Date.parse(week+'T00:00:00+05:00'),leisureTo=Date.parse(end+'T00:00:00+05:00')+86400000;
+  const leisureSeconds=leisureSpans.length?leisureSpans.reduce((sum,i)=>sum+Math.max(0,Math.min(i.end,leisureTo)-Math.max(i.start,leisureFrom))/1000,0):null;
   const sessions = timer.sessions.filter(s => s.finishedAt && atDate(Date.parse(s.finishedAt)) >= week && atDate(Date.parse(s.finishedAt)) <= end).map(s => sessionView(s, now)).reverse();
   const workEntries = entries.filter(e => ['dashboard_timer','dashboard_timer_offline'].includes(e.source) && e.date >= week && e.date <= end);
   const seconds = e => e.durationSeconds ?? e.amount * 3600;
@@ -178,7 +211,7 @@ export function timerView(value, { now = Date.now(), entries, week, end, entitie
   return { version: 1, revision: timer.revision, serverNow: new Date(now).toISOString(), settings: timer.settings, active: active ? sessionView(active, now) : null,
     cycleCount: timer.cycleCount, sessions, week, end, plans, byWork,
     events:timer.sessions.flatMap(s=>s.events.filter(e=>atDate(Date.parse(e.at))>=week&&atDate(Date.parse(e.at))<=end).map((e,index)=>({...e,id:s.id+':'+index,sessionId:s.id,title:s.title,workRef:s.workRef,phase:s.phase}))).sort((a,b)=>b.at.localeCompare(a.at)),
-    summary: { workSeconds: workEntries.length ? workEntries.reduce((sum,e) => sum + seconds(e),0) : null,
+    summary: { leisureSeconds, workSeconds: workEntries.length ? workEntries.reduce((sum,e) => sum + seconds(e),0) : null,
       pomodoros: sessions.filter(s => s.phase === 'work').reduce((sum,s) => sum + s.completedPomodoros,0),
       breakSeconds: sessions.filter(s => s.phase !== 'work' && s.status === 'finished').reduce((sum,s) => sum + s.elapsedMs / 1000,0), records: workEntries.length } };
 }

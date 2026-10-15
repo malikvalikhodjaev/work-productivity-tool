@@ -49,7 +49,7 @@ void main() {
       repo.pomodoroTargetsForDate('2026-10-16').single['actualPomodoros'],
       1,
     );
-    expect(repo.hasPomodoroPlan, false);
+    expect(repo.hasPomodoroPlan, today() == '2026-10-16');
     expect(pomodoroFact({...finished, 'completedPomodoros': 0}), isNull);
     expect(pomodoroFact({...finished, 'syncResolution': 'excluded'}), isNull);
     final week = pomodoroWeekRows(repo.pomodoroRows, [

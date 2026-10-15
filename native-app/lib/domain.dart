@@ -44,8 +44,25 @@ int elapsedMs(Json s, int now) {
   );
 }
 
-String clockOf(Json s, int now) {
-  final ms = s['mode'] == 'pomodoro'
+bool inLeisure(Json? s) => s?['leisure'] is Map;
+bool leisureDue(Json? s, int now) =>
+    inLeisure(s) && object(s?['leisure'])['until'] <= now;
+String leisureKey(Json s) =>
+    '${s['id']}:${object(s['leisure'])['start']}:${object(s['leisure'])['until']}';
+String leisureTime(Json s) => DateTime.fromMillisecondsSinceEpoch(
+  object(s['leisure'])['until'] as int,
+  isUtc: true,
+).add(const Duration(hours: 5)).toIso8601String().substring(11, 16);
+int leisureElapsedMs(Json s, int now) =>
+    rows(
+      s['leisureIntervals'],
+    ).fold<int>(0, (sum, i) => sum + (i['end'] as int) - (i['start'] as int)) +
+    (inLeisure(s) ? max(0, now - (object(s['leisure'])['start'] as int)) : 0);
+
+String clockOf(Json s, int now, {bool workOnly = false}) {
+  final ms = !workOnly && inLeisure(s)
+      ? max(0, (object(s['leisure'])['until'] as int) - now)
+      : s['mode'] == 'pomodoro'
       ? max(0, (s['plannedMs'] as num).toInt() - elapsedMs(s, now))
       : elapsedMs(s, now);
   final total = ms ~/ 1000;
@@ -132,6 +149,7 @@ Json changeLocalSession(
   int now, {
   String observation = '',
   int? workedSeconds,
+  int? leisureUntil,
 }) {
   final s = {
     ...source,
@@ -165,7 +183,27 @@ Json changeLocalSession(
     now,
     isUtc: true,
   ).toIso8601String();
-  if (action == 'pause') {
+  if (action == 'leisure') {
+    if (s['phase'] != 'work') {
+      throw StateError('Leisure доступен из рабочего сеанса.');
+    }
+    if (leisureUntil == null ||
+        leisureUntil <= now ||
+        leisureUntil > now + 86400000) {
+      throw ArgumentError(
+        'Выбери время окончания Leisure в следующие 24 часа.',
+      );
+    }
+    if (s['mode'] == 'pomodoro' &&
+        elapsedMs({...s, 'status': 'paused'}, now) >= s['plannedMs']) {
+      throw StateError('Сначала учти истёкшую помидорку или продли её.');
+    }
+    s['status'] = 'paused';
+    s['leisure'] = {
+      'start': object(source['leisure'])['start'] ?? now,
+      'until': leisureUntil,
+    };
+  } else if (action == 'pause') {
     if (source['status'] != 'running') throw StateError('Сеанс уже на паузе.');
     s['status'] = 'paused';
   } else if (action == 'resume') {
@@ -224,12 +262,21 @@ Json changeLocalSession(
   } else {
     throw ArgumentError('Неизвестное действие.');
   }
+  if (['resume', 'finish', 'cancel'].contains(action) && inLeisure(source)) {
+    final l = object(source['leisure']);
+    s['leisureIntervals'] = [
+      ...rows(source['leisureIntervals']),
+      {'start': l['start'], 'end': now, 'plannedUntil': l['until']},
+    ];
+    s['leisure'] = null;
+  }
   s['updatedAt'] = stamp;
   (s['events'] as List).add({
     'action': action,
     'at': stamp,
     'elapsedSeconds': elapsedMs(s, now) / 1000,
     'workedSeconds': ?workedSeconds,
+    'leisureUntil': ?leisureUntil,
   });
   return s;
 }

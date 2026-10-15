@@ -58,12 +58,17 @@ class TimerOverlay(private val context: Context) {
             else -> problemText
         }
         val elapsed = FocusService.elapsed(active, now)
-        val seconds = (if (active.optString("mode") == "pomodoro")
+        val leisure=active.optJSONObject("leisure")
+        val seconds = (if(leisure!=null)max(0L,leisure.optLong("until")-now)else if (active.optString("mode") == "pomodoro")
             max(0L, active.optLong("plannedMs") - elapsed) else elapsed) / 1000
-        clock?.text = (if (active.optString("status") == "paused") "Пауза · " else "") +
+        clock?.text = (if (leisure==null&&active.optString("status") == "paused") "Пауза · " else "") +
             if (seconds >= 3600) String.format(Locale.ROOT, "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
             else String.format(Locale.ROOT, "%02d:%02d", seconds / 60, seconds % 60)
-        title?.text = (if (active.optString("phase") != "work") "Перерыв: "
+        val leisureCaption=if(leisure!=null) {
+            val time=java.time.Instant.ofEpochMilli(leisure.optLong("until")).atOffset(java.time.ZoneOffset.ofHours(5)).toLocalTime().toString().take(5)
+            if(leisure.optLong("until")<=now)"Вернуться к работе?\n"else"Leisure до $time\n"
+        }else""
+        title?.text = leisureCaption + (if (active.optString("phase") != "work") "Перерыв: "
             else if (active.optString("workRef").startsWith("case:")) "Working on a problem: " else "Working on: ") + active.optString("title")
         val date = FocusService.date(now)
         val rows = snapshot.optJSONArray("pomodoroTargets")

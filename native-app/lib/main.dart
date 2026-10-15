@@ -24,6 +24,7 @@ import 'compact_timer.dart';
 import 'timer_command_notice.dart';
 import 'daily_problem_banner.dart';
 import 'project_review.dart';
+import 'leisure.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -173,7 +174,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.7',
+        'clientVersion': '0.1.8',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -217,11 +218,13 @@ class _DashboardHomeState extends State<DashboardHome>
     await show();
     setState(() {
       section = 2;
-      focusMode = screen == 'timer';
+      focusMode = screen == 'timer' || screen == 'leisure';
     });
     await repo.synchronize();
     if (!mounted || dialogOpen || Navigator.of(context).canPop()) return;
-    if (screen == 'norms') {
+    if (screen == 'leisure' && inLeisure(repo.active)) {
+      await offerLeisureReturn();
+    } else if (screen == 'norms') {
       final due = dueNorms();
       if (planningDue(force: true)) {
         await showPlanningQuestion(force: true);
@@ -326,6 +329,14 @@ class _DashboardHomeState extends State<DashboardHome>
     if (!mounted) return;
     setState(() {});
     final s = repo.active;
+    if (leisureDue(s, repo.now) &&
+        !dialogOpen &&
+        !Navigator.of(context).canPop() &&
+        (foreground || (widget.backgroundEnabled && Platform.isWindows)) &&
+        repo.local.get('leisurePrompt') != leisureKey(s!)) {
+      unawaited(offerLeisureReturn());
+      return;
+    }
     if (s != null &&
         s['mode'] == 'pomodoro' &&
         s['status'] == 'running' &&
@@ -360,6 +371,22 @@ class _DashboardHomeState extends State<DashboardHome>
       planEntryPending = false;
       final due = dueNorms();
       if (due.isNotEmpty || pomodoroReminderDue()) unawaited(showNorms(due));
+    }
+  }
+
+  Future<void> offerLeisureReturn() async {
+    final s = repo.active;
+    if (!inLeisure(s) || dialogOpen || Navigator.of(context).canPop()) return;
+    dialogOpen = true;
+    repo.local.set('leisurePrompt', leisureKey(s!));
+    try {
+      if (widget.backgroundEnabled && Platform.isWindows && !foreground) {
+        await show();
+      }
+      if (widget.backgroundEnabled) unawaited(background.notifyTimer());
+      if (mounted) await safe(() => askLeisureReturn(context, repo));
+    } finally {
+      dialogOpen = false;
     }
   }
 
@@ -940,6 +967,8 @@ class _DashboardHomeState extends State<DashboardHome>
                     child: Text(
                       s == null
                           ? 'Пространство для важного'
+                          : inLeisure(s)
+                          ? 'Leisure · до ${leisureTime(s)}'
                           : s['status'] == 'paused'
                           ? 'Paused'
                           : s['mode'] == 'pomodoro'
@@ -973,6 +1002,8 @@ class _DashboardHomeState extends State<DashboardHome>
                 ),
               ),
               const SizedBox(height: 12),
+              if (s != null && inLeisure(s))
+                LeisureInfo(session: s, now: repo.now),
               Text(
                 s == null ? 'Выбери карточку работы' : caption(s),
                 style: const TextStyle(fontSize: 17, height: 1.5),
@@ -1020,13 +1051,31 @@ class _DashboardHomeState extends State<DashboardHome>
                               ),
                             ),
                       child: Text(
-                        s['status'] == 'paused' ? 'Продолжить' : 'Пауза',
+                        inLeisure(s)
+                            ? 'Вернуться к работе'
+                            : s['status'] == 'paused'
+                            ? 'Продолжить'
+                            : 'Пауза',
                       ),
                     ),
                     FilledButton(
                       onPressed: repo.timerBusy ? null : finishTimer,
                       child: const Text('Учесть'),
                     ),
+                    if (s['phase'] == 'work')
+                      TextButton.icon(
+                        onPressed: repo.timerBusy
+                            ? null
+                            : () => safe(() => chooseLeisure(context, repo)),
+                        icon: const Icon(
+                          Icons.free_breakfast_outlined,
+                          color: Colors.white70,
+                        ),
+                        label: Text(
+                          inLeisure(s) ? 'Изменить Leisure' : 'Leisure',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
                     TextButton(
                       onPressed: repo.timerBusy ? null : cancelTimer,
                       child: const Text(
@@ -2672,7 +2721,7 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'I&W · Native 0.1.7',
+                          'I&W · Native 0.1.8',
                           style: TextStyle(fontSize: 11),
                         ),
                       ],

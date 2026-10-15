@@ -24,6 +24,7 @@ class FocusService : Service() {
         const val ONGOING = 101
         const val TIMER_ALERT = 102
         const val DAILY_ALERT = 103
+        const val LEISURE_ALERT = 104
         @Volatile var appVisible = false
         @Volatile var running = false
         fun channels(context: Context) {
@@ -40,6 +41,27 @@ class FocusService : Service() {
             return past + if(s.optString("mode")=="pomodoro") min(running,max(0L,s.optLong("plannedMs")-past)) else running
         }
         fun open(context: Context, screen: String): PendingIntent = PendingIntent.getActivity(context,screen.hashCode(),Intent(context,MainActivity::class.java).putExtra("iw_screen",screen).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        fun leisureKey(active: JSONObject): String? {
+            val l=active.optJSONObject("leisure")?:return null
+            if(active.optString("status")!="paused")return null
+            return "${active.optString("id")}:${l.optLong("start")}:${l.optLong("until")}"
+        }
+        fun alertLeisure(context: Context, data: JSONObject) {
+            val active=data.optJSONObject("active")?:return
+            val key=leisureKey(active)?:return
+            val now=System.currentTimeMillis()+if(data.optBoolean("local"))0L else data.optLong("serverOffset")
+            if(active.getJSONObject("leisure").optLong("until")>now)return
+            val prefs=context.getSharedPreferences(PREFS,MODE_PRIVATE)
+            if(prefs.getString("leisureAlerted",null)==key)return
+            prefs.edit().putString("leisureAlerted",key).apply()
+            if(appVisible)return
+            channels(context)
+            val message=active.optString("title")+" · рабочий таймер на паузе"
+            val notification=Notification.Builder(context,ALERTS).setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                .setContentTitle("Вернуться к работе?").setContentText(message)
+                .setContentIntent(open(context,"leisure")).setAutoCancel(true).build()
+            context.getSystemService(NotificationManager::class.java).notify(LEISURE_ALERT,notification)
+        }
         fun alert(context: Context, timer: Boolean) {
             channels(context)
             val prefs=context.getSharedPreferences(PREFS,MODE_PRIVATE)
@@ -78,6 +100,11 @@ class FocusService : Service() {
             val offset=if(data.optBoolean("local"))0L else data.optLong("serverOffset")
             val remaining=if(active!=null&&active.optString("status")=="running"&&active.optString("mode")=="pomodoro")max(0L,active.optLong("plannedMs")-elapsed(active,now+offset))else null
             alarm("timer",if(remaining!=null&&remaining>0)now+remaining else null)
+            val leisure=active?.optJSONObject("leisure")
+            val currentLeisureKey=if(active!=null)leisureKey(active)else null
+            val leisureAlerted=context.getSharedPreferences(PREFS,MODE_PRIVATE).getString("leisureAlerted",null)
+            alarm("leisure",if(currentLeisureKey!=null&&currentLeisureKey!=leisureAlerted)now+max(0L,leisure!!.optLong("until")-(now+offset))else null)
+            if(leisure==null)context.getSystemService(NotificationManager::class.java).cancel(LEISURE_ALERT)
             var next: Long?=null
             val norms=data.optJSONArray("norms")?:JSONArray()
             val checks=data.optJSONArray("checks")?:JSONArray()
@@ -149,12 +176,14 @@ class FocusService : Service() {
             if(active!=null){
                 val now=System.currentTimeMillis()+offset
                 val amount=elapsed(active,now)
-                val remaining=if(active.optString("mode")=="pomodoro")max(0L,active.optLong("plannedMs")-amount)else amount
+                val leisure=active.optJSONObject("leisure")
+                val remaining=if(leisure!=null)max(0L,leisure.optLong("until")-now)else if(active.optString("mode")=="pomodoro")max(0L,active.optLong("plannedMs")-amount)else amount
                 val seconds=remaining/1000
                 title="%02d:%02d".format(seconds/60,seconds%60)
                 val prefix=if(active.optString("workRef").startsWith("case:"))"Working on a problem: "else"Working on: "
                 detail=prefix+active.optString("title")
-                if(active.optString("status")=="paused")title="Пауза · $title"
+                if(leisure!=null)title=if(remaining==0L)"Вернуться к работе?"else"Leisure · $title"
+                else if(active.optString("status")=="paused")title="Пауза · $title"
             }
             val notification=Notification.Builder(this@FocusService,CHANNEL).setSmallIcon(android.R.drawable.ic_lock_idle_alarm).setContentTitle(title).setContentText(detail).setStyle(Notification.BigTextStyle().bigText(detail)).setContentIntent(open(this@FocusService,"timer")).setOngoing(true).setOnlyAlertOnce(true).build()
             getSystemService(NotificationManager::class.java).notify(ONGOING,notification)

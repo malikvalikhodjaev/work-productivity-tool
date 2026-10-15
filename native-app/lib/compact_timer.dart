@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'domain.dart';
+import 'leisure.dart';
 
 const focusColors = {
   'green': Color(0xff243b30),
@@ -51,6 +52,8 @@ class CompactTimer extends StatelessWidget {
             Text(
               s == null
                   ? 'Сеанс завершён'
+                  : inLeisure(s)
+                  ? 'Leisure · до ${leisureTime(s)}'
                   : s['status'] == 'paused'
                   ? 'Пауза'
                   : s['mode'] == 'pomodoro'
@@ -81,6 +84,7 @@ class CompactTimer extends StatelessWidget {
               style: const TextStyle(fontSize: 16, height: 1.35),
             ),
             if (s != null) ...[
+              if (inLeisure(s)) LeisureInfo(session: s, now: now),
               const SizedBox(height: 8),
               Text(
                 '${(elapsedMs(s, now) / 60000).toStringAsFixed(1)} мин',
@@ -95,7 +99,11 @@ class CompactTimer extends StatelessWidget {
                   FilledButton.tonal(
                     onPressed: busy ? null : pause,
                     child: Text(
-                      s['status'] == 'paused' ? 'Продолжить' : 'Пауза',
+                      inLeisure(s)
+                          ? 'Вернуться к работе'
+                          : s['status'] == 'paused'
+                          ? 'Продолжить'
+                          : 'Пауза',
                     ),
                   ),
                   FilledButton(
