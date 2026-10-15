@@ -21,6 +21,7 @@ import 'writing_screen.dart';
 import 'reflection_hints.dart';
 import 'data_table.dart';
 import 'compact_timer.dart';
+import 'timer_command_notice.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -169,7 +170,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.5',
+        'clientVersion': '0.1.6',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -961,6 +962,10 @@ class _DashboardHomeState extends State<DashboardHome>
               focus: (ref, title) => startTimer(ref: ref, title: title),
             ),
             const SizedBox(height: 18),
+            TimerCommandNotice(
+              repo: repo,
+              retry: () => safe(repo.checkPendingTimer),
+            ),
             Wrap(
               spacing: 10,
               runSpacing: 8,
@@ -979,21 +984,23 @@ class _DashboardHomeState extends State<DashboardHome>
                   ),
                 ] else ...[
                   FilledButton.tonal(
-                    onPressed: () => safe(
-                      () => repo.timerAction(
-                        s['status'] == 'paused' ? 'resume' : 'pause',
-                      ),
-                    ),
+                    onPressed: repo.timerBusy
+                        ? null
+                        : () => safe(
+                            () => repo.timerAction(
+                              s['status'] == 'paused' ? 'resume' : 'pause',
+                            ),
+                          ),
                     child: Text(
                       s['status'] == 'paused' ? 'Продолжить' : 'Пауза',
                     ),
                   ),
                   FilledButton(
-                    onPressed: finishTimer,
+                    onPressed: repo.timerBusy ? null : finishTimer,
                     child: const Text('Учесть'),
                   ),
                   TextButton(
-                    onPressed: cancelTimer,
+                    onPressed: repo.timerBusy ? null : cancelTimer,
                     child: const Text(
                       'Отменить',
                       style: TextStyle(color: Colors.white70),
@@ -1001,7 +1008,9 @@ class _DashboardHomeState extends State<DashboardHome>
                   ),
                   if (s['mode'] == 'pomodoro')
                     TextButton(
-                      onPressed: () => safe(() => repo.timerAction('extend')),
+                      onPressed: repo.timerBusy
+                          ? null
+                          : () => safe(() => repo.timerAction('extend')),
                       child: const Text(
                         '＋ 5 мин',
                         style: TextStyle(color: Colors.white),
@@ -1127,7 +1136,13 @@ class _DashboardHomeState extends State<DashboardHome>
     try {
       await action();
     } catch (e) {
-      message(e.toString());
+      message(
+        e is StateError
+            ? e.message
+            : e is ArgumentError
+            ? e.message.toString()
+            : e.toString(),
+      );
     }
   }
 
@@ -2216,6 +2231,9 @@ class _DashboardHomeState extends State<DashboardHome>
       'Кейсы': repo.entities('cases', 'case'),
       'Карточки работы': repo.entities('workItems', 'work'),
       'Сеансы таймера': repo.cache('timer')['sessions'],
+      'Отклонённые команды таймера': object(
+        repo.local.get('timerCommandHistory'),
+      ).values.toList(),
       'Сеансы устройства': repo.local.get('localHistory'),
       'Нормы дня': repo.dailyNorms,
       'План помидорок по датам': repo.pomodoroRows,
@@ -2357,7 +2375,6 @@ class _DashboardHomeState extends State<DashboardHome>
                 onPressed: () => safe(repo.checkPendingTimer),
                 child: const Text('Проверить действие'),
               ),
-              onTap: () => safe(repo.abandonTimerCommand),
             ),
           ),
         for (final dataset in datasets.entries)
@@ -2513,6 +2530,11 @@ class _DashboardHomeState extends State<DashboardHome>
               padding: const EdgeInsets.all(12),
               children: [
                 CompactTimer(
+                  busy: repo.timerBusy,
+                  commandStatus: TimerCommandNotice(
+                    repo: repo,
+                    retry: () => safe(repo.checkPendingTimer),
+                  ),
                   session: repo.active,
                   now: repo.now,
                   theme: (repo.local.get('theme') ?? 'green').toString(),
@@ -2592,7 +2614,7 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'I&W · Native 0.1.5',
+                          'I&W · Native 0.1.6',
                           style: TextStyle(fontSize: 11),
                         ),
                       ],

@@ -23,6 +23,10 @@ class DashboardRepository extends ChangeNotifier {
   Timer? _poll;
   bool syncing = false, online = false;
   bool focusStarting = false;
+  bool _sharedActionInFlight = false;
+  Future<void>? _timerCheck;
+  bool get timerBusy => _sharedActionInFlight || _timerCheck != null;
+  bool get timerPending => local.get('pendingTimer') != null;
   String status = 'Локальное хранилище готово';
   DashboardRepository(this.local, {http.Client? client})
     : _http = client ?? http.Client();
@@ -103,6 +107,7 @@ class DashboardRepository extends ChangeNotifier {
     focusStarting = true;
     notifyListeners();
     try {
+      if (!isLocal && timerPending && online) await _recoverTimerCommand();
       final s = active;
       if (s != null) {
         if (s['workRef'] != ref) {
@@ -223,6 +228,7 @@ class DashboardRepository extends ChangeNotifier {
       if (serverId == null) local.set('serverId', context['serverId']);
       local.capture('context', context);
       online = true;
+      if (timerPending) await _recoverTimerCommand();
       for (final queued in pending) {
         final item = local.queue.firstWhere((q) => q['id'] == queued['id']);
         if (item['state'] == 'conflict') break;
@@ -303,7 +309,11 @@ class DashboardRepository extends ChangeNotifier {
       );
       local.atomic(() {
         for (final entry in values) {
-          local.capture(entry.key, entry.value);
+          if (entry.key == 'timer') {
+            _captureTimer(entry.value);
+          } else {
+            local.capture(entry.key, entry.value);
+          }
         }
         for (final article in rows(
           local.snapshot('writingExport')['entries'],
@@ -579,42 +589,148 @@ class DashboardRepository extends ChangeNotifier {
   }
 
   Future<void> sharedAction(String action, Json input) async {
+    if (_sharedActionInFlight) return;
     if (isLocal) throw StateError('Сначала заверши таймер этого устройства.');
     if (!online) {
       throw StateError(
         'Для общего сеанса нужна связь с сервером. Для самостоятельного учёта выбери таймер устройства.',
       );
     }
-    if (local.get('pendingTimer') != null) {
-      throw StateError(
-        'Предыдущее действие ещё ждёт ответа. Нажми «Проверить действие».',
-      );
+    _sharedActionInFlight = true;
+    notifyListeners();
+    try {
+      if (timerPending) await _recoverTimerCommand();
+      final current = active;
+      if (['pause', 'resume', 'extend', 'finish', 'cancel'].contains(action)) {
+        if (current == null || current['id'] != input['sessionId']) {
+          throw StateError(
+            'Этот сеанс уже завершён или изменён. Таймер обновлён.',
+          );
+        }
+        if (action == 'pause' && current['status'] == 'paused' ||
+            action == 'resume' && current['status'] == 'running') {
+          return;
+        }
+      }
+      for (var attempt = 0; attempt < 2; attempt++) {
+        final command = {
+          'action': action,
+          'input': {
+            ...input,
+            'requestId': uuid.v4(),
+            'expectedRevision': cache('timer')['revision'] ?? 0,
+          },
+        };
+        local.atomic(() {
+          local.set('pendingTimer', command);
+          local.set('pendingTimerServerId', serverId);
+        });
+        try {
+          await checkPendingTimer();
+          return;
+        } on ApiFailure catch (e) {
+          // This click expresses pause/resume for this exact session. Retry once
+          // after a definite version rejection; never replay finish or extend.
+          if (attempt != 0 ||
+              e.status != 409 ||
+              timerPending ||
+              !['pause', 'resume'].contains(action) ||
+              active?['id'] != input['sessionId']) {
+            rethrow;
+          }
+          if (action == 'pause' && active?['status'] == 'paused' ||
+              action == 'resume' && active?['status'] == 'running') {
+            return;
+          }
+        }
+      }
+    } finally {
+      _sharedActionInFlight = false;
+      notifyListeners();
     }
-    final command = {
-      'action': action,
-      'input': {
-        ...input,
-        'requestId': uuid.v4(),
-        'expectedRevision': cache('timer')['revision'] ?? 0,
-      },
-    };
-    local.set('pendingTimer', command);
-    await checkPendingTimer();
   }
 
-  Future<void> checkPendingTimer() async {
+  void _captureTimer(Json result) {
+    if ((result['revision'] as int? ?? 0) >=
+        (cache('timer')['revision'] as int? ?? 0)) {
+      local.capture('timer', result);
+    }
+  }
+
+  Future<void> _recoverTimerCommand() async {
+    try {
+      await checkPendingTimer();
+    } on ApiFailure {
+      // Only a definite rejection with a refreshed snapshot may release the slot.
+      if (timerPending) rethrow;
+    }
+  }
+
+  Future<void> checkPendingTimer() {
+    if (_timerCheck != null) return _timerCheck!;
+    if (!timerPending) return Future.value();
+    final operation = _sendPendingTimer().whenComplete(() {
+      _timerCheck = null;
+      notifyListeners();
+    });
+    _timerCheck = operation;
+    notifyListeners();
+    return operation;
+  }
+
+  Future<void> _sendPendingTimer() async {
     final command = local.get('pendingTimer');
     if (command == null) return;
+    final expectedServer = local.get('pendingTimerServerId') ?? serverId;
+    final commandBase = base;
+    // Check the installation before replay, including commands from older clients.
+    final context = await request(
+      '/api/offline/connect',
+      body: {'deviceId': deviceId},
+    );
+    if (expectedServer == null ||
+        context['serverId'] != expectedServer ||
+        commandBase != base) {
+      throw ApiFailure(
+        'Команда принадлежит другой установке сервера. Исходник сохранён.',
+        409,
+      );
+    }
     try {
       final result = await request('/api/timer', body: object(command));
+      if (commandBase != base) {
+        throw StateError(
+          'Адрес сервера изменился. Команда сохранена для проверки.',
+        );
+      }
       local.atomic(() {
-        local.capture('timer', result);
+        _captureTimer(result);
         local.remove('pendingTimer');
+        local.remove('pendingTimerServerId');
+        local.remove('timerConflict');
       });
       notifyListeners();
     } on ApiFailure catch (e) {
-      if (e.status == 409) {
+      if ([400, 409, 422].contains(e.status)) {
         local.set('timerConflict', e.message);
+        final latest = await request('/api/timer');
+        if (commandBase != base) rethrow;
+        local.atomic(() {
+          final history = object(local.get('timerCommandHistory'));
+          history[object(object(command)['input'])['requestId'].toString()] = {
+            'command': command,
+            'serverId': expectedServer,
+            'status': 'rejected',
+            'httpStatus': e.status,
+            'error': e.message,
+            'at': DateTime.now().toUtc().toIso8601String(),
+          };
+          local.set('timerCommandHistory', history);
+          _captureTimer(latest);
+          local.remove('pendingTimer');
+          local.remove('pendingTimerServerId');
+          local.remove('timerConflict');
+        });
         notifyListeners();
       }
       rethrow;
@@ -622,14 +738,8 @@ class DashboardRepository extends ChangeNotifier {
   }
 
   Future<void> abandonTimerCommand() async {
-    if (local.get('pendingTimer') == null) return;
-    final result = await request('/api/timer');
-    local.atomic(() {
-      local.capture('timer', result);
-      local.remove('pendingTimer');
-      local.remove('timerConflict');
-    });
-    notifyListeners();
+    // Reconcile the immutable command instead of silently dropping it.
+    await checkPendingTimer();
   }
 
   Future<void> resolveConflict(Json item, {required bool apply}) async {

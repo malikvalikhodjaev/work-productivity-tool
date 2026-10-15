@@ -16,6 +16,8 @@ class CompactTimer extends StatelessWidget {
   final VoidCallback pause;
   final VoidCallback finish;
   final Widget checklist;
+  final bool busy;
+  final Widget? commandStatus;
 
   const CompactTimer({
     super.key,
@@ -25,6 +27,8 @@ class CompactTimer extends StatelessWidget {
     required this.pause,
     required this.finish,
     required this.checklist,
+    this.busy = false,
+    this.commandStatus,
   });
 
   @override
@@ -80,17 +84,21 @@ class CompactTimer extends StatelessWidget {
                 style: const TextStyle(color: Colors.white70),
               ),
               const SizedBox(height: 16),
+              ?commandStatus,
               Wrap(
                 spacing: 10,
                 runSpacing: 8,
                 children: [
                   FilledButton.tonal(
-                    onPressed: pause,
+                    onPressed: busy ? null : pause,
                     child: Text(
                       s['status'] == 'paused' ? 'Продолжить' : 'Пауза',
                     ),
                   ),
-                  FilledButton(onPressed: finish, child: const Text('Учесть')),
+                  FilledButton(
+                    onPressed: busy ? null : finish,
+                    child: const Text('Учесть'),
+                  ),
                 ],
               ),
             ],

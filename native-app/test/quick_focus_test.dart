@@ -10,6 +10,13 @@ import 'package:indicators_work/local_database.dart';
 import 'package:indicators_work/main.dart';
 import 'package:indicators_work/repository.dart';
 
+http.Client timerClient(Future<http.Response> Function(http.Request) handle) =>
+    MockClient(
+      (r) async => r.url.path == '/api/offline/connect'
+          ? http.Response(jsonEncode({'serverId': 'owner-server'}), 200)
+          : await handle(r),
+    );
+
 http.Response reply(LocalDatabase db, Json command) {
   final input = object(command['input']);
   final now = DateTime.now().millisecondsSinceEpoch;
@@ -68,7 +75,7 @@ void main() {
       final commands = <Json>[];
       final repo = DashboardRepository(
         db,
-        client: MockClient((r) async {
+        client: timerClient((r) async {
           final command = object(jsonDecode(r.body));
           commands.add(command);
           expect(db.get('pendingTimer'), command);
@@ -109,7 +116,7 @@ void main() {
       final commands = <Json>[];
       final repo = DashboardRepository(
         db,
-        client: MockClient((r) async {
+        client: timerClient((r) async {
           final command = object(jsonDecode(r.body));
           commands.add(command);
           return reply(db, command);
@@ -137,7 +144,7 @@ void main() {
       var requests = 0;
       final repo = DashboardRepository(
         db,
-        client: MockClient((_) async {
+        client: timerClient((_) async {
           requests++;
           return http.Response('{}', 500);
         }),
@@ -179,7 +186,7 @@ void main() {
     var requests = 0;
     final repo = DashboardRepository(
       db,
-      client: MockClient((r) async {
+      client: timerClient((r) async {
         requests++;
         await gate.future;
         return reply(db, object(jsonDecode(r.body)));
@@ -201,7 +208,7 @@ void main() {
     var lost = true;
     final repo = DashboardRepository(
       db,
-      client: MockClient((r) async {
+      client: timerClient((r) async {
         commands.add(r.body);
         if (lost) {
           lost = false;
@@ -220,7 +227,8 @@ void main() {
       repo.focusWork(ref: 'work:two', title: 'Другой фокус'),
       throwsStateError,
     );
-    expect(jsonEncode(db.get('pendingTimer')), pending);
+    expect(commands.last, pending);
+    expect(db.get('pendingTimer'), isNull);
     await repo.checkPendingTimer();
     expect(commands, hasLength(2));
     expect(commands[0], commands[1]);
@@ -245,7 +253,7 @@ void main() {
     });
     final repo = DashboardRepository(
       db,
-      client: MockClient((r) async => reply(db, object(jsonDecode(r.body)))),
+      client: timerClient((r) async => reply(db, object(jsonDecode(r.body)))),
     )..online = true;
     await tester.pumpWidget(
       DashboardApp(repo: repo, folder: '.', backgroundEnabled: false),
