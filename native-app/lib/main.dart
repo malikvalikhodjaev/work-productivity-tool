@@ -22,6 +22,8 @@ import 'reflection_hints.dart';
 import 'data_table.dart';
 import 'compact_timer.dart';
 import 'timer_command_notice.dart';
+import 'daily_problem_banner.dart';
+import 'project_review.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -107,6 +109,7 @@ class _DashboardHomeState extends State<DashboardHome>
   DashboardRepository get repo => widget.repo;
   late BackgroundRuntime background;
   final overlayAllowed = ValueNotifier(false);
+  final pageScroll = ScrollController();
   Timer? ticker;
   int section = 0;
   bool focusMode = false,
@@ -170,7 +173,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.6',
+        'clientVersion': '0.1.7',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -689,7 +692,10 @@ class _DashboardHomeState extends State<DashboardHome>
 
   Future<void> startTimer({String title = '', String? ref, Json? item}) async {
     if (ref != null) {
-      await safe(() => repo.focusWork(ref: ref, title: title, item: item));
+      await safe(() async {
+        await repo.focusWork(ref: ref, title: title, item: item);
+        if (repo.active?['workRef'] == ref) await revealMobilePlayer();
+      });
       return;
     }
     if (repo.active != null) {
@@ -712,6 +718,7 @@ class _DashboardHomeState extends State<DashboardHome>
       ).where((m) => m['unit'] == 'hours'))
         m['id'].toString(): m['title'].toString(),
     };
+    String? startedId;
     await editFields(
       context,
       title: 'Начать фокус',
@@ -805,14 +812,31 @@ class _DashboardHomeState extends State<DashboardHome>
           }
           repo.startLocal(start, independentConfirmed: confirmed);
         }
+        startedId = repo.active?['id']?.toString();
       },
     );
+    if (startedId != null && repo.active?['id'] == startedId) {
+      await revealMobilePlayer();
+    }
+  }
+
+  Future<void> revealMobilePlayer() async {
+    if (!mounted ||
+        (!Platform.isAndroid && MediaQuery.sizeOf(context).width >= 950)) {
+      return;
+    }
+    setState(() => section = 2);
+    await changeFocus(true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && pageScroll.hasClients) pageScroll.jumpTo(0);
+    });
   }
 
   Future<void> changeFocus(bool value) async {
     if (background.desktop?.compact == true) await background.show();
+    if (!mounted) return;
     setState(() => focusMode = value);
-    await background.focusMode(value);
+    if (widget.backgroundEnabled) await background.focusMode(value);
   }
 
   Future<void> focusSettings() async {
@@ -899,234 +923,239 @@ class _DashboardHomeState extends State<DashboardHome>
     final s = repo.active;
     final theme = (repo.local.get('theme') ?? 'green').toString();
     const colors = focusColors;
-    return Container(
-      padding: const EdgeInsets.all(26),
-      decoration: BoxDecoration(
-        color: colors[theme],
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: DefaultTextStyle(
-        style: const TextStyle(color: Colors.white, fontSize: 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    s == null
-                        ? 'Пространство для важного'
-                        : s['status'] == 'paused'
-                        ? 'Paused'
-                        : s['mode'] == 'pomodoro'
-                        ? 'Pomodoro'
-                        : 'Stopwatch',
-                    style: const TextStyle(color: Colors.white70),
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => changeFocus(!focusMode),
-                  icon: Icon(
-                    focusMode ? Icons.dashboard_outlined : Icons.open_in_full,
-                    color: Colors.white,
-                  ),
-                  tooltip: focusMode ? 'Все разделы' : 'Крупный таймер',
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              s == null ? '25:00' : clockOf(s, repo.now),
-              style: TextStyle(
-                fontSize: focusMode ? 88 : 68,
-                fontWeight: FontWeight.w500,
-                letterSpacing: -3,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              s == null ? 'Выбери карточку работы' : caption(s),
-              style: const TextStyle(fontSize: 17, height: 1.5),
-            ),
-            const SizedBox(height: 12),
-            if (s != null)
-              Text(
-                '${(elapsedMs(s, repo.now) / 60000).toStringAsFixed(1)} мин · ${repo.isLocal ? 'таймер устройства' : 'общий сеанс'}',
-                style: const TextStyle(color: Colors.white70),
-              ),
-            const SizedBox(height: 18),
-            PomodoroChecklist(
-              repo: repo,
-              compact: true,
-              focus: (ref, title) => startTimer(ref: ref, title: title),
-            ),
-            const SizedBox(height: 18),
-            TimerCommandNotice(
-              repo: repo,
-              retry: () => safe(repo.checkPendingTimer),
-            ),
-            Wrap(
-              spacing: 10,
-              runSpacing: 8,
-              children: [
-                if (s == null) ...[
-                  FilledButton(
-                    onPressed: () => startTimer(),
-                    child: const Text('Новая активность'),
-                  ),
-                  TextButton(
-                    onPressed: () => safe(startBreak),
-                    child: const Text(
-                      'Перерыв',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ] else ...[
-                  FilledButton.tonal(
-                    onPressed: repo.timerBusy
-                        ? null
-                        : () => safe(
-                            () => repo.timerAction(
-                              s['status'] == 'paused' ? 'resume' : 'pause',
-                            ),
-                          ),
+    return Material(
+      color: colors[theme],
+      borderRadius: BorderRadius.circular(24),
+      child: Padding(
+        padding: const EdgeInsets.all(26),
+        child: DefaultTextStyle(
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DailyProblemBanner(repo: repo, edit: editProblem),
+              Row(
+                children: [
+                  Expanded(
                     child: Text(
-                      s['status'] == 'paused' ? 'Продолжить' : 'Пауза',
+                      s == null
+                          ? 'Пространство для важного'
+                          : s['status'] == 'paused'
+                          ? 'Paused'
+                          : s['mode'] == 'pomodoro'
+                          ? 'Pomodoro'
+                          : 'Stopwatch',
+                      style: const TextStyle(color: Colors.white70),
                     ),
                   ),
-                  FilledButton(
-                    onPressed: repo.timerBusy ? null : finishTimer,
-                    child: const Text('Учесть'),
-                  ),
-                  TextButton(
-                    onPressed: repo.timerBusy ? null : cancelTimer,
-                    child: const Text(
-                      'Отменить',
-                      style: TextStyle(color: Colors.white70),
+                  IconButton(
+                    onPressed: () => changeFocus(!focusMode),
+                    icon: Icon(
+                      focusMode ? Icons.dashboard_outlined : Icons.open_in_full,
+                      color: Colors.white,
                     ),
+                    tooltip: focusMode ? 'Все разделы' : 'Крупный таймер',
                   ),
-                  if (s['mode'] == 'pomodoro')
+                ],
+              ),
+              const SizedBox(height: 12),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  s == null ? '25:00' : clockOf(s, repo.now),
+                  style: TextStyle(
+                    fontSize: focusMode ? 88 : 68,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: -3,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                s == null ? 'Выбери карточку работы' : caption(s),
+                style: const TextStyle(fontSize: 17, height: 1.5),
+              ),
+              const SizedBox(height: 12),
+              if (s != null)
+                Text(
+                  '${(elapsedMs(s, repo.now) / 60000).toStringAsFixed(1)} мин · ${repo.isLocal ? 'таймер устройства' : 'общий сеанс'}',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+              const SizedBox(height: 18),
+              PomodoroChecklist(
+                repo: repo,
+                compact: true,
+                focus: (ref, title) => startTimer(ref: ref, title: title),
+              ),
+              const SizedBox(height: 18),
+              TimerCommandNotice(
+                repo: repo,
+                retry: () => safe(repo.checkPendingTimer),
+              ),
+              Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                children: [
+                  if (s == null) ...[
+                    FilledButton(
+                      onPressed: () => startTimer(),
+                      child: const Text('Новая активность'),
+                    ),
                     TextButton(
-                      onPressed: repo.timerBusy
-                          ? null
-                          : () => safe(() => repo.timerAction('extend')),
+                      onPressed: () => safe(startBreak),
                       child: const Text(
-                        '＋ 5 мин',
+                        'Перерыв',
                         style: TextStyle(color: Colors.white),
                       ),
                     ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 14),
-            TextButton.icon(
-              onPressed: focusSettings,
-              icon: const Icon(Icons.tune, color: Colors.white70, size: 18),
-              label: const Text(
-                'Настройки таймера',
-                style: TextStyle(color: Colors.white70),
-              ),
-            ),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final name in colors.keys)
-                  ChoiceChip(
-                    label: Text(
-                      {
-                        'green': 'Зелень',
-                        'evening': 'Вечер',
-                        'desert': 'Пустыня',
-                        'lofi': 'Лофи',
-                      }[name]!,
-                    ),
-                    selected: theme == name,
-                    onSelected: (_) {
-                      repo.local.set('theme', name);
-                      setState(() {});
-                    },
-                  ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    initialValue: (repo.local.get('sound') ?? 'brown')
-                        .toString(),
-                    decoration: const InputDecoration(
-                      labelText: 'Фоновый звук',
-                      isDense: true,
-                    ),
-                    items:
-                        const {
-                              'white': 'Белый шум',
-                              'pink': 'Розовый шум',
-                              'brown': 'Коричневый шум',
-                              'rain': 'Дождь',
-                              'wind': 'Ветер',
-                              'lofi': 'Лофи',
-                            }.entries
-                            .map(
-                              (e) => DropdownMenuItem(
-                                value: e.key,
-                                child: Text(
-                                  e.value,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                  ] else ...[
+                    FilledButton.tonal(
+                      onPressed: repo.timerBusy
+                          ? null
+                          : () => safe(
+                              () => repo.timerAction(
+                                s['status'] == 'paused' ? 'resume' : 'pause',
                               ),
-                            )
-                            .toList(),
-                    onChanged: (value) {
-                      repo.local.set('sound', value);
+                            ),
+                      child: Text(
+                        s['status'] == 'paused' ? 'Продолжить' : 'Пауза',
+                      ),
+                    ),
+                    FilledButton(
+                      onPressed: repo.timerBusy ? null : finishTimer,
+                      child: const Text('Учесть'),
+                    ),
+                    TextButton(
+                      onPressed: repo.timerBusy ? null : cancelTimer,
+                      child: const Text(
+                        'Отменить',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                    if (s['mode'] == 'pomodoro')
+                      TextButton(
+                        onPressed: repo.timerBusy
+                            ? null
+                            : () => safe(() => repo.timerAction('extend')),
+                        child: const Text(
+                          '＋ 5 мин',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 14),
+              TextButton.icon(
+                onPressed: focusSettings,
+                icon: const Icon(Icons.tune, color: Colors.white70, size: 18),
+                label: const Text(
+                  'Настройки таймера',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final name in colors.keys)
+                    ChoiceChip(
+                      label: Text(
+                        {
+                          'green': 'Зелень',
+                          'evening': 'Вечер',
+                          'desert': 'Пустыня',
+                          'lofi': 'Лофи',
+                        }[name]!,
+                      ),
+                      selected: theme == name,
+                      onSelected: (_) {
+                        repo.local.set('theme', name);
+                        setState(() {});
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      initialValue: (repo.local.get('sound') ?? 'brown')
+                          .toString(),
+                      decoration: const InputDecoration(
+                        labelText: 'Фоновый звук',
+                        isDense: true,
+                      ),
+                      items:
+                          const {
+                                'white': 'Белый шум',
+                                'pink': 'Розовый шум',
+                                'brown': 'Коричневый шум',
+                                'rain': 'Дождь',
+                                'wind': 'Ветер',
+                                'lofi': 'Лофи',
+                              }.entries
+                              .map(
+                                (e) => DropdownMenuItem(
+                                  value: e.key,
+                                  child: Text(
+                                    e.value,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                      onChanged: (value) {
+                        repo.local.set('sound', value);
+                        unawaited(background.update());
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  IconButton(
+                    onPressed: () {
+                      repo.local.set(
+                        'soundEnabled',
+                        repo.local.get('soundEnabled') != true,
+                      );
+                      setState(() {});
                       unawaited(background.update());
                     },
+                    icon: Icon(
+                      repo.local.get('soundEnabled') == true
+                          ? Icons.volume_off_outlined
+                          : Icons.volume_up_outlined,
+                      color: Colors.white,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                IconButton(
-                  onPressed: () {
-                    repo.local.set(
-                      'soundEnabled',
-                      repo.local.get('soundEnabled') != true,
-                    );
-                    setState(() {});
-                    unawaited(background.update());
-                  },
-                  icon: Icon(
-                    repo.local.get('soundEnabled') == true
-                        ? Icons.volume_off_outlined
-                        : Icons.volume_up_outlined,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-            Slider(
-              value: (repo.local.get('volume') as num? ?? .2).toDouble(),
-              onChanged: (value) {
-                repo.local.set('volume', value);
-                setState(() {});
-                unawaited(background.update());
-              },
-            ),
-            if (Platform.isWindows && focusMode)
-              SwitchListTile(
-                title: const Text(
-                  'Поверх других окон',
-                  style: TextStyle(color: Colors.white),
-                ),
-                value: repo.local.get('pinFocus') == true,
+                ],
+              ),
+              Slider(
+                value: (repo.local.get('volume') as num? ?? .2).toDouble(),
                 onChanged: (value) {
-                  repo.local.set('pinFocus', value);
+                  repo.local.set('volume', value);
                   setState(() {});
-                  windowManager.setAlwaysOnTop(value);
+                  unawaited(background.update());
                 },
               ),
-          ],
+              if (Platform.isWindows && focusMode)
+                SwitchListTile(
+                  title: const Text(
+                    'Поверх других окон',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  value: repo.local.get('pinFocus') == true,
+                  onChanged: (value) {
+                    repo.local.set('pinFocus', value);
+                    setState(() {});
+                    windowManager.setAlwaysOnTop(value);
+                  },
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -1612,12 +1641,7 @@ class _DashboardHomeState extends State<DashboardHome>
   }
 
   Widget problemCard() {
-    final previous =
-        rows(repo.cache('problems')['entries'])
-            .where((p) => p['date'] == today())
-            .firstOrNull ??
-        <String, dynamic>{};
-    final problem = repo.entity('problem:${today()}', previous);
+    final problem = repo.todayProblem;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -1630,30 +1654,14 @@ class _DashboardHomeState extends State<DashboardHome>
             ),
             const SizedBox(height: 10),
             Text(
-              (problem['text'] ?? 'No Data').toString(),
+              repo.todayProblemText,
               style: const TextStyle(fontSize: 19, height: 1.5),
             ),
             const SizedBox(height: 12),
             Wrap(
               children: [
                 TextButton(
-                  onPressed: () => editFields(
-                    context,
-                    title: 'What is the biggest problem today?',
-                    initial: {'text': problem['text'] ?? ''},
-                    fields: const [
-                      FieldSpec(
-                        'text',
-                        'Разрыв между желаемым и текущим',
-                        lines: 5,
-                      ),
-                    ],
-                    draft: (input) =>
-                        repo.local.set('problemComposer:${today()}', input),
-                    save: (input) async {
-                      repo.saveProblem(today(), input['text'].toString());
-                    },
-                  ),
+                  onPressed: editProblem,
                   child: const Text('Записать / уточнить'),
                 ),
                 if (problem['caseRef'] != null)
@@ -1671,6 +1679,22 @@ class _DashboardHomeState extends State<DashboardHome>
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> editProblem() async {
+    final day = today();
+    await editFields(
+      context,
+      title: 'What is the biggest problem today?',
+      initial: {'text': repo.todayProblem['text'] ?? ''},
+      fields: const [
+        FieldSpec('text', 'Разрыв между желаемым и текущим', lines: 5),
+      ],
+      draft: (input) => repo.local.set('problemComposer:$day', input),
+      save: (input) async {
+        repo.saveProblem(day, input['text'].toString());
+      },
     );
   }
 
@@ -1724,6 +1748,13 @@ class _DashboardHomeState extends State<DashboardHome>
   }
 
   Future<void> measureGoal(Json goal) async {
+    if ((goal['unit'] ?? '').toString().trim().isEmpty) {
+      message(
+        'Сначала укажи единицу шкалы. Для денег — валюту и период, например USD / месяц.',
+      );
+      await editGoal(goal);
+      return;
+    }
     await editFields(
       context,
       title: 'Замер · ${goal['title']}',
@@ -1763,6 +1794,20 @@ class _DashboardHomeState extends State<DashboardHome>
             child: const Text('＋ Цель'),
           ),
         ),
+        const ExpansionTile(
+          title: Text('Как вводить и читать показатели'),
+          children: [
+            Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Руководства: часы чтения и применения — отдельные нормы. Прорыв фиксируется по применённой идее и подтверждённому изменению в проекте, карьере или результате; свидетельство записывается в замере.\n\n'
+                'Выручка — платежи клиентов. Прибыль бизнеса — выручка минус расходы. Личный доход — полученное себе. Для каждого денежного показателя укажи валюту и период; в месячном замере записывай итог выбранного месяца.\n\n'
+                'Сон: записывай часы за ночь на дату пробуждения. Минимум указан в карточке нормы.\n\n'
+                'Для прогресса цели нужны база, цель и текущий замер. Пока шкала не определена — No Data. Дата под карточкой показывает, к какому моменту относится последний факт.',
+              ),
+            ),
+          ],
+        ),
         if (goals.isEmpty)
           const Text('No Data · задай цель, шкалу и текущий замер.'),
         Wrap(
@@ -1782,6 +1827,13 @@ class _DashboardHomeState extends State<DashboardHome>
                         g['percent'],
                         unit: (g['unit'] ?? '').toString(),
                         onTap: () => measureGoal(g),
+                      ),
+                      Text(
+                        'Последний замер: ${object(g['measurement'])['date'] ?? 'No Data'}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xff727780),
+                        ),
                       ),
                       Row(
                         children: [
@@ -2142,6 +2194,11 @@ class _DashboardHomeState extends State<DashboardHome>
   Widget projectsPage() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
+      ProjectReview(
+        repo: repo,
+        openAlpha: (project, alpha) => editAlpha(project, alpha),
+      ),
+      const SizedBox(height: 20),
       sectionTitle(
         'Проекты и моделер',
         trailing: TextButton(
@@ -2530,6 +2587,7 @@ class _DashboardHomeState extends State<DashboardHome>
               padding: const EdgeInsets.all(12),
               children: [
                 CompactTimer(
+                  dailyProblem: DailyProblemBanner(repo: repo, compact: true),
                   busy: repo.timerBusy,
                   commandStatus: TimerCommandNotice(
                     repo: repo,
@@ -2614,7 +2672,7 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'I&W · Native 0.1.6',
+                          'I&W · Native 0.1.7',
                           style: TextStyle(fontSize: 11),
                         ),
                       ],
@@ -2623,6 +2681,7 @@ class _DashboardHomeState extends State<DashboardHome>
                 ),
               Expanded(
                 child: ListView(
+                  controller: pageScroll,
                   padding: EdgeInsets.all(wide ? 28 : 16),
                   children: [
                     if (!wide && !focusMode)
@@ -2678,6 +2737,7 @@ class _DashboardHomeState extends State<DashboardHome>
     repo.removeListener(changed);
     WidgetsBinding.instance.removeObserver(this);
     overlayAllowed.dispose();
+    pageScroll.dispose();
     if (widget.backgroundEnabled && Platform.isWindows) {
       windowManager.removeListener(this);
     }

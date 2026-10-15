@@ -18,6 +18,7 @@ class CompactTimer extends StatelessWidget {
   final Widget checklist;
   final bool busy;
   final Widget? commandStatus;
+  final Widget? dailyProblem;
 
   const CompactTimer({
     super.key,
@@ -29,6 +30,7 @@ class CompactTimer extends StatelessWidget {
     required this.checklist,
     this.busy = false,
     this.commandStatus,
+    this.dailyProblem,
   });
 
   @override
@@ -45,6 +47,7 @@ class CompactTimer extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            ?dailyProblem,
             Text(
               s == null
                   ? 'Сеанс завершён'

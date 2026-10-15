@@ -201,6 +201,11 @@ class FocusService : Service() {
                     request.connectTimeout=7000;request.readTimeout=7000;request.setRequestProperty("Origin",url)
                     JSONObject(request.getInputStream().bufferedReader().use{it.readText()})
                 }catch(_:Exception){null}
+                val problems=try {
+                    val request=URL("$url/api/daily-problems").openConnection()
+                    request.connectTimeout=7000;request.readTimeout=7000;request.setRequestProperty("Origin",url)
+                    JSONObject(request.getInputStream().bufferedReader().use{it.readText()})
+                }catch(_:Exception){null}
                 handler.post{
                     if(destroyed||snapshot.optBoolean("local")!=localAtRequest||snapshot.optString("serverUrl")!=url)return@post
                     if(state!=null&&state.optLong("revision")>=snapshot.optLong("timerRevision")){
@@ -211,6 +216,16 @@ class FocusService : Service() {
                         snapshot.put("pomodoroTargets",plans.optJSONArray("pomodoroTargets"))
                         snapshot.put("pomodoroCounts",plans.optJSONObject("pomodoroPlan")?.optJSONArray("targets"))
                         snapshot.put("pomodoroDay",plans.optString("today"))
+                    }
+                    if(!snapshot.optBoolean("problemLocalChanges")&&problems!=null){
+                        val day=date(System.currentTimeMillis())
+                        val entries=problems.optJSONArray("entries")?:JSONArray()
+                        var problemText=""
+                        for(i in 0 until entries.length()) {
+                            val entry=entries.getJSONObject(i)
+                            if(entry.optString("date")==day)problemText=entry.optString("text","")
+                        }
+                        snapshot.put("dailyProblem",JSONObject().put("date",day).put("loaded",true).put("text",problemText))
                     }
                     snapshot.put("planOnline",plans!=null)
                     getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString("snapshot",snapshot.toString()).apply()

@@ -68,108 +68,132 @@ Future<bool> editFields(
 
   final result = await showDialog<bool>(
     context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: Text(title),
-        content: SizedBox(
-          width: 580,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final field in fields)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: field.options == null
-                        ? TextField(
-                            controller: controllers[field.key],
-                            maxLines: field.lines,
-                            minLines: field.lines > 1 ? 2 : 1,
-                            keyboardType: field.numeric || field.integer
-                                ? const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                    signed: true,
+    builder: (context) => _FormControllerOwner(
+      controllers: controllers,
+      child: StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(title),
+          content: SizedBox(
+            width: 580,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final field in fields)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: field.options == null
+                          ? TextField(
+                              controller: controllers[field.key],
+                              maxLines: field.lines,
+                              minLines: field.lines > 1 ? 2 : 1,
+                              keyboardType: field.numeric || field.integer
+                                  ? const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                      signed: true,
+                                    )
+                                  : TextInputType.multiline,
+                              decoration: InputDecoration(
+                                labelText: field.label,
+                                alignLabelWithHint: true,
+                              ),
+                              onChanged: (_) {
+                                try {
+                                  draft?.call(collect());
+                                } catch (_) {
+                                  draft?.call({
+                                    ...values,
+                                    ...controllers.map(
+                                      (k, c) => MapEntry(k, c.text),
+                                    ),
+                                  });
+                                }
+                              },
+                            )
+                          : DropdownButtonFormField<String>(
+                              initialValue:
+                                  field.options!.containsKey(
+                                    values[field.key]?.toString(),
                                   )
-                                : TextInputType.multiline,
-                            decoration: InputDecoration(
-                              labelText: field.label,
-                              alignLabelWithHint: true,
+                                  ? values[field.key]?.toString()
+                                  : field.options!.keys.firstOrNull,
+                              hint: const Text('No Data'),
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                labelText: field.label,
+                              ),
+                              items: field.options!.entries
+                                  .map(
+                                    (e) => DropdownMenuItem(
+                                      value: e.key,
+                                      child: Text(e.value),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) {
+                                setState(() => values[field.key] = value);
+                                try {
+                                  draft?.call(collect());
+                                } catch (_) {}
+                              },
                             ),
-                            onChanged: (_) {
-                              try {
-                                draft?.call(collect());
-                              } catch (_) {
-                                draft?.call({
-                                  ...values,
-                                  ...controllers.map(
-                                    (k, c) => MapEntry(k, c.text),
-                                  ),
-                                });
-                              }
-                            },
-                          )
-                        : DropdownButtonFormField<String>(
-                            initialValue:
-                                field.options!.containsKey(
-                                  values[field.key]?.toString(),
-                                )
-                                ? values[field.key]?.toString()
-                                : field.options!.keys.firstOrNull,
-                            hint: const Text('No Data'),
-                            isExpanded: true,
-                            decoration: InputDecoration(labelText: field.label),
-                            items: field.options!.entries
-                                .map(
-                                  (e) => DropdownMenuItem(
-                                    value: e.key,
-                                    child: Text(e.value),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              setState(() => values[field.key] = value);
-                              try {
-                                draft?.call(collect());
-                              } catch (_) {}
-                            },
-                          ),
-                  ),
-                if (error != null)
-                  Text(error!, style: const TextStyle(color: Colors.red)),
-              ],
+                    ),
+                  if (error != null)
+                    Text(error!, style: const TextStyle(color: Colors.red)),
+                ],
+              ),
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(context, false),
+              child: const Text('Закрыть'),
+            ),
+            FilledButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      setState(() => saving = true);
+                      try {
+                        await save(collect());
+                        if (context.mounted) Navigator.pop(context, true);
+                      } catch (e) {
+                        setState(() {
+                          error = e.toString();
+                          saving = false;
+                        });
+                      }
+                    },
+              child: Text(saving ? progressLabel : submitLabel),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: saving ? null : () => Navigator.pop(context, false),
-            child: const Text('Закрыть'),
-          ),
-          FilledButton(
-            onPressed: saving
-                ? null
-                : () async {
-                    setState(() => saving = true);
-                    try {
-                      await save(collect());
-                      if (context.mounted) Navigator.pop(context, true);
-                    } catch (e) {
-                      setState(() {
-                        error = e.toString();
-                        saving = false;
-                      });
-                    }
-                  },
-            child: Text(saving ? progressLabel : submitLabel),
-          ),
-        ],
       ),
     ),
   );
-  for (final controller in controllers.values) {
-    controller.dispose();
-  }
   return result ?? false;
+}
+
+/// Dialog pop completes before its reverse animation unmounts the fields.
+/// Keep their controllers alive until the route's widget is actually disposed.
+class _FormControllerOwner extends StatefulWidget {
+  final Map<String, TextEditingController> controllers;
+  final Widget child;
+  const _FormControllerOwner({required this.controllers, required this.child});
+  @override
+  State<_FormControllerOwner> createState() => _FormControllerOwnerState();
+}
+
+class _FormControllerOwnerState extends State<_FormControllerOwner> {
+  @override
+  Widget build(BuildContext context) => widget.child;
+  @override
+  void dispose() {
+    for (final controller in widget.controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
 }
 
 Widget metricCard(

@@ -99,6 +99,12 @@ class BackgroundRuntime {
     final volume = (repo.local.get('volume') as num? ?? .2).toDouble();
     final payload = {
       'active': s,
+      'dailyProblem': {
+        'date': today(),
+        'loaded': repo.todayProblemLoaded,
+        'text': repo.todayProblem['text'],
+      },
+      'problemLocalChanges': repo.local.draft('problem:${today()}') != null,
       'local': repo.isLocal,
       'timerRevision': repo.cache('timer')['revision'] ?? 0,
       'serverUrl': repo.base,

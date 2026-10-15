@@ -62,6 +62,24 @@ class DashboardRepository extends ChangeNotifier {
   String? get serverId => local.get('serverId') as String?;
   String get deviceId => local.get('deviceId') as String;
   Json cache(String key) => local.snapshot(key);
+  Json get todayProblem {
+    final day = today();
+    final saved = rows(cache('problems')['entries'])
+        .where((entry) => entry['date'] == day)
+        .firstOrNull;
+    return entity('problem:$day', saved ?? <String, dynamic>{});
+  }
+
+  bool get todayProblemLoaded =>
+      cache('problems').isNotEmpty || local.draft('problem:${today()}') != null;
+  String get todayProblemText {
+    if (!todayProblemLoaded) return 'No Data · проблема дня ещё не загружена';
+    final text = (todayProblem['text'] ?? '').toString();
+    return text.trim().isEmpty
+        ? 'Главная проблема на сегодня не записана'
+        : text;
+  }
+
   List<Json> get pending => local.queue;
   Json? get localActive =>
       local.get('localActive') is Map ? object(local.get('localActive')) : null;

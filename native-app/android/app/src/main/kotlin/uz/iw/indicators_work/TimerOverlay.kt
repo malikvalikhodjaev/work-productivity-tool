@@ -7,6 +7,7 @@ import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.provider.Settings
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.WindowManager
@@ -24,6 +25,7 @@ class TimerOverlay(private val context: Context) {
     private val preferences = context.getSharedPreferences(FocusService.PREFS, Context.MODE_PRIVATE)
     private var root: LinearLayout? = null
     private var clock: TextView? = null
+    private var problem: TextView? = null
     private var title: TextView? = null
     private var plan: TextView? = null
     private var source: TextView? = null
@@ -47,6 +49,14 @@ class TimerOverlay(private val context: Context) {
         sessionId = active.optString("id")
         if (root == null && !attach()) return
         val now = System.currentTimeMillis() + if (snapshot.optBoolean("local")) 0 else snapshot.optLong("serverOffset")
+        val problemData = snapshot.optJSONObject("dailyProblem")
+        val problemText = problemData?.opt("text")?.takeIf { it != JSONObject.NULL }?.toString() ?: ""
+        problem?.text = "Главная проблема на сегодня\n" + when {
+            problemData == null || problemData.optString("date") != FocusService.date(now) || !problemData.optBoolean("loaded") ->
+                "No Data · проблема дня ещё не загружена"
+            problemText.isBlank() -> "Главная проблема на сегодня не записана"
+            else -> problemText
+        }
         val elapsed = FocusService.elapsed(active, now)
         val seconds = (if (active.optString("mode") == "pomodoro")
             max(0L, active.optLong("plannedMs") - elapsed) else elapsed) / 1000
@@ -112,6 +122,11 @@ class TimerOverlay(private val context: Context) {
         }
         header.addView(close, LinearLayout.LayoutParams(dp(44), dp(44)))
         panel.addView(header)
+        problem = text(12f).apply {
+            maxLines = 4; ellipsize = TextUtils.TruncateAt.END
+            setPadding(0, dp(4), 0, dp(10))
+        }
+        panel.addView(problem)
         clock = text(38f).apply {
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setOnClickListener { openApp() }
@@ -163,6 +178,6 @@ class TimerOverlay(private val context: Context) {
 
     fun remove() {
         root?.let { try { manager.removeView(it) } catch (_: IllegalArgumentException) { } }
-        root = null; clock = null; title = null; plan = null; source = null
+        root = null; clock = null; problem = null; title = null; plan = null; source = null
     }
 }
