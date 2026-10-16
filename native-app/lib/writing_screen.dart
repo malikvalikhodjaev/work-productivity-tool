@@ -51,7 +51,11 @@ class _WritingScreenState extends State<WritingScreen> {
   bool converting = false;
   String status = '';
   bool showTrash = false;
+  bool showFavorites = false;
   DashboardRepository get repo => widget.repo;
+  bool get favorite => repo.writingEntries.any(
+    (entry) => entry['id'] == selected && entry['favorite'] == true,
+  );
   bool get inTrash =>
       selected != null &&
       repo.writingEntries.any(
@@ -123,6 +127,7 @@ class _WritingScreenState extends State<WritingScreen> {
     'title': title.text,
     'date': date.text,
     'status': mode,
+    'favorite': favorite,
     'document': editorDocument({
       'ops': controller.document.toDelta().toJson(),
     }, toServer: true),
@@ -157,6 +162,7 @@ class _WritingScreenState extends State<WritingScreen> {
   Widget build(BuildContext context) {
     final source = repo.writingEntries
         .where((a) => (a['trashedAt'] != null) == showTrash)
+        .where((a) => !showFavorites || a['favorite'] == true)
         .toList();
     final trashed = inTrash;
     controller.readOnly = trashed;
@@ -173,6 +179,7 @@ class _WritingScreenState extends State<WritingScreen> {
         FilledButton.icon(
           onPressed: () {
             showTrash = false;
+            showFavorites = false;
             open({'id': uuid.v4(), 'date': today(), 'status': 'draft'});
           },
           icon: const Icon(Icons.add),
@@ -187,13 +194,26 @@ class _WritingScreenState extends State<WritingScreen> {
           onPressed: () => setState(() {
             month = null;
             showTrash = false;
+            showFavorites = false;
           }),
           child: const Text('Все записи'),
         ),
         TextButton.icon(
           onPressed: () => setState(() {
+            showTrash = false;
+            showFavorites = true;
+            month = null;
+          }),
+          icon: const Icon(Icons.star_outline),
+          label: Text(
+            'Избранное · ${repo.writingEntries.where((a) => a['favorite'] == true && a['trashedAt'] == null).length}',
+          ),
+        ),
+        TextButton.icon(
+          onPressed: () => setState(() {
             month = null;
             showTrash = true;
+            showFavorites = false;
           }),
           icon: const Icon(Icons.delete_outline),
           label: Text(
@@ -205,6 +225,7 @@ class _WritingScreenState extends State<WritingScreen> {
             onPressed: () => setState(() {
               month = m['month'].toString();
               showTrash = false;
+              showFavorites = false;
             }),
             child: Text('${m['month']} · ${m['count']}'),
           ),
@@ -215,6 +236,9 @@ class _WritingScreenState extends State<WritingScreen> {
             )
             .map(
               (a) => ListTile(
+                leading: a['favorite'] == true
+                    ? const Icon(Icons.star, size: 18)
+                    : null,
                 selected: selected == a['id'],
                 title: Text(
                   (a['title'] ?? '').toString().isEmpty
@@ -348,6 +372,34 @@ class _WritingScreenState extends State<WritingScreen> {
                             }
                           },
                     child: const Text('Сохранить'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed:
+                        trashed ||
+                            repo.pending.any(
+                              (p) =>
+                                  p['entity'] == 'writing:$selected' &&
+                                  (p['attempted'] == 1 ||
+                                      object(p['body'])['action'] != 'save'),
+                            )
+                        ? null
+                        : () {
+                            try {
+                              persistDraft();
+                              repo.saveWriting({
+                                ...article(),
+                                'favorite': !favorite,
+                              });
+                              setState(
+                                () => status =
+                                    'Метка избранного сохранена на устройстве',
+                              );
+                            } catch (e) {
+                              setState(() => status = e.toString());
+                            }
+                          },
+                    icon: Icon(favorite ? Icons.star : Icons.star_outline),
+                    label: Text(favorite ? 'В избранном' : 'В избранное'),
                   ),
                   OutlinedButton.icon(
                     onPressed: pendingWriting

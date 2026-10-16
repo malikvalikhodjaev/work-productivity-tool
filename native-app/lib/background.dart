@@ -109,6 +109,8 @@ class BackgroundRuntime {
       },
       'problemLocalChanges': repo.local.draft('problem:${today()}') != null,
       'local': repo.isLocal,
+      'timerLocalChanges': repo.timerPending,
+      'automaticSync': repo.automaticSync,
       'timerRevision': repo.cache('timer')['revision'] ?? 0,
       'serverUrl': repo.base,
       'serverOffset': repo.local.get('serverOffset') ?? 0,

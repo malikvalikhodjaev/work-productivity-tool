@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'domain.dart';
 import 'local_database.dart';
 import 'pomodoro_plan.dart';
+import 'durable_timer.dart';
 
 class ApiFailure implements Exception {
   final String message;
@@ -26,7 +27,9 @@ class DashboardRepository extends ChangeNotifier {
   bool _sharedActionInFlight = false;
   Future<void>? _timerCheck;
   bool get timerBusy => _sharedActionInFlight || _timerCheck != null;
-  bool get timerPending => local.get('pendingTimer') != null;
+  bool get timerPending =>
+      local.get('pendingTimer') != null ||
+      pending.any((q) => q['route'] == '/api/timer');
   String status = 'Локальное хранилище готово';
   DashboardRepository(this.local, {http.Client? client})
     : _http = client ?? http.Client();
@@ -61,7 +64,24 @@ class DashboardRepository extends ChangeNotifier {
 
   String? get serverId => local.get('serverId') as String?;
   String get deviceId => local.get('deviceId') as String;
-  Json cache(String key) => local.snapshot(key);
+  Json cache(String key) =>
+      key == 'timer' && local.get('optimisticTimer') is Map
+      ? object(local.get('optimisticTimer'))
+      : local.snapshot(key);
+  bool get durableTimer =>
+      local.get('durableTimerEnabled') == true ||
+      cache('timer')['offlineCommands'] == true;
+  bool get automaticSync => local.get('automaticSync') != false;
+  void setAutomaticSync(bool enabled) {
+    local.set('automaticSync', enabled);
+    notifyListeners();
+    if (enabled) requestAutoSync();
+  }
+
+  void requestAutoSync() {
+    if (automaticSync) unawaited(synchronize());
+  }
+
   Json get todayProblem {
     final day = today();
     final saved = rows(cache('problems')['entries'])
@@ -125,7 +145,9 @@ class DashboardRepository extends ChangeNotifier {
     focusStarting = true;
     notifyListeners();
     try {
-      if (!isLocal && timerPending && online) await _recoverTimerCommand();
+      if (!durableTimer && !isLocal && timerPending && online) {
+        await _recoverTimerCommand();
+      }
       final s = active;
       if (s != null) {
         if (s['workRef'] != ref) {
@@ -141,7 +163,8 @@ class DashboardRepository extends ChangeNotifier {
           .firstOrNull;
       final source = item ?? local.draft(ref) ?? known ?? <String, dynamic>{};
       if (title.trim().isEmpty) throw ArgumentError('Сначала назови работу.');
-      if (timerStrategy == 'shared' &&
+      if (!durableTimer &&
+          timerStrategy == 'shared' &&
           local.draft(ref) != null &&
           known == null) {
         throw StateError(
@@ -171,12 +194,13 @@ class DashboardRepository extends ChangeNotifier {
   }
 
   void startPolling() {
+    local.set('durableTimerEnabled', true);
     _poll?.cancel();
     _poll = Timer.periodic(
       const Duration(seconds: 30),
-      (_) => unawaited(synchronize()),
+      (_) => requestAutoSync(),
     );
-    unawaited(synchronize());
+    requestAutoSync();
   }
 
   void setBase(String value) {
@@ -230,6 +254,7 @@ class DashboardRepository extends ChangeNotifier {
 
   Future<void> synchronize() async {
     if (syncing) return;
+    final syncBase = base;
     syncing = true;
     notifyListeners();
     try {
@@ -246,8 +271,11 @@ class DashboardRepository extends ChangeNotifier {
       if (serverId == null) local.set('serverId', context['serverId']);
       local.capture('context', context);
       online = true;
-      if (timerPending) await _recoverTimerCommand();
+      if (local.get('pendingTimer') != null) await _recoverTimerCommand();
       for (final queued in pending) {
+        if (base != syncBase) {
+          throw StateError('Адрес изменён. Очередь сохранена для проверки.');
+        }
         final item = local.queue.firstWhere((q) => q['id'] == queued['id']);
         if (item['state'] == 'conflict') break;
         if (item['server_id'] != serverId) {
@@ -257,13 +285,47 @@ class DashboardRepository extends ChangeNotifier {
           );
           break;
         }
+        if (item['route'] == '/api/timer' &&
+            context['offlineCommands'] != true) {
+          throw StateError(
+            'Обнови сервер до версии 1.16.0. Записанное время осталось на устройстве.',
+          );
+        }
         local.attempted(item['id'] as String);
         try {
           final response = await request(
             item['route'] as String,
             body: object(item['body']),
           );
+          if (base != syncBase) {
+            throw StateError(
+              'Адрес изменён. Подтверждение сохранения будет проверено при следующей связи.',
+            );
+          }
           local.atomic(() {
+            if (item['route'] == '/api/timer') {
+              _captureTimer(response);
+              final receipts = object(local.get('timerCommandReceipts'));
+              receipts[item['id'].toString()] = {
+                'command': item['body'],
+                'serverId': serverId,
+                'acknowledgedAt': DateTime.now().toUtc().toIso8601String(),
+                'revision': response['revision'],
+              };
+              local.set('timerCommandReceipts', receipts);
+              if (object(item['body'])['action'] == 'finish') {
+                final id = object(object(item['body'])['input'])['sessionId'];
+                final session = rows(cache('timer')['sessions'])
+                    .where((s) => s['id'] == id)
+                    .firstOrNull;
+                final fact = session == null ? null : pomodoroFact(session);
+                if (fact != null) {
+                  final accepted = object(local.get('acceptedPomodoroFacts'));
+                  accepted[id.toString()] = fact;
+                  local.set('acceptedPomodoroFacts', accepted);
+                }
+              }
+            }
             if (item['route'] == '/api/offline/import' &&
                 object(response['receipt'])['status'] == 'accepted') {
               final fact = pomodoroFact(
@@ -312,9 +374,13 @@ class DashboardRepository extends ChangeNotifier {
             }
           });
           local.acknowledge(item['id'] as String);
+          _clearTimerProjectionIfAcknowledged();
         } on ApiFailure catch (e) {
           if (e.status >= 400 && e.status < 500) {
             local.conflict(item['id'] as String, e.message);
+            if (item['route'] == '/api/timer') {
+              local.set('timerChainConflict', true);
+            }
             break;
           }
           rethrow;
@@ -325,6 +391,9 @@ class DashboardRepository extends ChangeNotifier {
           (entry) async => MapEntry(entry.key, await request(entry.value)),
         ),
       );
+      if (base != syncBase) {
+        throw StateError('Адрес изменён. Локальные данные сохранены.');
+      }
       local.atomic(() {
         for (final entry in values) {
           if (entry.key == 'timer') {
@@ -350,10 +419,15 @@ class DashboardRepository extends ChangeNotifier {
       });
       status = pending.any((q) => q['state'] == 'conflict')
           ? 'Нужен разбор очереди'
+          : pending.isNotEmpty
+          ? 'Сохранено на устройстве · ожидает отправки: ${pending.length}'
           : 'Синхронизировано · ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}';
+      local.set('lastSyncAt', DateTime.now().toUtc().toIso8601String());
+      local.remove('lastSyncError');
     } catch (e) {
       online = false;
-      status = e.toString();
+      local.set('lastSyncError', e.toString());
+      status = 'Нет связи с сервером · изменения сохранены на устройстве';
     } finally {
       syncing = false;
       notifyListeners();
@@ -394,7 +468,7 @@ class DashboardRepository extends ChangeNotifier {
     }, draft: projected);
     status = 'Сохранено на устройстве · ожидает синхронизации';
     notifyListeners();
-    unawaited(synchronize());
+    requestAutoSync();
   }
 
   String saveProblem(String date, String text) {
@@ -439,7 +513,7 @@ class DashboardRepository extends ChangeNotifier {
       });
     }
     notifyListeners();
-    unawaited(synchronize());
+    requestAutoSync();
     return ref;
   }
 
@@ -556,7 +630,28 @@ class DashboardRepository extends ChangeNotifier {
     };
     for (final session in rows(cache('timer')['sessions'])) {
       final fact = pomodoroFact(session);
-      if (fact != null) facts[session['id'].toString()] = fact;
+      final queued = pending
+          .where(
+            (q) =>
+                q['route'] == '/api/timer' &&
+                object(q['body'])['action'] == 'finish' &&
+                object(object(q['body'])['input'])['sessionId'] ==
+                    session['id'],
+          )
+          .firstOrNull;
+      if (queued != null &&
+          (local.get('timerChainConflict') == true ||
+              pending.any(
+                (q) => q['route'] == '/api/timer' && q['state'] == 'conflict',
+              ))) {
+        continue;
+      }
+      if (fact != null && queued?['state'] != 'conflict') {
+        facts[session['id'].toString()] = {
+          ...fact,
+          if (queued != null) 'pending': true,
+        };
+      }
     }
     final confirmedIds = rows(cache('entries')['entries'])
         .map((e) => e['timerSessionId'])
@@ -607,6 +702,10 @@ class DashboardRepository extends ChangeNotifier {
   }
 
   Future<void> sharedAction(String action, Json input) async {
+    if (durableTimer) {
+      _queueSharedAction(action, input);
+      return;
+    }
     if (_sharedActionInFlight) return;
     if (isLocal) throw StateError('Сначала заверши таймер этого устройства.');
     if (!online) {
@@ -677,9 +776,69 @@ class DashboardRepository extends ChangeNotifier {
 
   void _captureTimer(Json result) {
     if ((result['revision'] as int? ?? 0) >=
-        (cache('timer')['revision'] as int? ?? 0)) {
+        (local.snapshot('timer')['revision'] as int? ?? 0)) {
       local.capture('timer', result);
     }
+  }
+
+  void _clearTimerProjectionIfAcknowledged() {
+    if (!pending.any((q) => q['route'] == '/api/timer') &&
+        local.get('pendingTimer') == null) {
+      local.remove('optimisticTimer');
+      local.remove('timerChainConflict');
+    }
+  }
+
+  void _queueSharedAction(String action, Json input) {
+    if (isLocal) {
+      throw StateError('Сначала заверши таймер этого устройства.');
+    }
+    if (serverId == null) {
+      throw StateError('Один раз подключи приложение к своему серверу.');
+    }
+    final before = cache('timer');
+    final current = before['active'] is Map ? object(before['active']) : null;
+    if (action == 'pause' && current?['status'] == 'paused' ||
+        action == 'resume' && current?['status'] == 'running') {
+      return;
+    }
+    final at = now;
+    final id = uuid.v4();
+    final fields = <String, dynamic>{
+      ...input,
+      'requestId': id,
+      'expectedRevision': before['revision'] ?? 0,
+      'occurredAt': at,
+      if (['start', 'startBreak'].contains(action)) 'newSessionId': uuid.v4(),
+    };
+    final projected = projectTimer(before, action, fields, at);
+    // Command, complete projected session and screen state survive one SQLite transaction.
+    local.atomic(() {
+      local.db.execute(
+        'INSERT INTO outbox(id,entity,route,body,server_id,created) VALUES(?,?,?,?,?,?)',
+        [
+          id,
+          'timer:$id',
+          '/api/timer',
+          jsonEncode({'action': action, 'input': fields}),
+          serverId,
+          local.nextOrder(),
+        ],
+      );
+      local.set('optimisticTimer', projected);
+      if (['finish', 'cancel'].contains(action)) {
+        final completed = rows(projected['sessions'])
+            .firstWhere((s) => s['id'] == fields['sessionId']);
+        final history = rows(local.get('sharedLocalHistory'))
+            .where((s) => s['id'] != completed['id'])
+            .toList();
+        local.set('sharedLocalHistory', [...history, completed]);
+      }
+      local.set('lastLocalSaveAt', DateTime.now().toUtc().toIso8601String());
+    });
+    status = 'Сохранено на устройстве · ожидает синхронизации';
+    notifyListeners();
+    requestAutoSync();
   }
 
   Future<void> _recoverTimerCommand() async {
@@ -692,6 +851,9 @@ class DashboardRepository extends ChangeNotifier {
   }
 
   Future<void> checkPendingTimer() {
+    if (durableTimer && local.get('pendingTimer') == null) {
+      return synchronize();
+    }
     if (_timerCheck != null) return _timerCheck!;
     if (!timerPending) return Future.value();
     final operation = _sendPendingTimer().whenComplete(() {
@@ -734,6 +896,7 @@ class DashboardRepository extends ChangeNotifier {
         local.remove('pendingTimerServerId');
         local.remove('timerConflict');
       });
+      _clearTimerProjectionIfAcknowledged();
       notifyListeners();
     } on ApiFailure catch (e) {
       if ([400, 409, 422].contains(e.status)) {
@@ -770,11 +933,17 @@ class DashboardRepository extends ChangeNotifier {
   Future<void> resolveConflict(Json item, {required bool apply}) async {
     if (!apply) {
       local.resolve(item['id'].toString());
+      _clearTimerProjectionIfAcknowledged();
       notifyListeners();
-      unawaited(synchronize());
+      requestAutoSync();
       return;
     }
     final body = object(item['body']);
+    if (item['route'] == '/api/timer') {
+      throw StateError(
+        'Команды времени нельзя применять поверх другого сеанса. Сохрани исходник локально или повтори исходную команду.',
+      );
+    }
     final input = object(body['input']);
     Json? current;
     if (item['route'] == '/api/writing') {
@@ -888,7 +1057,7 @@ class DashboardRepository extends ChangeNotifier {
     body['requestId'] = uuid.v4();
     local.resolve(item['id'].toString(), replacement: body);
     notifyListeners();
-    unawaited(synchronize());
+    requestAutoSync();
   }
 
   void startLocal(Json input, {bool independentConfirmed = false}) {
@@ -937,7 +1106,7 @@ class DashboardRepository extends ChangeNotifier {
       );
       if (['finish', 'cancel'].contains(action)) {
         local.finishLocal(changed, serverId);
-        unawaited(synchronize());
+        requestAutoSync();
       } else {
         local.set('localActive', changed);
       }
@@ -969,6 +1138,9 @@ class DashboardRepository extends ChangeNotifier {
         'trashedAt': metadata.containsKey('trashedAt')
             ? metadata['trashedAt']
             : article['trashedAt'],
+        'favorite': metadata.containsKey('favorite')
+            ? metadata['favorite']
+            : article['favorite'] ?? false,
       };
     }
 
@@ -1009,6 +1181,7 @@ class DashboardRepository extends ChangeNotifier {
         'date': article['date'],
         'status': article['status'],
         'document': article['document'],
+        if (article['favorite'] is bool) 'favorite': article['favorite'],
       },
       draft: {
         ...article,
@@ -1016,7 +1189,7 @@ class DashboardRepository extends ChangeNotifier {
       },
     );
     notifyListeners();
-    unawaited(synchronize());
+    requestAutoSync();
   }
 
   void restoreWriting(String id) {
@@ -1040,7 +1213,7 @@ class DashboardRepository extends ChangeNotifier {
       draft: {...original, 'trashedAt': null},
     );
     notifyListeners();
-    unawaited(synchronize());
+    requestAutoSync();
   }
 
   Future<String> exportLocal(String folder) async {

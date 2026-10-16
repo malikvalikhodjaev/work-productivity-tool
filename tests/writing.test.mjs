@@ -72,6 +72,19 @@ test('Новый локальный черновик можно удалить �
   assert.equal(fs.readFileSync(f.file,'utf8'),raw);
   assert.equal(f.store.save(f.packet({id:removed.id,expectedRevision:1,action:'restore'})).entry.trashedAt,null);
 });
+
+test('Избранное сохраняется отдельно от публикации; обычная правка, корзина и восстановление не снимают звезду',()=>{
+  const f=fixture(),first=f.store.save(f.packet({status:'published'})).entry;
+  let next=f.store.save(f.packet({id:first.id,expectedRevision:1,status:'published',favorite:true})).entry;
+  assert.equal(next.favorite,true);assert.equal(next.revisions[0].favorite,false);
+  assert.equal(f.store.view().months[0].count,1);assert.equal(f.store.view().entries[0].favorite,true);
+  next=f.store.save(f.packet({id:first.id,expectedRevision:2,status:'published',title:'Правка'})).entry;
+  assert.equal(next.favorite,true);
+  next=f.store.save(f.packet({id:first.id,expectedRevision:3,action:'trash'})).entry;
+  next=f.store.save(f.packet({id:first.id,expectedRevision:4,action:'restore'})).entry;
+  f.reopen();assert.equal(f.store.get(first.id).favorite,true);
+  assert.equal(f.store.view().counts.published,1);
+});
 test('Черновики разных вкладок сохраняются независимо; подтверждение старой версии не удаляет новые правки',async()=>{
   const factory=new IDBFactory(),a=createWritingDraftStore(factory),b=createWritingDraftStore(factory),record={key:'tab-a:post',token:'1:1',savedAt:'2026-10-13T10:00:00Z',content:{document}};
   await a.put(record);await b.put({...record,key:'tab-b:post'});await a.put({...record,token:'1:2'});await b.removeIf(record.key,'1:1');assert.equal((await a.list()).length,2);

@@ -106,6 +106,13 @@ export function changeTimer(value, action, input, { now = Date.now(), validateWo
     return { timer, entries: [], duplicate: true };
   }
   if (input.expectedRevision !== timer.revision) conflict('Таймер изменён на другом устройстве. Обнови состояние и повтори действие.');
+  if (input.occurredAt !== undefined) {
+    if (!Number.isSafeInteger(input.occurredAt) || input.occurredAt < Date.parse('2010-01-01T00:00:00Z') || input.occurredAt > now + 300000) fail('Проверь время устройства. Действие сохранено локально.');
+    if (!['start','startBreak','pause','resume','extend','finish','cancel','leisure'].includes(action)) fail('Это действие нельзя отправить с отложенным временем.');
+    const lastEvent = timer.sessions.flatMap(s => s.events).reduce((latest, event) => Math.max(latest, Date.parse(event.at)), 0);
+    if (input.occurredAt < lastEvent) conflict('Время действия раньше последнего события таймера. Исходник сохранён для разбора.');
+    now = input.occurredAt;
+  }
   const stamp = new Date(now).toISOString();
   const entries = [];
   const active = timer.sessions.find(s => s.id === timer.activeId);
@@ -135,7 +142,8 @@ export function changeTimer(value, action, input, { now = Date.now(), validateWo
     const workType = input.workType ?? '';
     if (typeof workType !== 'string' || workType.length > 80) fail('Характер работы: до 80 символов.');
     const duration = phase === 'work' ? settings.workMinutes : phase === 'long_break' ? settings.longBreakMinutes : settings.shortBreakMinutes;
-    const s = { id: randomUUID(), phase, mode, status: 'running', title: title.trim(), workRef, metricId: metric?.id ?? null, allocation,
+    if (input.newSessionId !== undefined && (typeof input.newSessionId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(input.newSessionId) || timer.sessions.some(s => s.id === input.newSessionId))) fail('Неверный или занятый ID сеанса.');
+    const s = { id: input.newSessionId ?? randomUUID(), phase, mode, status: 'running', title: title.trim(), workRef, metricId: metric?.id ?? null, allocation,
       workType: workType.trim() || null, settings, plannedMs: mode === 'pomodoro' ? duration * 60000 : null,
       startedAt: stamp, updatedAt: stamp, runningSince: now, intervals: [], completedPomodoros: 0, events: [{ action, at: stamp, elapsedSeconds:0 }] };
     timer.sessions.push(s); timer.activeId = s.id;
@@ -208,7 +216,7 @@ export function timerView(value, { now = Date.now(), entries, week, end, entitie
     const actual = records.length ? records.reduce((sum,e) => sum + e.amount, 0) : null;
     return { workRef: ref, title: entities.find(e => e.ref === ref)?.title ?? ref, target, actual, percent: actual === null ? null : Math.round(actual / target * 100) };
   });
-  return { version: 1, revision: timer.revision, serverNow: new Date(now).toISOString(), settings: timer.settings, active: active ? sessionView(active, now) : null,
+  return { version: 1, offlineCommands: true, revision: timer.revision, serverNow: new Date(now).toISOString(), settings: timer.settings, active: active ? sessionView(active, now) : null,
     cycleCount: timer.cycleCount, sessions, week, end, plans, byWork,
     events:timer.sessions.flatMap(s=>s.events.filter(e=>atDate(Date.parse(e.at))>=week&&atDate(Date.parse(e.at))<=end).map((e,index)=>({...e,id:s.id+':'+index,sessionId:s.id,title:s.title,workRef:s.workRef,phase:s.phase}))).sort((a,b)=>b.at.localeCompare(a.at)),
     summary: { leisureSeconds, workSeconds: workEntries.length ? workEntries.reduce((sum,e) => sum + seconds(e),0) : null,

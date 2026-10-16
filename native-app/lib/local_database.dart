@@ -94,7 +94,9 @@ class LocalDatabase {
           if (route == '/api/native/command') {
             body = {
               ...body,
-              'action': old['action'],
+              'action': old['module'] == 'inbox' && body['action'] != 'save'
+                  ? body['action']
+                  : old['action'],
               'expectedUpdatedAt': old['expectedUpdatedAt'],
               if (old.containsKey('expectedTarget'))
                 'expectedTarget': old['expectedTarget'],

@@ -21,16 +21,20 @@ class TimerCommandNotice extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            repo.timerBusy ? 'Подтверждаю действие…' : 'Ответ сервера не получен. Действие сохранено и будет проверено при связи.',
+            repo.durableTimer
+                ? 'Сохранено на устройстве · ${repo.pending.where((q) => q['route'] == '/api/timer').length} действий ждут синхронизации'
+                : repo.timerBusy
+                ? 'Подтверждаю действие…'
+                : 'Ответ сервера не получен. Действие сохранено и будет проверено при связи.',
             style: const TextStyle(color: Colors.white70, fontSize: 13),
           ),
           if (!repo.timerBusy)
             TextButton.icon(
               onPressed: retry,
               icon: const Icon(Icons.sync, color: Colors.white),
-              label: const Text(
-                'Проверить действие',
-                style: TextStyle(color: Colors.white),
+              label: Text(
+                repo.durableTimer ? 'Синхронизировать' : 'Проверить действие',
+                style: const TextStyle(color: Colors.white),
               ),
             ),
         ],

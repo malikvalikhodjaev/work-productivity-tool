@@ -1,4 +1,4 @@
-const CACHE = 'indicators-work-offline-1.15.0';
+const CACHE = 'indicators-work-offline-1.16.0';
 const OFFLINE = ['/offline.html', '/timer-ringtones.js', '/timer-ringtones.css', '/ringtones/catalog.json', '/ringtones/bip_bip.wav', '/ringtones/sonar.wav', '/ringtones/glass.wav', '/ringtones/marimba.wav', '/ringtones/orbit.wav', '/ringtones/warm_bell.wav', '/ringtones/classic.wav', '/offline-work.css', '/offline-work.js', '/focus-ambience.js', '/focus-youtube.js', '/focus-ambience.css', '/offline-store.js', '/offline-engine.js', '/timer-core.js', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(OFFLINE)).then(() => self.skipWaiting()));

@@ -16,6 +16,38 @@ function fixture(start='2026-10-09T09:00:00+05:00') {
   const act=(action,input={})=>store.mutateTimer(action,{...input,week,requestId:randomUUID(),expectedRevision:store.getTimer(week).revision});
   return {file,options,act, get store(){return store;}, advance:seconds=>{clock+=seconds*1000;}, reopen:()=>{store=createStore(file,options);}, start:(extra={})=>act('start',{title:'Работа',mode:'pomodoro',metricId:'guides',allocation:'assigned',workRef:'task:real',workType:'Создание',...extra}).active };
 }
+
+test('Отложенные действия используют время нажатия; повтор после потери ответа не удваивает факт',()=>{
+  const f=fixture(),base=Date.parse('2026-10-09T09:00:00+05:00'),id=randomUUID();
+  f.advance(36000);
+  const apply=(action,offset,input={})=>f.act(action,{occurredAt:base+offset*1000,...input});
+  const started=apply('start',0,{newSessionId:id,title:'Без сети',mode:'pomodoro',metricId:'guides',allocation:'assigned',workRef:'task:real'});
+  assert.equal(started.active.id,id);assert.equal(started.offlineCommands,true);
+  apply('pause',600,{sessionId:id});
+  apply('resume',1200,{sessionId:id});
+  const packet={sessionId:id,occurredAt:base+2100*1000,observation:'  Сохранилось · 思考  ',requestId:randomUUID(),expectedRevision:3,week};
+  f.store.mutateTimer('finish',packet);f.reopen();
+  assert.equal(f.store.mutateTimer('finish',packet).duplicate,true);
+  const entries=f.store.getStoredEntries().entries;
+  assert.equal(entries.length,1);assert.equal(entries[0].durationSeconds,1500);
+  const session=f.store.getTimer(week).sessions[0];
+  assert.equal(session.finishedAt,new Date(base+2100*1000).toISOString());
+  assert.equal(session.observation,'  Сохранилось · 思考  ');assert.equal(session.completedPomodoros,1);
+});
+
+test('Отложенная цепочка не переписывает чужую версию; неверное время и повтор ID сохраняют источник',()=>{
+  const f=fixture(),s=f.start(),raw=readFileSync(f.file,'utf8');
+  const now=Date.parse(s.startedAt);
+  assert.throws(()=>f.act('pause',{sessionId:s.id,occurredAt:now-1}),e=>e.status===409);
+  assert.throws(()=>f.act('pause',{sessionId:s.id,occurredAt:now+600001}),/время устройства/);
+  assert.equal(readFileSync(f.file,'utf8'),raw);
+  f.advance(10);f.act('pause',{sessionId:s.id});
+  const paused=readFileSync(f.file,'utf8');
+  assert.throws(()=>f.store.mutateTimer('finish',{sessionId:s.id,occurredAt:now+11000,requestId:randomUUID(),expectedRevision:1,week}),e=>e.status===409);
+  assert.equal(readFileSync(f.file,'utf8'),paused);
+  f.act('cancel',{sessionId:s.id});
+  assert.throws(()=>f.start({newSessionId:s.id}),/занятый ID/);
+});
 test('Паузы и перерывы исключаются; факт переживает перезапуск и обновляет два разреза без удвоения',()=>{
   const f=fixture(), s=f.start(); f.advance(600); f.act('pause',{sessionId:s.id}); f.advance(900); f.reopen();
   assert.equal(f.store.getTimer(week).active.elapsedMs,600000); f.act('resume',{sessionId:s.id}); f.advance(900);

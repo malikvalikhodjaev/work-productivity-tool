@@ -16,6 +16,7 @@ import 'forms.dart';
 import 'local_database.dart';
 import 'reminders.dart';
 import 'repository.dart';
+import 'sync_panel.dart';
 import 'pomodoro_widgets.dart';
 import 'writing_screen.dart';
 import 'reflection_hints.dart';
@@ -175,7 +176,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.11',
+        'clientVersion': '0.1.12',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -221,7 +222,7 @@ class _DashboardHomeState extends State<DashboardHome>
       section = 2;
       focusMode = screen == 'timer' || screen == 'leisure';
     });
-    await repo.synchronize();
+    repo.requestAutoSync();
     if (!mounted || dialogOpen || Navigator.of(context).canPop()) return;
     if (screen == 'leisure' && inLeisure(repo.active)) {
       await offerLeisureReturn();
@@ -248,7 +249,7 @@ class _DashboardHomeState extends State<DashboardHome>
         unawaited(refreshOverlayPermission());
       }
       if (background.desktop?.transitioning != true) planEntryPending = true;
-      unawaited(repo.synchronize());
+      repo.requestAutoSync();
     }
   }
 
@@ -763,7 +764,7 @@ class _DashboardHomeState extends State<DashboardHome>
           'strategy',
           'Учёт',
           options: {
-            'shared': 'Общий таймер · нужна связь с сервером',
+            'shared': 'Общий таймер · сохранение на устройстве',
             'local': 'Таймер устройства · работает без связи',
           },
         ),
@@ -885,7 +886,7 @@ class _DashboardHomeState extends State<DashboardHome>
           'strategy',
           'Учёт',
           options: {
-            'shared': 'Общий таймер · нужна связь с сервером',
+            'shared': 'Общий таймер · сохранение на устройстве',
             'local': 'Таймер устройства · работает без связи',
           },
         ),
@@ -936,7 +937,7 @@ class _DashboardHomeState extends State<DashboardHome>
       'phase': long ? 'long_break' : 'short_break',
       'settings': repo.settings,
     };
-    if (repo.online && repo.localActive == null) {
+    if ((repo.durableTimer || repo.online) && repo.localActive == null) {
       await repo.sharedAction('startBreak', input);
     } else {
       repo.startLocal({...input, 'mode': 'pomodoro'});
@@ -1034,7 +1035,7 @@ class _DashboardHomeState extends State<DashboardHome>
               const SizedBox(height: 12),
               if (s != null)
                 Text(
-                  '${(elapsedMs(s, repo.now) / 60000).toStringAsFixed(1)} мин · ${repo.isLocal ? 'таймер устройства' : 'общий сеанс'}',
+                  '${(elapsedMs(s, repo.now) / 60000).toStringAsFixed(1)} мин · ${repo.isLocal || repo.durableTimer ? 'сохранение на устройстве' : 'общий сеанс'}',
                   style: const TextStyle(color: Colors.white70),
                 ),
               const SizedBox(height: 18),
@@ -2376,6 +2377,10 @@ class _DashboardHomeState extends State<DashboardHome>
         repo.local.get('timerCommandHistory'),
       ).values.toList(),
       'Сеансы устройства': repo.local.get('localHistory'),
+      'Локальная история таймера': repo.local.get('sharedLocalHistory'),
+      'Подтверждённые действия таймера': object(
+        repo.local.get('timerCommandReceipts'),
+      ).values.toList(),
       'Нормы дня': repo.dailyNorms,
       'План помидорок по датам': repo.pomodoroRows,
       'Факты помидорок': repo.pomodoroFacts,
@@ -2407,6 +2412,7 @@ class _DashboardHomeState extends State<DashboardHome>
             child: const Text('Выгрузить локальную копию'),
           ),
         ),
+        SyncPanel(repo: repo),
         SelectableText(
           'SQLite: ${p.join(widget.folder, 'indicators-work.sqlite')}\nУстройство: ${repo.deviceId}\nСервер: ${repo.serverId ?? 'No Data'}',
         ),
@@ -2443,7 +2449,10 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                       ),
                     if (item['state'] == 'conflict' &&
-                        item['route'] != '/api/offline/import')
+                        ![
+                          '/api/offline/import',
+                          '/api/timer',
+                        ].contains(item['route']))
                       TextButton(
                         onPressed: () async {
                           final confirm = await showDialog<bool>(
@@ -2762,7 +2771,7 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'I&W · Native 0.1.11',
+                          'I&W · Native 0.1.12',
                           style: TextStyle(fontSize: 11),
                         ),
                       ],

@@ -18,11 +18,16 @@ class _InboxWidgetState extends State<InboxWidget> {
   String filter = 'new';
   @override
   Widget build(BuildContext context) {
-    final inbox = widget.repo.cache('inbox'), entries = rows(inbox['entries']);
+    final inbox = widget.repo.cache('inbox'),
+        entries = rows(inbox['entries'])
+            .map((e) => widget.repo.entity('inbox:${e['id']}', e))
+            .toList();
     return Card(
       child: ExpansionTile(
         leading: const Icon(Icons.inbox_outlined),
-        title: Text('Входящие мысли · ${object(inbox['counts'])['new'] ?? 0}'),
+        title: Text(
+          'Входящие мысли · ${entries.where((e) => e['status'] == 'new').length}',
+        ),
         subtitle: const Text('Текст и голосовые из твоего Telegram-бота'),
         childrenPadding: const EdgeInsets.all(16),
         children: [
@@ -33,6 +38,7 @@ class _InboxWidgetState extends State<InboxWidget> {
                 'new': 'Не разобрано',
                 'reviewed': 'Разобрано',
                 'archived': 'Архив',
+                'favorites': 'Избранное',
               }.entries)
                 ChoiceChip(
                   label: Text(choice.value),
@@ -41,15 +47,29 @@ class _InboxWidgetState extends State<InboxWidget> {
                 ),
             ],
           ),
-          if (entries.where((e) => e['status'] == filter).isEmpty)
+          if (entries
+              .where(
+                (e) => filter == 'favorites'
+                    ? e['favorite'] == true
+                    : e['status'] == filter,
+              )
+              .isEmpty)
             const Padding(
               padding: EdgeInsets.all(20),
               child: Text('No Data · сообщения боту появятся здесь.'),
             ),
-          for (final item in entries.where((e) => e['status'] == filter))
+          for (final item in entries.where(
+            (e) => filter == 'favorites'
+                ? e['favorite'] == true
+                : e['status'] == filter,
+          ))
             ListTile(
               leading: Icon(
-                item['kind'] == 'voice' ? Icons.mic_none : Icons.notes,
+                item['favorite'] == true
+                    ? Icons.star
+                    : item['kind'] == 'voice'
+                    ? Icons.mic_none
+                    : Icons.notes,
               ),
               title: Text(
                 item['title'].toString(),
@@ -100,10 +120,11 @@ class _InboxReview extends StatefulWidget {
 
 class _InboxReviewState extends State<_InboxReview> {
   late final Json source;
-  late final TextEditingController title, transcript, notes;
+  late final TextEditingController title, body, transcript, notes;
   AudioPlayer? player;
   StreamSubscription<PlayerState>? subscription;
   bool playing = false;
+  bool favorite = false;
   String? error;
   String get entity => 'inbox:${widget.item['id']}';
   @override
@@ -111,6 +132,10 @@ class _InboxReviewState extends State<_InboxReview> {
     super.initState();
     source = widget.repo.local.draft(entity) ?? widget.item;
     title = TextEditingController(text: source['title'] ?? '');
+    body = TextEditingController(
+      text: source['body'] ?? source['sourceText'] ?? '',
+    );
+    favorite = source['favorite'] == true;
     transcript = TextEditingController(text: source['transcript'] ?? '');
     notes = TextEditingController(text: source['notes'] ?? '');
   }
@@ -118,13 +143,17 @@ class _InboxReviewState extends State<_InboxReview> {
   Json fields() => {
     'id': source['id'],
     'title': title.text,
+    'body': body.text,
+    'favorite': favorite,
     'transcript': transcript.text,
     'notes': notes.text,
   };
   void keep() => widget.repo.local.keepDraft(entity, {...source, ...fields()});
   void save(String action) {
     try {
+      keep();
       if (title.text.length > 300 ||
+          body.text.length > 80000 ||
           transcript.text.length > 80000 ||
           notes.text.length > 80000) {
         throw ArgumentError('Тема — до 300 знаков, текст — до 80 000.');
@@ -134,7 +163,17 @@ class _InboxReviewState extends State<_InboxReview> {
         action,
         fields(),
         entity,
-        draft: {...source, ...fields()},
+        draft: {
+          ...source,
+          ...fields(),
+          'status': action == 'archive'
+              ? 'archived'
+              : action == 'reopen'
+              ? 'new'
+              : action == 'convert'
+              ? 'reviewed'
+              : source['status'],
+        },
         expectedUpdatedAt: source['updatedAt'],
       );
       Navigator.pop(context);
@@ -148,6 +187,7 @@ class _InboxReviewState extends State<_InboxReview> {
     subscription?.cancel();
     if (player != null) unawaited(player!.dispose());
     title.dispose();
+    body.dispose();
     transcript.dispose();
     notes.dispose();
     super.dispose();
@@ -155,7 +195,9 @@ class _InboxReviewState extends State<_InboxReview> {
 
   @override
   Widget build(BuildContext context) {
-    final queued = widget.repo.pending.any((q) => q['entity'] == entity),
+    final queued = widget.repo.pending.any(
+          (q) => q['entity'] == entity && q['attempted'] == 1,
+        ),
         audio = object(widget.item['audio']);
     return AlertDialog(
       title: const Text('Разобрать мысль'),
@@ -172,6 +214,15 @@ class _InboxReviewState extends State<_InboxReview> {
                 onChanged: (_) => keep(),
                 decoration: const InputDecoration(labelText: 'Тема мысли'),
                 maxLength: 300,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: body,
+                readOnly: queued,
+                onChanged: (_) => keep(),
+                minLines: 4,
+                maxLines: 12,
+                decoration: const InputDecoration(labelText: 'Заметка'),
               ),
               if ((source['sourceText'] ?? '').toString().isNotEmpty)
                 ExpansionTile(
@@ -265,12 +316,24 @@ class _InboxReviewState extends State<_InboxReview> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Закрыть'),
         ),
+        TextButton.icon(
+          onPressed: queued
+              ? null
+              : () {
+                  setState(() => favorite = !favorite);
+                  save('save');
+                },
+          icon: Icon(favorite ? Icons.star : Icons.star_outline),
+          label: Text(favorite ? 'В избранном' : 'В избранное'),
+        ),
         TextButton(
           onPressed: queued
               ? null
               : () =>
                     save(source['status'] == 'archived' ? 'reopen' : 'archive'),
-          child: Text(source['status'] == 'archived' ? 'Вернуть' : 'В архив'),
+          child: Text(
+            source['status'] == 'archived' ? 'Вернуть' : 'Обработал · в архив',
+          ),
         ),
         TextButton(
           onPressed: queued ? null : () => save('save'),

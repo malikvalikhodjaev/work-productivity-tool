@@ -228,13 +228,13 @@ class FocusService : Service() {
         val volume=snapshot.optDouble("volume",.2).toFloat().coerceIn(0f,1f);player?.setVolume(volume,volume)
     }
     private fun pollTimer(){
-        if(fetching)return
+        if(fetching||!snapshot.optBoolean("automaticSync",true))return
         fetching=true
         val url=snapshot.optString("serverUrl")
         val localAtRequest=snapshot.optBoolean("local")
         network.execute{
             try{
-                val state=if(!localAtRequest){
+                val state=if(!localAtRequest&&!snapshot.optBoolean("timerLocalChanges")){
                     val connection=URL("$url/api/timer").openConnection();connection.connectTimeout=7000;connection.readTimeout=7000;connection.setRequestProperty("Origin",url)
                     JSONObject(connection.getInputStream().bufferedReader().use{it.readText()})
                 }else null
@@ -250,7 +250,7 @@ class FocusService : Service() {
                 }catch(_:Exception){null}
                 handler.post{
                     if(destroyed||snapshot.optBoolean("local")!=localAtRequest||snapshot.optString("serverUrl")!=url)return@post
-                    if(state!=null&&state.optLong("revision")>=snapshot.optLong("timerRevision")){
+                    if(state!=null&&!snapshot.optBoolean("timerLocalChanges")&&state.optLong("revision")>=snapshot.optLong("timerRevision")){
                         snapshot.put("active",state.optJSONObject("active"));snapshot.put("timerRevision",state.optLong("revision"))
                         if(state.has("serverNow"))snapshot.put("serverOffset",Instant.parse(state.getString("serverNow")).toEpochMilli()-System.currentTimeMillis())
                     }

@@ -14,6 +14,44 @@ const token='123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi';
 const update=(id,text='Мысль на ходу · 中文',extra={})=>({update_id:id,message:{message_id:19,date:1792021200,chat:{id:88,type:'private'},from:{id:88,is_bot:false},text,...extra}});
 function fixture(t,options={}){const directory=fs.mkdtempSync(path.join(os.tmpdir(),'iw-inbox-')),file=path.join(directory,'inbox.json');t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));const writing=createWritingStore(path.join(directory,'writing.json'));const inbox=createInboxStore(file,{writing,...options});return {directory,file,inbox,writing,command:(item,action='save',input={})=>({requestId:randomUUID(),action,expectedUpdatedAt:item.updatedAt,input:{id:item.id,...input}})};}
 
+test('Telegram note has a timestamp title and full multiline body; processed goes to reversible archive',t=>{
+  const f=fixture(t),text='  Первая строка · 思考\n\n'+'Длинная мысль. '.repeat(100),message=update(1,text);
+  const item=f.inbox.receive('42',message),sent=new Date(message.message.date*1000+5*3600000);
+  assert.match(item.title,/^telegram-note \(\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}\)$/);
+  assert.ok(item.title.endsWith(`${String(sent.getUTCHours()).padStart(2,'0')}:${String(sent.getUTCMinutes()).padStart(2,'0')})`));
+  assert.equal(item.body,text);assert.equal(item.sourceText,text);
+  const archived=f.inbox.mutate(f.command(item,'archive',{body:text+'\nМоя правка',notes:'Разобрал'})).item;
+  assert.equal(archived.status,'archived');assert.equal(f.inbox.view().counts.new,0);
+  assert.equal(f.inbox.exportData().entries[0].originals[0].message.text,text);
+  const restored=f.inbox.mutate(f.command(archived,'reopen')).item;
+  const converted=f.inbox.mutate(f.command(restored,'convert')).item;
+  assert.equal(f.writing.get(converted.writingId).title,item.title);
+  assert.equal(f.writing.get(converted.writingId).document.ops[0].insert,text+'\nМоя правка\n\nРазобрал\n');
+});
+
+test('Old generated title is presented as telegram-note without rewriting raw archive; manual titles stay intact',t=>{
+  const f=fixture(t),item=f.inbox.receive('42',update(1));
+  const raw=JSON.parse(fs.readFileSync(f.file,'utf8'));delete raw.entries[0].body;raw.entries[0].title=raw.entries[0].sourceText;
+  fs.writeFileSync(f.file,JSON.stringify(raw));const bytes=fs.readFileSync(f.file);
+  const reopened=createInboxStore(f.file,{writing:f.writing});
+  assert.match(reopened.view().entries[0].title,/^telegram-note /);assert.equal(reopened.view().entries[0].body,raw.entries[0].sourceText);
+  assert.deepEqual(fs.readFileSync(f.file),bytes);
+  const saved=reopened.mutate(f.command(item,'save',{title:'Моё имя',body:'Моё тело'})).item;
+  reopened.receive('42',{update_id:2,edited_message:{...update(1).message,text:'Изменено в Telegram'}});
+  assert.equal(reopened.view().entries[0].title,'Моё имя');assert.equal(reopened.view().entries[0].body,'Моё тело');
+  assert.equal(saved.sourceText,raw.entries[0].sourceText);
+});
+
+test('Избранная Telegram-заметка остаётся избранной при обработке, правке источника и повторном открытии',t=>{
+  const f=fixture(t),item=f.inbox.receive('42',update(1));
+  let saved=f.inbox.mutate(f.command(item,'save',{favorite:true})).item;
+  saved=f.inbox.mutate(f.command(saved,'archive')).item;
+  f.inbox.receive('42',{update_id:2,edited_message:{...update(1).message,text:'Уточнение'}});
+  const reopened=createInboxStore(f.file,{writing:f.writing});
+  assert.equal(reopened.view().entries[0].favorite,true);assert.equal(reopened.view().entries[0].status,'archived');
+  assert.equal(reopened.exportData().entries[0].originals.length,2);
+});
+
 test('Telegram text is retained exactly; repeated delivery and restart do not duplicate it',t=>{
   const f=fixture(t),original=update(1,'  中文\n<script>мысль</script>  '),item=f.inbox.receive('42',original);
   f.inbox.receive('42',original);assert.equal(f.inbox.view().entries.length,1);assert.equal(f.inbox.cursor('42'),2);
