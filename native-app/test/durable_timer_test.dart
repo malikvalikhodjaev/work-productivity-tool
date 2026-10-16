@@ -29,6 +29,40 @@ void seed(LocalDatabase db) {
 }
 
 void main() {
+  test('recovery of a legacy request does not disable local pause', () async {
+    final db = LocalDatabase(':memory:');
+    seed(db);
+    final active = newLocalSession(
+      title: 'Работа',
+      workRef: 'work:one',
+      now: DateTime.now().millisecondsSinceEpoch - 2000,
+    );
+    db.capture('timer', {'revision': 1, 'active': active, 'sessions': []});
+    final original = {
+      'action': 'pause',
+      'input': {
+        'sessionId': active['id'],
+        'requestId': uuid.v4(),
+        'expectedRevision': 1,
+      },
+    };
+    db.set('pendingTimer', original);
+    final waiting = Completer<http.Response>();
+    final repo = DashboardRepository(
+      db,
+      client: MockClient((_) => waiting.future),
+    );
+    final check = repo.checkPendingTimer();
+    expect(repo.timerBusy, false);
+    await repo.timerAction('pause').timeout(const Duration(seconds: 1));
+    expect(repo.active!['status'], 'paused');
+    expect(db.get('pendingTimer'), original);
+    expect(repo.pending.length, 1);
+    final failure = expectLater(check, throwsA(isA<ApiFailure>()));
+    waiting.complete(response({}, 503));
+    await failure;
+    repo.dispose();
+  });
   test('offline start, pause, resume and finish survive restart; lost reply keeps immutable commands', () async {
     final directory = Directory.systemTemp.createTempSync('iw-durable-timer-');
     addTearDown(() => directory.deleteSync(recursive: true));

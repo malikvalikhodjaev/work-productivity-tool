@@ -26,7 +26,8 @@ class DashboardRepository extends ChangeNotifier {
   bool focusStarting = false;
   bool _sharedActionInFlight = false;
   Future<void>? _timerCheck;
-  bool get timerBusy => _sharedActionInFlight || _timerCheck != null;
+  bool get timerBusy =>
+      _sharedActionInFlight || (!durableTimer && _timerCheck != null);
   bool get timerPending =>
       local.get('pendingTimer') != null ||
       pending.any((q) => q['route'] == '/api/timer');
