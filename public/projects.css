@@ -185,6 +185,15 @@ h2 { font-size: 18px; font-weight: 600; letter-spacing: 0; }
 footer { color: var(--muted); }
 
 .project-list { gap: 12px; }
+.project-list:has(.project-table) { display: block; overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.project-table { width: 100%; min-width: 780px; border-collapse: collapse; font-size: 13px; text-align: left; }
+.project-table th { padding: 13px 16px; font-size: 11px; font-weight: 500; color: var(--muted); background: #fafafa; border-bottom: 1px solid var(--line); }
+.project-table td { padding: 15px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.project-table tr:last-child td { border-bottom: 0; }
+.project-table tr.selected { background: #f1f7f4; }
+.project-table td small { display: block; color: var(--muted); font-size: 11px; margin-top: 4px; }
+.project-table-name { border: 0; background: transparent; padding: 4px 0; color: var(--ink); text-align: left; font: inherit; font-weight: 600; cursor: pointer; }
+.project-table button:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
 .project-choice {
   border-radius: 8px;
   padding: 15px 16px;

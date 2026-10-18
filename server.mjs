@@ -17,6 +17,7 @@ import {createInboxStore} from './lib/inbox.mjs';
 import {createTelegramBot} from './lib/telegram-bot.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
+const serverVersion = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 const port = Number(process.env.DASHBOARD_PORT ?? 8787);
 const dataDir = process.env.DASHBOARD_DATA_DIR ?? path.join(root, 'data');
 let store;
@@ -95,7 +96,7 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.origin && !expectedHosts.some(host => req.headers.origin === `http://${host}`)) return json(res, 403, { error: 'Запрос с другого сайта запрещён.' });
   try {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: '1.12.0', timezone: 'Asia/Tashkent' });
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'rhythm-dashboard', version: serverVersion, timezone: 'Asia/Tashkent' });
     if (req.method === 'GET' && url.pathname === '/api/inbox') return json(res, 200, inbox.view());
     if (req.method === 'GET' && url.pathname === '/api/inbox/export') return json(res, 200, inbox.exportData());
     if (req.method === 'POST' && url.pathname === '/api/inbox') return json(res, 200, inbox.mutate(await body(req)));

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'domain.dart';
+import 'modeler.dart';
 import 'repository.dart';
 
 List<Json> reviewProjects(
@@ -55,7 +56,10 @@ class ProjectReview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final entries = reviewProjects(
-      repo.entities('projects', 'project'),
+      repo
+          .entities('projects', 'project')
+          .map((p) => modelProject(p, repo.entities('alphas', 'alpha')))
+          .toList(),
       repo.entities('alphas', 'alpha'),
       today(),
     );

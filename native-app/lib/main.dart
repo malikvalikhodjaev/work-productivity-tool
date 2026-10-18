@@ -24,7 +24,7 @@ import 'data_table.dart';
 import 'compact_timer.dart';
 import 'timer_command_notice.dart';
 import 'daily_problem_banner.dart';
-import 'project_review.dart';
+import 'modeling_workspace.dart';
 import 'leisure.dart';
 import 'timer_ringtones.dart';
 
@@ -176,7 +176,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.12',
+        'clientVersion': '0.1.13',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -705,7 +705,7 @@ class _DashboardHomeState extends State<DashboardHome>
             'Сколько минут действительно работал',
             numeric: true,
           ),
-          FieldSpec('observation', 'Наблюдения · одной строкой'),
+          FieldSpec('observation', 'Наблюдения', lines: 6),
         ],
         save: (input) async {
           if (repo.active?['id'] != s['id']) {
@@ -1885,7 +1885,7 @@ class _DashboardHomeState extends State<DashboardHome>
             Padding(
               padding: EdgeInsets.all(16),
               child: Text(
-                'Руководства: часы чтения и применения — отдельные нормы. Прорыв фиксируется по применённой идее и подтверждённому изменению в проекте, карьере или результате; свидетельство записывается в замере.\n\n'
+                'Руководства: часы чтения и применения — отдельные нормы. В замере можно записывать, какую идею применяешь, что меняется в проекте, карьере или результате и чем это подтверждается.\n\n'
                 'Выручка — платежи клиентов. Прибыль бизнеса — выручка минус расходы. Личный доход — полученное себе. Для каждого денежного показателя укажи валюту и период; в месячном замере записывай итог выбранного месяца.\n\n'
                 'Сон: записывай часы за ночь на дату пробуждения. Минимум указан в карточке нормы.\n\n'
                 'Для прогресса цели нужны база, цель и текущий замер. Пока шкала не определена — No Data. Дата под карточкой показывает, к какому моменту относится последний факт.',
@@ -2187,7 +2187,12 @@ class _DashboardHomeState extends State<DashboardHome>
     );
   }
 
-  Future<void> editAlpha(Json project, [Json? previous]) async {
+  Future<void> editAlpha(
+    Json project, {
+    Json? previous,
+    Json? zone,
+    Json? parent,
+  }) async {
     final id = previous?['id'] ?? uuid.v4(), key = 'alpha:$id';
     final base = rows(repo.cache('portfolio')['alphas'])
         .where((a) => a['id'] == id)
@@ -2204,8 +2209,12 @@ class _DashboardHomeState extends State<DashboardHome>
         'projectId': project['id'],
         'state': previous?['state'] ?? 'empty',
         'zoneId':
-            previous?['zoneId'] ?? rows(project['zones']).firstOrNull?['id'],
-        'parentId': previous?['parentId'] ?? '',
+            previous?['zoneId'] ??
+            zone?['id'] ??
+            parent?['zoneId'] ??
+            rows(project['zones']).firstOrNull?['id'],
+        'parentId': previous?['parentId'] ?? parent?['id'] ?? '',
+        'typeName': previous?['typeName'] ?? zone?['typeName'] ?? '',
       },
       [
         FieldSpec(
@@ -2276,93 +2285,21 @@ class _DashboardHomeState extends State<DashboardHome>
     );
   }
 
-  Widget projectsPage() => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      ProjectReview(
-        repo: repo,
-        openAlpha: (project, alpha) => editAlpha(project, alpha),
-      ),
-      const SizedBox(height: 20),
-      sectionTitle(
-        'Проекты и моделер',
-        trailing: TextButton(
-          onPressed: () => editProject(),
-          child: const Text('＋ Проект'),
-        ),
-      ),
-      if (repo.entities('projects', 'project').isEmpty) const Text('No Data'),
-      ...repo
-          .entities('projects', 'project')
-          .map(
-            (project) => Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Card(
-                child: ExpansionTile(
-                  title: Text(project['name'].toString()),
-                  subtitle: Text('${project['status']} · ${project['phase']}'),
-                  children: [
-                    Wrap(
-                      children: [
-                        TextButton(
-                          onPressed: () => editProject(project),
-                          child: const Text('Проект'),
-                        ),
-                        TextButton(
-                          onPressed: () => editAlpha(project),
-                          child: const Text('＋ Слот альфы'),
-                        ),
-                        TextButton(
-                          onPressed: () =>
-                              linkSystem('project:${project['id']}'),
-                          child: const Text('Характеристики'),
-                        ),
-                      ],
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: characteristics('project:${project['id']}'),
-                    ),
-                    for (final zone in rows(project['zones']))
-                      ListTile(
-                        title: Text(zone['title'].toString()),
-                        subtitle: Text(
-                          zone['covered'] == true
-                              ? 'Подтверждено'
-                              : rows(project['zones']).isEmpty
-                              ? 'No Data'
-                              : (zone['issues'] as List? ??
-                                        ['Нужна диагностика'])
-                                    .join(' · '),
-                        ),
-                      ),
-                    for (final alpha
-                        in repo
-                            .entities('alphas', 'alpha')
-                            .where((a) => a['projectId'] == project['id']))
-                      ListTile(
-                        title: Text(
-                          '${alpha['parentId'] != null ? '↳ ' : ''}${(alpha['uniqueName'] ?? '').toString().isEmpty ? alpha['typeName'] : alpha['uniqueName']}',
-                        ),
-                        subtitle: Text(
-                          '${alpha['typeName']} · ${alpha['state']}\n${alpha['nextStep'] ?? ''}',
-                        ),
-                        onTap: () => editAlpha(project, alpha),
-                        trailing: IconButton(
-                          onPressed: () => startTimer(
-                            title: (alpha['uniqueName'] ?? alpha['typeName'])
-                                .toString(),
-                            ref: 'alpha:${alpha['id']}',
-                          ),
-                          icon: const Icon(Icons.play_arrow),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-    ],
+  Widget projectsPage() => ModelingWorkspace(
+    repo: repo,
+    createProject: () => editProject(),
+    editProject: (project) => editProject(project),
+    editAlpha: (project, alpha) => editAlpha(project, previous: alpha),
+    createInZone: (project, zone) => editAlpha(project, zone: zone),
+    createChild: (project, alpha) => editAlpha(project, parent: alpha),
+    focusAlpha: (alpha) => startTimer(
+      title: (alpha['uniqueName'] ?? '').toString().trim().isEmpty
+          ? alpha['typeName'].toString()
+          : alpha['uniqueName'].toString(),
+      ref: 'alpha:${alpha['id']}',
+    ),
+    linkSystem: (project) => linkSystem('project:${project['id']}'),
+    characteristics: (project) => characteristics('project:${project['id']}'),
   );
   Widget dataPage() {
     final datasets = {
@@ -2771,7 +2708,7 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'I&W · Native 0.1.12',
+                          'I&W · Native 0.1.13',
                           style: TextStyle(fontSize: 11),
                         ),
                       ],

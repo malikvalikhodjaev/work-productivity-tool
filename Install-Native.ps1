@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory=$true)][string]$ReleaseDirectory, [string]$ShortcutDirectory, [switch]$SkipStartMenu)
+param([Parameter(Mandatory=$true)][string]$ReleaseDirectory, [string]$ShortcutDirectory, [switch]$SkipStartMenu, [switch]$SkipAutostart)
 $ErrorActionPreference = 'Stop'
 $nativeRelease = [IO.Path]::GetFullPath($ReleaseDirectory)
 if (-not (Test-Path -LiteralPath (Join-Path $nativeRelease 'indicators_work.exe'))) { throw 'Release folder must contain indicators_work.exe and its runtime files.' }
@@ -40,3 +40,4 @@ foreach ($nativeFolder in $nativeDestinations) {
     $nativeShortcut.Save()
     Write-Output $nativeLink
 }
+if (-not $SkipAutostart) { & (Join-Path $PSScriptRoot 'Install-Autostart.ps1') }

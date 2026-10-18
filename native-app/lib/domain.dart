@@ -220,8 +220,8 @@ Json changeLocalSession(
     s['plannedMs'] += 300000;
     if (s['status'] == 'running') s['runningSince'] = now;
   } else if (['finish', 'cancel'].contains(action)) {
-    if (observation.length > 1000 || observation.contains(RegExp(r'[\r\n]'))) {
-      throw ArgumentError('Наблюдение: одна строка до 1000 символов.');
+    if (observation.length > 10000) {
+      throw ArgumentError('Наблюдения: текст до 10000 символов.');
     }
     final total = elapsedMs({...s, 'status': 'paused'}, now);
     if (workedSeconds != null) {

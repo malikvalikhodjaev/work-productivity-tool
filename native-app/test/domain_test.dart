@@ -34,9 +34,9 @@ void main() {
       s,
       'finish',
       start + 120 * 60000,
-      observation: '  Хорошо · 模型  ',
+      observation: '  Хорошо · 模型\nНовая мысль  ',
     );
-    expect(s['observation'], '  Хорошо · 模型  ');
+    expect(s['observation'], '  Хорошо · 模型\nНовая мысль  ');
     expect(s['completedPomodoros'], 1);
     expect(rows(s['intervals']).length, 2);
     expect(caption(s), 'Working on a problem: Кейс · 问题');
@@ -48,7 +48,12 @@ void main() {
     final start = DateTime.utc(2026, 10, 13, 10).millisecondsSinceEpoch;
     var s = newLocalSession(title: 'Работа', now: start);
     db.set('localActive', s);
-    s = changeLocalSession(s, 'finish', start + 60000, observation: 'Успел');
+    s = changeLocalSession(
+      s,
+      'finish',
+      start + 60000,
+      observation: 'Успел\nПроверить ещё раз',
+    );
     db.finishLocal(s, 'server-one');
     db.close();
     db = LocalDatabase(file);
@@ -57,7 +62,7 @@ void main() {
     expect(db.queue.single['server_id'], 'server-one');
     expect(
       object(object(db.queue.single['body'])['session'])['observation'],
-      'Успел',
+      'Успел\nПроверить ещё раз',
     );
     final id = db.queue.single['id'].toString();
     db.attempted(id);

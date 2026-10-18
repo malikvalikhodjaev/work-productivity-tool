@@ -170,7 +170,7 @@ export function changeTimer(value, action, input, { now = Date.now(), validateWo
       active.plannedMs += 300000;
       if (active.status === 'running') active.runningSince = now;
     } else {
-      if(action==='finish'&&input.observation!==undefined&&(typeof input.observation!=='string'||input.observation.length>1000||/[\r\n]/.test(input.observation)))fail('Наблюдение: одна строка до 1000 символов.');
+      if(action==='finish'&&input.observation!==undefined&&(typeof input.observation!=='string'||input.observation.length>10000))fail('Наблюдения: текст до 10000 символов.');
       closeInterval(active, now);
       endLeisure(active,now);
       if (input.workedSeconds !== undefined) {

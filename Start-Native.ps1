@@ -3,8 +3,30 @@ param([string]$BinaryDirectory = (Join-Path $PSScriptRoot 'outputs\native-window
 $ErrorActionPreference = 'Stop'
 $nativeBinary = Join-Path ([IO.Path]::GetFullPath($BinaryDirectory)) 'indicators_work.exe'
 if (-not (Test-Path -LiteralPath $nativeBinary -PathType Leaf)) { throw 'Native app is missing. Build it and run Install-Native.ps1 with the release folder.' }
-& (Join-Path $PSScriptRoot 'Start-Dashboard.ps1') -NoBrowser | Out-Null
-$nativeHealth = Invoke-RestMethod 'http://127.0.0.1:8787/api/health' -TimeoutSec 3
-if (-not $nativeHealth.ok -or $nativeHealth.service -ne 'rhythm-dashboard') { throw 'Dashboard server is unavailable.' }
-if ($CheckOnly) { [pscustomobject]@{binary=$nativeBinary;serverVersion=$nativeHealth.version;ready=$true} | ConvertTo-Json; return }
-Start-Process -FilePath $nativeBinary -WorkingDirectory (Split-Path -Parent $nativeBinary)
+$nativeHasher = [Security.Cryptography.SHA256]::Create()
+try { $nativeRootHash = ([BitConverter]::ToString($nativeHasher.ComputeHash([Text.Encoding]::Unicode.GetBytes($PSScriptRoot.ToUpperInvariant())))).Replace('-', '').Substring(0, 16) }
+finally { $nativeHasher.Dispose() }
+$nativeMutex = New-Object System.Threading.Mutex($false, ('Local\IndicatorsWorkLauncher-' + $nativeRootHash))
+$nativeLocked = $false
+try {
+    try { $nativeLocked = $nativeMutex.WaitOne(30000) }
+    catch [Threading.AbandonedMutexException] { $nativeLocked = $true }
+    if (-not $nativeLocked) { throw 'Another dashboard launcher is still starting. Try again shortly.' }
+    $nativeHealth = $null
+    try {
+        & (Join-Path $PSScriptRoot 'Start-Dashboard.ps1') -NoBrowser | Out-Null
+        $nativeHealth = Invoke-RestMethod 'http://127.0.0.1:8787/api/health' -TimeoutSec 3
+        if (-not $nativeHealth.ok -or $nativeHealth.service -ne 'rhythm-dashboard') { throw 'Dashboard server is unavailable.' }
+    } catch {
+        if ($CheckOnly) { throw }
+        Write-Warning 'Local server is unavailable; opening the app with its saved local data.'
+    }
+    if ($CheckOnly) { [pscustomobject]@{binary=$nativeBinary;serverVersion=$nativeHealth.version;ready=$true} | ConvertTo-Json; return }
+    $nativeExisting = @(Get-Process -Name indicators_work -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [IO.Path]::GetFullPath($_.Path) -eq $nativeBinary })
+    if ($nativeExisting.Count -eq 0) {
+        Start-Process -FilePath $nativeBinary -WorkingDirectory (Split-Path -Parent $nativeBinary) -WindowStyle Hidden
+    }
+} finally {
+    if ($nativeLocked) { $nativeMutex.ReleaseMutex() }
+    $nativeMutex.Dispose()
+}

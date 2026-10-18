@@ -14,7 +14,7 @@ function fixture(){const file=path.join(mkdtempSync(path.join(tmpdir(),'iw-revie
 
 test('Наблюдение сохраняется с фактом атомарно, переживает перезапуск и повтор не удваивает время',()=>{
   const f=fixture(),s=f.act('start',start).active;f.advance(1500);
-  const observation='  模型 · понял критерий; завтра проверить «клиента»  ';
+  const observation='  模型 · понял критерий\nЗавтра проверить «клиента»\n  ';
   const payload={sessionId:s.id,observation,workedSeconds:1500,week,expectedRevision:1,requestId:randomUUID()};
   f.store.mutateTimer('finish',payload);f.reopen();
   assert.equal(f.store.getTimer(week).sessions[0].observation,observation);
@@ -24,9 +24,9 @@ test('Наблюдение сохраняется с фактом атомарн
   assert.throws(()=>f.store.mutateTimer('finish',{...payload,observation:'Иное'}),e=>e.status===409);
 });
 
-test('Некорректная строка не завершает сеанс, не создаёт факт и не меняет файл',()=>{
+test('Некорректное наблюдение не завершает сеанс, не создаёт факт и не меняет файл',()=>{
   const f=fixture(),s=f.act('start',start).active;f.advance(60);const raw=readFileSync(f.file,'utf8');
-  for(const observation of ['a\nb','a\rb','x'.repeat(1001),{text:'Ошибка'}])assert.throws(()=>f.act('finish',{sessionId:s.id,observation}),/одна строка/);
+  for(const observation of ['x'.repeat(10001),{text:'Ошибка'}])assert.throws(()=>f.act('finish',{sessionId:s.id,observation}),/10000 символов/);
   assert.equal(readFileSync(f.file,'utf8'),raw);assert.equal(f.store.getTimer(week).active.id,s.id);
   assert.equal(f.store.getStoredEntries().entries.length,0);
 });
@@ -42,13 +42,13 @@ test('Наблюдение устройства восстанавливаетс
   const f=fixture(),factory=new IDBFactory(),device=createDeviceStore(factory);const initialized=await device.update(()=>{});
   const context=f.store.offlineContext(initialized.deviceId);await device.update(state=>{state.context=context;});
   const started=await device.action('start',start,0,at);
-  await device.action('finish',{sessionId:started.timer.activeId,observation:'  Отвлёкся; отключить чат  '},1,at+1500000);
+  await device.action('finish',{sessionId:started.timer.activeId,observation:'  Отвлёкся\nОтключить чат  '},1,at+1500000);
   await device.close();const reopened=createDeviceStore(factory),state=await reopened.read(),record=Object.values(state.queue)[0];
-  assert.equal(record.session.observation,'  Отвлёкся; отключить чат  ');f.advance(1800);
+  assert.equal(record.session.observation,'  Отвлёкся\nОтключить чат  ');f.advance(1800);
   const payload={deviceId:state.deviceId,serverId:context.serverId,session:record.session};
   assert.equal(f.store.syncOffline(payload).receipt.status,'accepted');f.reopen();
   assert.equal(f.store.getTimer(week).sessions[0].observation,record.session.observation);
   assert.equal(f.store.syncOffline(payload).duplicate,true);assert.equal(f.store.getStoredEntries().entries.length,1);
-  assert.throws(()=>f.store.syncOffline({...payload,session:{...record.session,id:randomUUID(),observation:'wrong\nline'}}),/одна строка/);
+  assert.throws(()=>f.store.syncOffline({...payload,session:{...record.session,id:randomUUID(),observation:'x'.repeat(10001)}}),/10000 символов/);
   await reopened.close();
 });
