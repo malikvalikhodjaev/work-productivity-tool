@@ -4,6 +4,7 @@ import 'domain.dart';
 import 'modeler.dart';
 import 'project_review.dart';
 import 'repository.dart';
+import 'portfolio_grid.dart';
 
 class ModelingWorkspace extends StatefulWidget {
   final DashboardRepository repo;
@@ -116,69 +117,14 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
               padding: EdgeInsets.all(16),
               child: Text('No Data · создай первый проект.'),
             ),
-          if (projects.isNotEmpty)
-            table(
-              DataTable(
-                columnSpacing: 20,
-                horizontalMargin: 16,
-                dataRowMinHeight: 58,
-                dataRowMaxHeight: 80,
-                showCheckboxColumn: false,
-                columns: const [
-                  DataColumn(label: Text('Проект')),
-                  DataColumn(label: Text('Состояние')),
-                  DataColumn(label: Text('Слоты\nзаполнено / создано')),
-                  DataColumn(label: Text('Зоны с пробелами')),
-                  DataColumn(label: Text('К возврату')),
-                  DataColumn(label: Text('')),
-                ],
-                rows: [
-                  for (final p in shown)
-                    DataRow(
-                      key: ValueKey('project:${p['id']}'),
-                      selected: p['id'] == selected,
-                      onSelectChanged: (_) => open(p),
-                      cells: [
-                        DataCell(
-                          TextButton(
-                            onPressed: () => open(p),
-                            child: cell(p['name'].toString(), width: 200),
-                          ),
-                        ),
-                        DataCell(
-                          cell(
-                            '${projectStatusNames[p['status']] ?? p['status']}\n${projectPhaseNames[p['phase']] ?? p['phase']}',
-                            width: 150,
-                          ),
-                        ),
-                        DataCell(
-                          Text(
-                            '${object(p['summary'])['filled']} / ${object(p['summary'])['slots']}',
-                          ),
-                        ),
-                        DataCell(
-                          Text(
-                            rows(p['zones']).isEmpty
-                                ? 'No Data'
-                                : '${object(p['summary'])['gaps']} / ${object(p['summary'])['totalZones']}',
-                          ),
-                        ),
-                        DataCell(
-                          Text(
-                            '${allAlphas.where((a) => a['projectId'] == p['id'] && (a['reviewDate'] ?? '').toString().isNotEmpty && a['reviewDate'].toString().compareTo(today()) <= 0).length}',
-                          ),
-                        ),
-                        DataCell(
-                          TextButton(
-                            onPressed: () => open(p),
-                            child: const Text('Открыть моделер'),
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
+          PortfolioGrid(
+            key: ValueKey('projects:${repo.serverId}'),
+            repo: repo,
+            table: 'projects',
+            items: shown,
+            addRow: widget.createProject,
+            openRow: open,
+          ),
           if (projects.isNotEmpty && shown.isEmpty)
             const Text('По этому запросу проектов нет.'),
           const SizedBox(height: 16),
@@ -236,83 +182,16 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
                   'No Data · здесь пока нет альф. Нажми ＋ у нужной зоны.',
                 ),
               ),
-            if (alphas.isNotEmpty)
-              table(
-                DataTable(
-                  columnSpacing: 20,
-                  horizontalMargin: 16,
-                  showCheckboxColumn: false,
-                  dataRowMinHeight: 70,
-                  dataRowMaxHeight: 100,
-                  columns: const [
-                    DataColumn(label: Text('Альфа')),
-                    DataColumn(label: Text('Состояние')),
-                    DataColumn(label: Text('Следующий шаг')),
-                    DataColumn(label: Text('Вернуться')),
-                    DataColumn(label: Text('')),
-                  ],
-                  rows: [
-                    for (final a in alphas)
-                      DataRow(
-                        key: ValueKey('alpha:${a['id']}'),
-                        selected: inspected == a['id'],
-                        onSelectChanged: (_) =>
-                            setState(() => inspected = a['id'].toString()),
-                        cells: [
-                          DataCell(
-                            cell(
-                              '${(a['parentId'] ?? '').toString().isEmpty ? '' : '↳ '}${alphaName(a)}\n${a['typeName'] ?? ''}',
-                              width: 240,
-                            ),
-                          ),
-                          DataCell(
-                            cell(
-                              alphaStateNames[a['state']] ?? 'No Data',
-                              width: 150,
-                            ),
-                          ),
-                          DataCell(
-                            cell(
-                              (a['nextStep'] ?? '').toString().isEmpty
-                                  ? 'No Data'
-                                  : a['nextStep'].toString(),
-                              width: 250,
-                            ),
-                          ),
-                          DataCell(
-                            Text(
-                              (a['reviewDate'] ?? '').toString().isEmpty
-                                  ? 'No Data'
-                                  : a['reviewDate'].toString(),
-                            ),
-                          ),
-                          DataCell(
-                            Row(
-                              children: [
-                                IconButton(
-                                  tooltip: 'Записать',
-                                  onPressed: () => widget.editAlpha(project, a),
-                                  icon: const Icon(Icons.edit_outlined),
-                                ),
-                                IconButton(
-                                  tooltip: 'Фокус',
-                                  onPressed: () => widget.focusAlpha(a),
-                                  icon: const Icon(Icons.play_arrow),
-                                ),
-                                IconButton(
-                                  tooltip: 'Подальфа',
-                                  onPressed: () =>
-                                      widget.createChild(project, a),
-                                  icon: const Icon(Icons.account_tree_outlined),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
+            PortfolioGrid(
+              key: ValueKey('alphas:${repo.serverId}$selected'),
+              repo: repo,
+              table: 'alphas',
+              items: alphas,
+              addRow: () => widget.editAlpha(project, null),
+              openRow: (row) {
+                setState(() => inspected = row['id'].toString());
+              },
+            ),
             if (alpha != null)
               Card(
                 child: Padding(

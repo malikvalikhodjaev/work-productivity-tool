@@ -9,6 +9,7 @@ import 'domain.dart';
 import 'local_database.dart';
 import 'pomodoro_plan.dart';
 import 'durable_timer.dart';
+import 'grid_definitions.dart';
 
 class ApiFailure implements Exception {
   final String message;
@@ -519,6 +520,63 @@ class DashboardRepository extends ChangeNotifier {
   }
 
   Json entity(String key, Json source) => local.draft(key) ?? source;
+
+  /// Cell commands have their own identity and retain the exact before/value pair.
+  void gridCommand(String action, Json input) {
+    if (serverId == null || cache('portfolio')['tableEditing'] != 1) {
+      throw StateError('Подключи приложение к обновлённому серверу таблиц.');
+    }
+    final id = uuid.v4();
+    local.enqueue('grid:$id', '/api/native/command', {
+      'requestId': id,
+      'serverId': serverId,
+      'deviceId': deviceId,
+      'module': 'portfolio',
+      'action': action,
+      'input': input,
+    });
+    status = 'Ячейка сохранена на устройстве · ожидает синхронизации';
+    notifyListeners();
+    requestAutoSync();
+  }
+
+  List<Json> gridColumns(String table, {bool archived = false}) {
+    final cached = cache('portfolio');
+    final columns = {
+      for (final c in rows(
+        object(cached['tableDefinitions'])[table] ?? defaultGridColumns[table],
+      ))
+        c['id']: Map<String, dynamic>.from(c),
+    };
+    for (final c in rows(object(cached['tableColumns'])[table])) {
+      columns[c['id']] = Map<String, dynamic>.from(c);
+    }
+    for (final queued in pending) {
+      final body = object(queued['body']), input = object(body['input']);
+      if (body['module'] != 'portfolio' || input['table'] != table) continue;
+      if (body['action'] == 'createColumn') {
+        columns[input['id']] = {
+          ...input,
+          'custom': true,
+          'archived': false,
+          'visible': true,
+          'revision': 1,
+        };
+      }
+      if (body['action'] == 'updateColumn' &&
+          columns.containsKey(input['id'])) {
+        columns[input['id']] = {
+          ...columns[input['id']]!,
+          ...input,
+          'revision': (input['expectedRevision'] as int) + 1,
+        };
+      }
+    }
+    return columns.values
+        .where((c) => archived || c['archived'] != true)
+        .toList();
+  }
+
   List<Json> entities(String collection, String prefix) {
     final source = rows(
       cache(
@@ -537,6 +595,32 @@ class DashboardRepository extends ChangeNotifier {
       (d) => d['entity'].toString().startsWith('$prefix:'),
     )) {
       items[draft['entity'] as String] = object(draft['body']);
+    }
+    for (final queued in pending) {
+      final body = object(queued['body']), input = object(body['input']);
+      if (body['module'] != 'portfolio' ||
+          body['action'] != 'editCells' ||
+          input['table'] != collection) {
+        continue;
+      }
+      final key = '$prefix:${input['id']}';
+      final previous = items[key];
+      if (previous == null) continue;
+      final row = Map<String, dynamic>.from(previous),
+          custom = Map<String, dynamic>.from(object(previous['customValues']));
+      final columns = gridColumns(collection, archived: true);
+      for (final cell in rows(input['changes'])) {
+        final column = columns
+            .where((c) => c['id'] == cell['columnId'])
+            .firstOrNull;
+        if (column == null) continue;
+        if (column['custom'] == true) {
+          custom[cell['columnId'].toString()] = cell['value'];
+        } else {
+          row[cell['columnId'].toString()] = cell['value'];
+        }
+      }
+      items[key] = {...row, 'customValues': custom};
     }
     return items.values.toList();
   }
@@ -984,6 +1068,53 @@ class DashboardRepository extends ChangeNotifier {
             body['expectedUpdatedAt'] = current['updatedAt'];
           }
         case 'portfolio':
+          if (body['action'] == 'editCells' ||
+              body['action'] == 'updateColumn') {
+            final fresh = await request('/api/portfolio');
+            if (item['server_id'] != serverId) {
+              throw StateError('Правка связана с другой установкой.');
+            }
+            local.capture('portfolio', fresh);
+            if (body['action'] == 'editCells') {
+              current = rows(fresh[input['table'].toString()])
+                  .where((r) => r['id'] == input['id'])
+                  .firstOrNull;
+              if (current == null) {
+                throw StateError(
+                  'Строка не найдена. Исходная правка сохранена.',
+                );
+              }
+              final definitions = rows(
+                object(fresh['tableDefinitions'])[input['table']],
+              );
+              input['changes'] = [
+                for (final change in rows(input['changes']))
+                  (() {
+                    final col = definitions
+                        .where((c) => c['id'] == change['columnId'])
+                        .firstOrNull;
+                    if (col == null) {
+                      throw StateError('Сначала восстанови столбец из архива.');
+                    }
+                    return {
+                      ...change,
+                      'before': col['custom'] == true
+                          ? object(current!['customValues'])[col['id']]
+                          : current![col['id']],
+                    };
+                  })(),
+              ];
+            } else {
+              final column = rows(object(fresh['tableColumns'])[input['table']])
+                  .where((c) => c['id'] == input['id'])
+                  .firstOrNull;
+              if (column == null) {
+                throw StateError('Столбец не найден. Исходник сохранён.');
+              }
+              input['expectedRevision'] = column['revision'];
+            }
+            break;
+          }
           final collection = {
             'updateProject': 'projects',
             'updateAlpha': 'alphas',

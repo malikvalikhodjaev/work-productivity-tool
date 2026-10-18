@@ -30,7 +30,7 @@ const references = createReferenceStore(path.join(dataDir, 'references.json'));
 const writing = createWritingStore(path.join(dataDir, 'writing.json'));
 const inbox = createInboxStore(path.join(dataDir, 'inbox.json'), {writing});
 const telegram = createTelegramBot({file:path.join(dataDir,'telegram-bot.json'),inbox});
-const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/projects.js': ['projects.js', 'text/javascript; charset=utf-8'], '/overview.js': ['overview.js', 'text/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8'], '/projects.css': ['projects.css', 'text/css; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
+const assets = { '/portfolio-grid.js':['portfolio-grid.js','text/javascript; charset=utf-8'], '/portfolio-grid-core.js':['portfolio-grid-core.js','text/javascript; charset=utf-8'], '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/projects.js': ['projects.js', 'text/javascript; charset=utf-8'], '/overview.js': ['overview.js', 'text/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8'], '/projects.css': ['projects.css', 'text/css; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
 assets['/workspace.js'] = ['workspace.js', 'text/javascript; charset=utf-8'];
 assets['/workspace.css'] = ['workspace.css', 'text/css; charset=utf-8'];
 assets['/sections.css'] = ['sections.css', 'text/css; charset=utf-8'];
@@ -231,7 +231,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/portfolio') {
       const input = await body(req);
       if (!input.input || typeof input.input !== 'object' || Array.isArray(input.input)) throw new Error('Укажи данные для сохранения.');
-      return json(res, 200, store.updatePortfolio(input.action, input.input));
+      return json(res, 200, ['editCells','createColumn','updateColumn'].includes(input.action) ? store.mutatePortfolioGrid(input.action,input.input,input.requestId) : store.updatePortfolio(input.action, input.input));
     }
     if (req.method === 'PUT' && url.pathname === '/api/targets') {
       const input = await body(req);

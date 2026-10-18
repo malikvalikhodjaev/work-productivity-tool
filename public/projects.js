@@ -1,3 +1,4 @@
+import {PortfolioGrid} from './portfolio-grid.js';
 const $ = id => document.getElementById(id);
 const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 let portfolio = null;
@@ -15,6 +16,25 @@ const projectStatus = { active: 'Активен', paused: 'На паузе', clo
 const phaseTitle = { pre_operation: 'До эксплуатации', operation: 'В эксплуатации' };
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tashkent', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const selected = () => portfolio?.projects.find(project => project.id === selectedProject);
+
+async function gridMutate(action,input) {
+  const command={action,input,requestId:crypto.randomUUID()};
+  // A lost response can be retried with the same command, never a new UUID.
+  let response;
+  for(let attempt=0;attempt<2;attempt++) {
+    try {response=await fetch('/api/portfolio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(command)});break;}
+    catch(error){if(attempt)throw error;}
+  }
+  const result=await response.json();if(!response.ok)throw new Error(result.error ?? 'Не удалось сохранить.');
+  portfolio=result;render();window.dispatchEvent(new Event('rhythm:portfolio-saved'));
+}
+async function selectGridProject(project) {
+  const bridge=$('alpha-modeler-frame').contentWindow?.rhythmAlphaModeler;
+  if(await bridge?.selectProject(project.id)===false)return;
+  selectedProject=project.id;render();
+}
+const projectGrid=new PortfolioGrid($('project-list'),{table:'projects',portfolio:()=>portfolio,mutate:gridMutate,openRow:selectGridProject,addRow:()=>openProject()});
+const alphaGrid=new PortfolioGrid($('alpha-grid'),{table:'alphas',portfolio:()=>portfolio,mutate:gridMutate,openRow:alpha=>openAlpha(alpha.id),addRow:()=>openAlpha()});
 
 async function request(action, input) {
   const knownProjects = new Set(portfolio?.projects.map(project => project.id) ?? []);
@@ -145,7 +165,9 @@ function render() {
   $('gap-zones').textContent = portfolio.summary.gapZones;
   $('new-alpha').disabled = !selected();
   $('new-task').disabled = !selected();
-  $('project-list').innerHTML = portfolio.projects.length ? `<table class="project-table"><thead><tr><th scope="col">Проект</th><th scope="col">Состояние</th><th scope="col">Слоты · заполнено / создано</th><th scope="col">Зоны с пробелами</th><th scope="col">До эксплуатации · задач</th><th scope="col"></th></tr></thead><tbody>${portfolio.projects.map(project => `<tr class="${project.id === selectedProject ? 'selected' : ''}"><td><button type="button" class="project-table-name" data-project="${escape(project.id)}" aria-pressed="${project.id === selectedProject}">${escape(project.name)}</button></td><td>${escape(projectStatus[project.status])}<small>${escape(phaseTitle[project.phase])}</small></td><td>${project.summary.filled} / ${project.summary.slots}</td><td>${project.summary.gaps} / ${project.summary.totalZones}</td><td>${project.summary.beforeOperationTasks}</td><td><button type="button" class="text-button" data-project="${escape(project.id)}">Открыть моделер</button></td></tr>`).join('')}</tbody></table>` : '<div class="project-empty">No Data · создай первый проект и выбери зоны, которые хочешь отслеживать.</div>';
+  projectGrid.render(portfolio.projects);
+  $('alpha-grid').hidden=!selected();
+  alphaGrid.render(portfolio.alphas.filter(a=>a.projectId===selectedProject));
   const project = selected();
   if (!project) { $('project-detail').innerHTML = ''; return; }
   const alphas = portfolio.alphas.filter(alpha => alpha.projectId === project.id && !alpha.parentId);
@@ -165,6 +187,21 @@ function makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyR
   const alphas = new Map(snapshot.alphas.map(alpha => [alpha.id, alpha]));
   const metrics = new Map(week.metrics.map(metric => [metric.id, metric]));
   return {
+    portfolioColumns: {
+      title:'Столбцы конструктора',note:'data/dashboard.json → portfolio.tableColumns · архив сохраняет значения',
+      columns:['Таблица','ID','Название','Тип','Варианты','В архиве','Версия'],
+      rows:Object.entries(snapshot.tableColumns ?? {}).flatMap(([table,columns])=>columns.map(c=>[table,c.id,c.title,c.type,c.options?JSON.stringify(c.options):null,c.archived,c.revision]))
+    },
+    tableEdits: {
+      title:'История ячеек',note:'data/dashboard.json → portfolio.tableHistory · исходные before/value',
+      columns:['ID','Таблица','Строка','Дата','Правки'],
+      rows:(alphaBackup.tableHistory ?? []).map(e=>[e.id,e.table,e.rowId,e.at,JSON.stringify(e.changes)])
+    },
+    portfolioValues: {
+      title:'Значения своих столбцов',note:'Текущие customValues проектов и альф, включая архивные столбцы',
+      columns:['Таблица','Строка','Название строки','Столбец','Название столбца','Значение'],
+      rows:['projects','alphas'].flatMap(table=>snapshot[table].flatMap(row=>Object.entries(row.customValues ?? {}).map(([id,value])=>[table,row.id,row.name || row.uniqueName || row.typeName,id,snapshot.tableColumns?.[table]?.find(c=>c.id===id)?.title,value])))
+    },
     sources: {
       title: 'Источники и мысли', note: `${countLabel(references.entries.length, 'запись', 'записи', 'записей')} · data/references.json · исходные формулировки и заметки`,
       columns: ['ID', 'Группа', 'Название', 'Ссылка', 'Вложение', 'Кто / источник', 'Исходная запись', 'Моя заметка', 'Добавлено', 'Обновлено', 'Правок'],

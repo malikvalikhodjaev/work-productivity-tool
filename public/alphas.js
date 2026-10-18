@@ -201,8 +201,8 @@ $('import-file').addEventListener('change', async () => {
     if (file.size > 3 * 1024 * 1024) throw new Error('Выбери файл до 3 МБ.');
     const backup = JSON.parse(await file.text()); const preview = await request('/api/alphas/import',{backup});
     pendingBackup = backup;
-    $('import-preview').innerHTML = `<p>Добавится: <strong>${preview.added}</strong>. Уже есть: ${preview.unchanged}. Пропущено отличающихся: ${preview.conflicts.length}.</p>${preview.conflicts.length ? `<ul>${preview.conflicts.map(item => `<li>${escape(item.name)}</li>`).join('')}</ul>` : ''}`;
-    $('import-commit').disabled = !preview.added;
+    $('import-preview').innerHTML = `<p>Добавится альф: <strong>${preview.added}</strong>. Новых проектов: ${preview.projectsAdded ?? 0}. Столбцов: ${preview.columnsAdded ?? 0}. Уже есть альф: ${preview.unchanged}. Пропущено отличающихся: ${preview.conflicts.length}.</p>${preview.conflicts.length ? `<ul>${preview.conflicts.map(item => `<li>${escape(item.name)}</li>`).join('')}</ul>` : ''}`;
+    $('import-commit').disabled = !(preview.added+(preview.projectsAdded ?? 0)+(preview.columnsAdded ?? 0));
   } catch(error) { $('import-preview').textContent = `Ошибка проверки: ${error.message}`; }
 });
 $('import-commit').addEventListener('click', async () => {
@@ -210,7 +210,7 @@ $('import-commit').addEventListener('click', async () => {
   try {
     const report = await request('/api/alphas/import',{backup:pendingBackup,commit:true}); const priorId = selectedId;
     portfolio = await request('/api/portfolio'); renderProjects(); openEditor(priorId ?? portfolio.alphas.at(-1)?.id,false);
-    $('import-dialog').close(); pendingBackup = null; notice(`Добавлено объектов: ${report.added}. Пропущено отличающихся: ${report.conflicts.length}.`); notifyParent('rhythm:alpha-saved');
+    $('import-dialog').close(); pendingBackup = null; notice(`Добавлено альф: ${report.added}, проектов: ${report.projectsAdded ?? 0}, столбцов: ${report.columnsAdded ?? 0}. Пропущено отличающихся: ${report.conflicts.length}.`); notifyParent('rhythm:alpha-saved');
   } catch(error) { $('import-preview').textContent = error.message; $('import-commit').disabled = false; }
 });
 load().catch(error => { notice(error.message,true); $('objects').textContent = 'Не удалось загрузить локальные данные. Обнови страницу после запуска дашборда.'; });

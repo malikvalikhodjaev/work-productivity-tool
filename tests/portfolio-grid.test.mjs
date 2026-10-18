@@ -1,0 +1,58 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {mkdtempSync,readFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+import {createStore} from '../lib/store.mjs';
+import {writeLegacyAlphaFixture} from './alpha-fixture.mjs';
+const fixture=()=>{const file=path.join(mkdtempSync(path.join(tmpdir(),'iw-grid-')),'dashboard.json');writeLegacyAlphaFixture(file);return {file,store:createStore(file)};};
+const edit=(store,table,id,columnId,before,value,requestId=randomUUID())=>store.mutatePortfolioGrid('editCells',{table,id,changes:[{columnId,before,value}]},requestId);
+test('Independent cells merge, same-cell conflict is atomic, raw text and UUID receipt survive restart',()=>{
+  const {file,store}=fixture(),row=store.getPortfolio().alphas[0],id=randomUUID(),text='  Первая строка\n\nВторая строка  ';
+  edit(store,'alphas',row.id,'description',row.description,text,id);
+  edit(store,'alphas',row.id,'nextStep',row.nextStep,'Позвонить');
+  assert.equal(store.getPortfolio().alphas[0].description,text);
+  const before=readFileSync(file,'utf8');
+  assert.throws(()=>edit(store,'alphas',row.id,'description',row.description,'Устаревшая правка'),e=>e.status===409);
+  assert.equal(readFileSync(file,'utf8'),before);
+  const reopened=createStore(file);
+  assert.equal(edit(reopened,'alphas',row.id,'description',row.description,text,id).duplicate,true);
+  assert.equal(readFileSync(file,'utf8'),before);
+  assert.ok(reopened.alphaHistory(row.id).some(h=>h.snapshot.description===text));
+  assert.equal(reopened.alphaBackup().tableHistory.length,2);
+  assert.throws(()=>edit(reopened,'projects','test-project','_slots',null,'99'),/рассчитывается/);
+});
+test('Typed custom columns rename, archive/restore and round-trip values with schema and history',()=>{
+  const {file,store}=fixture(),columnId=randomUUID(),row=store.getPortfolio().alphas[0];
+  store.mutatePortfolioGrid('createColumn',{table:'alphas',id:columnId,title:'Площадь',type:'number'},randomUUID());
+  edit(store,'alphas',row.id,columnId,null,123.5);
+  const before=readFileSync(file,'utf8');
+  assert.throws(()=>edit(store,'alphas',row.id,columnId,123.5,'не число'),/число/);
+  assert.equal(readFileSync(file,'utf8'),before);
+  store.mutatePortfolioGrid('updateColumn',{table:'alphas',id:columnId,title:'Площадь, м²',expectedRevision:1,archived:true},randomUUID());
+  assert.equal(store.getPortfolio().tableDefinitions.alphas.some(c=>c.id===columnId),false);
+  assert.equal(store.getPortfolio().alphas[0].customValues[columnId],123.5);
+  store.mutatePortfolioGrid('updateColumn',{table:'alphas',id:columnId,expectedRevision:2,archived:false},randomUUID());
+  const backup=store.alphaBackup(),destination=fixture();
+  // Import adds a fresh object rather than replacing an existing owner's row.
+  backup.alphas=[{...backup.alphas[0],id:randomUUID(),parentId:null,uniqueName:'Перенесённый объект'}];backup.history=[];
+  destination.store.importAlphas(backup,true);
+  const imported=destination.store.getPortfolio().alphas.at(-1);
+  assert.equal(imported.customValues[columnId],123.5);
+  assert.equal(destination.store.getPortfolio().tableColumns.alphas[0].title,'Площадь, м²');
+  assert.equal(createStore(file).getPortfolio().tableColumns.alphas[0].revisions.length,2);
+  assert.equal(Object.hasOwn(createStore(file).getPortfolio().tableColumns.alphas[0].revisions[1],'revisions'),false);
+});
+test('Empty projects and their custom data export without an alpha; malformed schema writes nothing',()=>{
+  const {store}=fixture(),c=randomUUID();
+  store.updatePortfolio('createProject',{name:'Пустой проект',status:'active',phase:'pre_operation',zoneIds:['customers']});
+  const project=store.getPortfolio().projects.at(-1);
+  store.mutatePortfolioGrid('createColumn',{table:'projects',id:c,title:'Риелтор',type:'text'},randomUUID());
+  edit(store,'projects',project.id,c,null,'  Контакт\nПозвонить  ');
+  const backup=store.alphaBackup(),destination=fixture();destination.store.importAlphas(backup,true);
+  assert.equal(destination.store.getPortfolio().projects.at(-1).customValues[c],'  Контакт\nПозвонить  ');
+  const before=readFileSync(destination.file,'utf8');backup.tableColumns.projects[0].type='javascript';
+  assert.throws(()=>destination.store.importAlphas(backup,true),/столбец/);
+  assert.equal(readFileSync(destination.file,'utf8'),before);
+});
