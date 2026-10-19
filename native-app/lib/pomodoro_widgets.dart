@@ -12,84 +12,342 @@ Future<bool> editPomodoroTarget(
   String? ref,
   String? title,
 }) async {
-  final entities = rows(repo.cache('workspace')['entities']);
-  if (entities.isEmpty) {
-    await showDialog<void>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Сначала создай работу или кейс'),
-        content: const Text(
-          'В разделе «Работа» добавь карточку. Норматив будет учитывать помидорки её таймера.',
+  return await showDialog<bool>(
+        context: context,
+        builder: (_) => _PomodoroTargetEditor(
+          repo: repo,
+          previous: previous,
+          ref: ref,
+          title: title,
+        ),
+      ) ??
+      false;
+}
+
+List<Json> _normWorks(DashboardRepository repo) {
+  final entities = {
+    for (final e in rows(repo.cache('workspace')['entities']))
+      e['ref'].toString(): e,
+  };
+  for (final collection in {
+    'workItems': 'work',
+    'cases': 'case',
+    'tasks': 'task',
+  }.entries) {
+    for (final e in repo.entities(collection.key, collection.value)) {
+      final ref = '${collection.value}:${e['id']}';
+      entities[ref] = {...e, 'ref': ref};
+    }
+  }
+  return entities.values.toList();
+}
+
+class _PomodoroTargetEditor extends StatefulWidget {
+  final DashboardRepository repo;
+  final Json? previous;
+  final String? ref, title;
+  const _PomodoroTargetEditor({
+    required this.repo,
+    this.previous,
+    this.ref,
+    this.title,
+  });
+  @override
+  State<_PomodoroTargetEditor> createState() => _PomodoroTargetEditorState();
+}
+
+class _PomodoroTargetEditorState extends State<_PomodoroTargetEditor> {
+  late final TextEditingController date, title, target;
+  late final List<Json> baseRecords;
+  String? workRef, error;
+  bool saving = false, creating = false;
+
+  DashboardRepository get repo => widget.repo;
+
+  @override
+  void initState() {
+    super.initState();
+    final entities = _normWorks(repo);
+    workRef = widget.previous?['workRef'] ?? widget.ref;
+    date = TextEditingController(text: widget.previous?['date'] ?? today());
+    title = TextEditingController(
+      text:
+          widget.previous?['title'] ??
+          widget.title ??
+          entities.where((e) => e['ref'] == workRef).firstOrNull?['title'] ??
+          '',
+    );
+    target = TextEditingController(
+      text: (widget.previous?['target'] ?? 1).toString(),
+    );
+    baseRecords = rows(repo.cache('dailyNorms')['pomodoroTargets'])
+        .map((n) => Map<String, dynamic>.from(n))
+        .toList();
+    repo.addListener(refresh);
+  }
+
+  void refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    repo.removeListener(refresh);
+    date.dispose();
+    title.dispose();
+    target.dispose();
+    super.dispose();
+  }
+
+  Future<void> createWork() async {
+    setState(() => creating = true);
+    Json? created;
+    try {
+      await editFields(
+        context,
+        title: 'Создать работу / кейс',
+        initial: {'kind': 'work', 'title': '', 'description': ''},
+        fields: const [
+          FieldSpec('kind', 'Тип', options: {'work': 'Работа', 'case': 'Кейс'}),
+          FieldSpec('title', 'Название'),
+          FieldSpec('description', 'Описание и размышления', lines: 4),
+        ],
+        save: (input) async {
+          final isCase = input['kind'] == 'case';
+          final name = input['title'].toString(),
+              note = input['description'].toString();
+          final maxTitle = isCase ? 200 : 300, maxNote = isCase ? 4000 : 12000;
+          if (name.trim().isEmpty || name.length > maxTitle) {
+            throw ArgumentError('Название: от 1 до $maxTitle знаков.');
+          }
+          if (note.length > maxNote) {
+            throw ArgumentError('Описание: до $maxNote знаков.');
+          }
+          final id = uuid.v4(), ref = '${isCase ? 'case' : 'work'}:$id';
+          repo.nativeSave(
+            'workspace',
+            isCase ? 'saveCase' : 'saveWorkItem',
+            isCase
+                ? {
+                    'clientId': id,
+                    'title': name,
+                    'context': note,
+                    'status': 'new',
+                  }
+                : {
+                    'id': id,
+                    'create': true,
+                    'expectedRevision': 0,
+                    'requestId': uuid.v4(),
+                    'title': name,
+                    'kind': 'work',
+                    'stage': 'planned',
+                    'description': note,
+                    'allocation': 'unclassified',
+                  },
+            ref,
+          );
+          created = {'ref': ref, 'title': name};
+        },
+      );
+      if (mounted && created != null) {
+        setState(() {
+          workRef = created!['ref'];
+          title.text = created!['title'];
+          error = null;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => creating = false);
+    }
+  }
+
+  Future<void> save() async {
+    setState(() {
+      saving = true;
+      error = null;
+    });
+    try {
+      final input = <String, dynamic>{
+        'date': date.text,
+        'workRef': workRef,
+        'title': title.text,
+        'target': target.text.isEmpty ? null : int.tryParse(target.text),
+        if (widget.previous == null) 'create': true,
+      };
+      if (workRef == null ||
+          !_normWorks(repo).any((e) => e['ref'] == workRef)) {
+        throw ArgumentError('Выбери или создай работу / кейс.');
+      }
+      if (target.text.isNotEmpty && input['target'] == null) {
+        throw ArgumentError('Норма: целое число от 1 до 1440.');
+      }
+      _savePomodoroTarget(repo, input, baseRecords);
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          error = e.toString();
+          saving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final entities = _normWorks(repo);
+    final selected = entities.any((e) => e['ref'] == workRef) ? workRef : null;
+    return PopScope(
+      canPop: !saving && !creating,
+      child: AlertDialog(
+        title: Text(
+          widget.previous == null
+              ? 'Добавить ежедневный норматив'
+              : 'Изменить ежедневный норматив',
+        ),
+        content: SizedBox(
+          width: 580,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: date,
+                  decoration: const InputDecoration(
+                    labelText: 'Действует с · YYYY-MM-DD',
+                  ),
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  key: ValueKey(selected),
+                  initialValue: selected,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Работа / задача / кейс',
+                  ),
+                  hint: Text(
+                    entities.isEmpty
+                        ? 'Создай работу или кейс'
+                        : 'Выбери работу',
+                  ),
+                  items: [
+                    for (final e in entities)
+                      DropdownMenuItem(
+                        value: e['ref'].toString(),
+                        child: Text(e['title'].toString()),
+                      ),
+                  ],
+                  onChanged: saving || creating || widget.previous != null
+                      ? null
+                      : (ref) => setState(() {
+                          workRef = ref;
+                          title.text =
+                              entities
+                                  .where((e) => e['ref'] == ref)
+                                  .firstOrNull?['title'] ??
+                              '';
+                        }),
+                ),
+                if (widget.previous == null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: saving || creating ? null : createWork,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Создать работу / кейс'),
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Каждая строка чек-листа относится к своей работе. Для отдельного счётчика выбери другую карточку или создай новую.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: title,
+                  decoration: const InputDecoration(
+                    labelText: 'Название норматива',
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: target,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Помидорок за день · пусто для снятия',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Ежедневно, без срока окончания — пока не изменишь или не снимешь.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                if (error != null)
+                  Text(error!, style: const TextStyle(color: Colors.red)),
+              ],
+            ),
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(c),
-            child: const Text('Понятно'),
+            onPressed: saving || creating
+                ? null
+                : () => Navigator.pop(context, false),
+            child: const Text('Закрыть'),
+          ),
+          FilledButton(
+            onPressed: saving || creating ? null : save,
+            child: Text(saving ? 'Сохраняю…' : 'Сохранить'),
           ),
         ],
       ),
     );
-    return false;
   }
-  final baseRecords = rows(repo.cache('dailyNorms')['pomodoroTargets'])
-      .map((n) => Map<String, dynamic>.from(n))
-      .toList();
-  return editFields(
-    context,
-    title: 'Ежедневный норматив помидорок',
-    initial: {
-      'date': previous?['date'] ?? today(),
-      'workRef': previous?['workRef'] ?? ref ?? entities.first['ref'],
-      'title': previous?['title'] ?? title ?? '',
-      'target': previous?['target'] ?? 1,
-    },
-    fields: [
-      const FieldSpec('date', 'Действует с · YYYY-MM-DD'),
-      FieldSpec(
-        'workRef',
-        'Работа / задача / кейс',
-        options: {
-          for (final e in entities) e['ref'].toString(): e['title'].toString(),
-        },
-      ),
-      const FieldSpec('title', 'Название норматива'),
-      const FieldSpec(
-        'target',
-        'Помидорок за день · пусто для снятия',
-        integer: true,
-      ),
-    ],
-    save: (input) async {
-      final date = input['date'].toString(),
-          parsed = DateTime.tryParse('${input['date']}T12:00:00Z');
-      if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(date) ||
-          parsed == null ||
-          parsed.toIso8601String().substring(0, 10) != date) {
-        throw ArgumentError('Дата: YYYY-MM-DD.');
-      }
-      if (input['title'].toString().trim().isEmpty ||
-          input['title'].toString().length > 240) {
-        throw ArgumentError('Впиши название до 240 знаков.');
-      }
-      final target = input['target'] as int?;
-      if (target != null && (target < 1 || target > 1440)) {
-        throw ArgumentError('Норма: целое число от 1 до 1440.');
-      }
-      final old = baseRecords
-          .where((n) => n['date'] == date && n['workRef'] == input['workRef'])
-          .firstOrNull;
-      repo.nativeSave(
-        'pomodoroTarget',
-        'save',
-        input,
-        'pomodoro:$date:${input['workRef']}',
-        expectedUpdatedAt: old?['updatedAt'],
-      );
-      repo.local.set(
-        'pomodoroReminder:$date',
-        DateTime.now().millisecondsSinceEpoch + 3600000,
-      );
-    },
+}
+
+void _savePomodoroTarget(
+  DashboardRepository repo,
+  Json input,
+  List<Json> baseRecords,
+) {
+  final date = input['date'].toString(),
+      parsed = DateTime.tryParse('${input['date']}T12:00:00Z');
+  if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(date) ||
+      parsed == null ||
+      parsed.toIso8601String().substring(0, 10) != date) {
+    throw ArgumentError('Дата: YYYY-MM-DD.');
+  }
+  if (input['title'].toString().trim().isEmpty ||
+      input['title'].toString().length > 240) {
+    throw ArgumentError('Впиши название до 240 знаков.');
+  }
+  if (input['create'] == true &&
+      repo
+          .pomodoroTargetsForDate(date)
+          .any((n) => n['workRef'] == input['workRef'])) {
+    throw ArgumentError(
+      'Для этой работы уже есть норматив. Измени его через карандаш или создай другую работу для нового норматива.',
+    );
+  }
+  final target = input['target'] as int?;
+  if (target != null && (target < 1 || target > 1440)) {
+    throw ArgumentError('Норма: целое число от 1 до 1440.');
+  }
+  final old = baseRecords
+      .where((n) => n['date'] == date && n['workRef'] == input['workRef'])
+      .firstOrNull;
+  repo.nativeSave(
+    'pomodoroTarget',
+    'save',
+    input,
+    'pomodoro:$date:${input['workRef']}',
+    expectedUpdatedAt: old?['updatedAt'],
+  );
+  repo.local.set(
+    'pomodoroReminder:$date',
+    DateTime.now().millisecondsSinceEpoch + 3600000,
   );
 }
 

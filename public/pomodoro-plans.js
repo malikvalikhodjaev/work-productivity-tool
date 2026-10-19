@@ -5,7 +5,7 @@ const today = () => new Date(Date.now() + 5 * 3600000).toISOString().slice(0, 10
 const shift = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 const readOnly = Boolean(document.querySelector('meta[name="dashboard-access"][content="viewer"]'));
 const embedded = window.parent !== window;
-let data, entities = [], selectedWeek = '', loading = false, submitting = false, expected, retryBody;
+let data, entities = [], selectedWeek = '', loading = false, submitting = false, expected, retryBody, editing = false;
 let promptedDay = '', nextPrompt = 0, entryPending = true;
 const host = document.createElement('section');
 host.className = 'pomodoro-settings'; host.id = 'pomodoro-settings';
@@ -61,9 +61,10 @@ async function load() {
 function previous() { return data?.pomodoroTargets?.find(t => t.date === field('date').value && t.workRef === field('workRef').value); }
 function fillPrevious() {
   const exact=previous(), row=exact??data?.pomodoroPlan.targets.find(t=>t.workRef===field('workRef').value&&t.repeat==='daily'&&t.sourceDate<=field('date').value); expected=exact?.updatedAt ?? null;
-  field('title').value = row?.title ?? entities.find(e=>e.ref===field('workRef').value)?.title ?? '';
-  field('target').value = row?.target ?? 1;
-  document.getElementById('pom-remove').hidden = !row || row.target == null;
+  field('title').value = (editing ? row?.title : null) ?? entities.find(e=>e.ref===field('workRef').value)?.title ?? '';
+  field('target').value = (editing ? row?.target : null) ?? 1;
+  document.getElementById('pom-remove').hidden = !editing || !row || row.target == null;
+  form.querySelector('.form-error').textContent=!editing&&row?.target!=null?'Для этой работы уже есть норматив. Выбери другую карточку; прежнюю норму можно изменить через карандаш.':'';
   retryBody = null;
 }
 async function edit(ref) {
@@ -72,15 +73,18 @@ async function edit(ref) {
     entities = (await api('/api/workspace')).entities;
     if (!entities.length) throw new Error('Сначала создай работу или кейс в разделе «Работа».');
     if (prompt.open) prompt.close();
+    editing=Boolean(ref);
+    form.querySelector('h2').textContent=editing?'Изменить ежедневный норматив':'Добавить ежедневный норматив';
     field('date').value=today();
-    field('workRef').innerHTML=entities.map(e=>`<option value="${esc(e.ref)}">${esc(e.title)}</option>`).join('');
+    field('workRef').innerHTML='<option value="">Выбери работу для отдельного счётчика</option>'+entities.map(e=>`<option value="${esc(e.ref)}">${esc(e.title)}</option>`).join('');
+    field('workRef').disabled=editing;
     if (ref) field('workRef').value=ref;
-    fillPrevious(); form.querySelector('.form-error').textContent=''; editor.showModal();
+    fillPrevious(); editor.showModal();
   } catch(error) { host.querySelector('.pom-status').textContent=error.message; if (prompt.open) { prompt.querySelector('p').textContent=error.message; } }
 }
 async function save(remove = false) {
   if (submitting || (!remove && !form.reportValidity())) return;
-  const input={date:field('date').value,workRef:field('workRef').value,title:field('title').value,target:remove?null:Number(field('target').value),repeat:'daily'};
+  const input={date:field('date').value,workRef:field('workRef').value,title:field('title').value,target:remove?null:Number(field('target').value),repeat:'daily',...(!editing?{create:true}:{})};
   const content=JSON.stringify({input,expectedUpdatedAt:expected});
   if (!retryBody || retryBody.content!==content) retryBody={content,command:{input,expectedUpdatedAt:expected,requestId:crypto.randomUUID()}};
   submitting=true; for(const b of form.querySelectorAll('button'))b.disabled=true;

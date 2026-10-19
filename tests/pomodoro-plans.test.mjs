@@ -11,12 +11,36 @@ const date = '2026-10-15', ref = 'task:reading';
 function fixture() {
   const file = path.join(mkdtempSync(path.join(tmpdir(), 'iw-pom-plan-')), 'dashboard.json');
   let clock = Date.parse(`${date}T10:00:00+05:00`);
-  const options = { now: () => clock, validateWorkRef: r => { if (r !== ref) throw Error('Unknown work'); return r; }, getEntities: () => [{ref, title:'Другое имя работы'}] };
+  const options = { now: () => clock, validateWorkRef: r => { if (![ref,'task:guides'].includes(r)) throw Error('Unknown work'); return r; }, getEntities: () => [{ref, title:'Другое имя работы'},{ref:'task:guides',title:'Руководства'}] };
   let store = createStore(file, options);
   return { file, get store() { return store; }, advance(s) { clock += s * 1000; }, reopen() { store = createStore(file, options); },
     command(target, expectedUpdatedAt = null, extra = {}) { return { module:'pomodoroTarget', action:'save', requestId:randomUUID(), expectedUpdatedAt, input:{workRef:ref, date, title:'  Чтение · 我的规范  ', target, repeat:'once', ...extra} }; },
     timer(action, input = {}) { return store.mutateTimer(action, { ...input, week:date, requestId:randomUUID(), expectedRevision:store.getTimer(date).revision }); } };
 }
+
+test('Explicit add never replaces a current or inherited norm; editing remains available', () => {
+  const f=fixture();
+  f.store.nativeMutate(f.command(10,null,{repeat:'daily',create:true}));
+  const before=readFileSync(f.file,'utf8');
+  assert.throws(()=>f.store.nativeMutate(f.command(2,null,{create:true,title:'Вторая норма'})),/уже есть норматив/);
+  assert.throws(()=>f.store.nativeMutate(f.command(2,null,{create:true,date:'2026-10-16'})),/уже есть норматив/);
+  assert.equal(readFileSync(f.file,'utf8'),before);
+  const old=f.store.getDailyNorms(date).pomodoroTargets[0];
+  f.store.nativeMutate(f.command(2,old.updatedAt,{title:'Редактируемая норма'}));
+  assert.equal(f.store.getDailyNorms(date).pomodoroPlan.targets[0].title,'Редактируемая норма');
+});
+
+test('Two different works keep independent daily norms and timer counts after restart', () => {
+  const f=fixture();
+  f.store.nativeMutate(f.command(10,null,{repeat:'daily',create:true}));
+  const second=f.command(2,null,{workRef:'task:guides',title:'Руководства',repeat:'daily',create:true});
+  f.store.nativeMutate(second);f.store.nativeMutate(second);
+  const s=f.timer('start',{title:'Чтение',mode:'pomodoro',metricId:'reading',allocation:'assigned',workRef:ref}).active;
+  f.advance(1500);f.timer('finish',{sessionId:s.id});f.reopen();
+  const view=f.store.getDailyNorms(date),first=view.pomodoroPlan.targets.find(t=>t.workRef===ref),other=view.pomodoroPlan.targets.find(t=>t.workRef==='task:guides');
+  assert.equal(view.pomodoroPlan.targets.length,2);assert.equal(first.target,10);assert.equal(first.actualPomodoros,1);assert.equal(other.target,2);assert.equal(other.actualPomodoros,0);
+  assert.equal(view.pomodoroWeek.rows.length,2);
+});
 
 test('Daily counts are backed by complete work sessions, deduplicated and assigned to Tashkent completion day', () => {
   const s = {id:'same',workRef:ref,status:'finished',phase:'work',mode:'pomodoro',completedPomodoros:1,finishedAt:'2026-10-14T19:01:00Z'};
