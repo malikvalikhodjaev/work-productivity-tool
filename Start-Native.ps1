@@ -22,10 +22,9 @@ try {
         Write-Warning 'Local server is unavailable; opening the app with its saved local data.'
     }
     if ($CheckOnly) { [pscustomobject]@{binary=$nativeBinary;serverVersion=$nativeHealth.version;ready=$true} | ConvertTo-Json; return }
-    $nativeExisting = @(Get-Process -Name indicators_work -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [IO.Path]::GetFullPath($_.Path) -eq $nativeBinary })
-    if ($nativeExisting.Count -eq 0) {
-        Start-Process -FilePath $nativeBinary -WorkingDirectory (Split-Path -Parent $nativeBinary) -WindowStyle Hidden
-    }
+    # The runner owns the single-instance mutex. A second invocation restores
+    # its existing window, including when it has been hidden in the tray.
+    Start-Process -FilePath $nativeBinary -WorkingDirectory (Split-Path -Parent $nativeBinary) -WindowStyle Hidden
 } finally {
     if ($nativeLocked) { $nativeMutex.ReleaseMutex() }
     $nativeMutex.Dispose()
