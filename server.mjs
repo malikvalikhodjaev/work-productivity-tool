@@ -56,6 +56,8 @@ assets['/pomodoro-plans.js'] = ['pomodoro-plans.js', 'text/javascript; charset=u
 assets['/pomodoro-plans.css'] = ['pomodoro-plans.css', 'text/css; charset=utf-8'];
 assets['/focus'] = ['focus.html', 'text/html; charset=utf-8'];
 assets['/focus-window.css'] = ['focus-window.css', 'text/css; charset=utf-8'];
+assets['/write'] = ['writing-sheet.html', 'text/html; charset=utf-8'];
+assets['/writing-sheet.js'] = ['writing-sheet.js', 'text/javascript; charset=utf-8'];
 assets['/writing-editor.js'] = ['writing-editor.js', 'text/javascript; charset=utf-8'];
 assets['/inbox.js'] = ['inbox.js', 'text/javascript; charset=utf-8'];
 assets['/inbox.css'] = ['inbox.css', 'text/css; charset=utf-8'];
