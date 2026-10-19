@@ -9,6 +9,7 @@ import 'package:indicators_work/domain.dart';
 import 'package:indicators_work/local_database.dart';
 import 'package:indicators_work/main.dart';
 import 'package:indicators_work/repository.dart';
+import 'package:indicators_work/active_timer_conflict.dart';
 
 http.Client timerClient(Future<http.Response> Function(http.Request) handle) =>
     MockClient(
@@ -152,11 +153,115 @@ void main() {
       addTearDown(repo.dispose);
       await expectLater(
         repo.focusWork(ref: 'case:second', title: 'Другая'),
-        throwsStateError,
+        throwsA(
+          isA<ActiveTimerConflict>()
+              .having((error) => error.title, 'active title', 'Первая')
+              .having((error) => error.sessionId, 'session ID', session['id']),
+        ),
       );
       expect(repo.active, session);
       expect(requests, 0);
       expect(db.get('pendingTimer'), isNull);
+    },
+  );
+
+  testWidgets(
+    'another Play names the current work and opens its unchanged player',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 1100);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final db = database();
+      db.set('durableTimerEnabled', true);
+      db.set('automaticSync', false);
+      final session = newLocalSession(
+        title: 'Продажа дома',
+        workRef: 'work:first',
+        now: DateTime.now().millisecondsSinceEpoch,
+      );
+      db.capture('timer', {
+        'revision': 1,
+        'active': session,
+        'sessions': [session],
+      });
+      db.capture('workspace', {
+        'cases': [
+          {'id': 'second', 'title': 'Руководства', 'status': 'active'},
+        ],
+        'entities': [
+          {'ref': 'case:second', 'title': 'Руководства'},
+        ],
+      });
+      final repo = DashboardRepository(db);
+      await tester.pumpWidget(
+        DashboardApp(repo: repo, folder: '.', backgroundEnabled: false),
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Работа').first);
+      await tester.pump();
+      final play = find.widgetWithText(TextButton, 'Фокус').first;
+      await tester.ensureVisible(play);
+      await tester.tap(play);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Уже есть активный таймер'), findsOneWidget);
+      expect(
+        find.textContaining('«Продажа дома» — идёт сейчас.'),
+        findsOneWidget,
+      );
+      expect(repo.active?['id'], session['id']);
+      expect(repo.pending, isEmpty);
+      await tester.tap(find.text('Открыть текущий таймер'));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byTooltip('Все разделы'), findsWidgets);
+      expect(repo.active?['id'], session['id']);
+      expect(repo.pending, isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+      repo.dispose();
+    },
+  );
+
+  test(
+    'paused work also blocks a different work without resuming or queueing',
+    () async {
+      final db = database();
+      db.set('durableTimerEnabled', true);
+      db.set('automaticSync', false);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final session = changeLocalSession(
+        newLocalSession(
+          title: 'Чтение',
+          workRef: 'work:first',
+          now: now - 60000,
+        ),
+        'pause',
+        now,
+      );
+      db.capture('timer', {
+        'revision': 2,
+        'active': session,
+        'sessions': [session],
+      });
+      final repo = DashboardRepository(db);
+      addTearDown(repo.dispose);
+      await expectLater(
+        repo.focusWork(ref: 'work:second', title: 'Бизнес'),
+        throwsA(
+          isA<ActiveTimerConflict>().having(
+            (error) => error.paused,
+            'paused',
+            true,
+          ),
+        ),
+      );
+      expect(repo.active, session);
+      expect(repo.pending, isEmpty);
+      await expectLater(
+        repo.sharedAction('startBreak', {}),
+        throwsA(isA<ActiveTimerConflict>()),
+      );
+      expect(repo.active, session);
+      expect(repo.pending, isEmpty);
     },
   );
 

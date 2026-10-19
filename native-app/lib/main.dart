@@ -27,6 +27,7 @@ import 'daily_problem_banner.dart';
 import 'modeling_workspace.dart';
 import 'leisure.dart';
 import 'timer_ringtones.dart';
+import 'active_timer_conflict.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -176,7 +177,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.16',
+        'clientVersion': '0.1.17',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -732,7 +733,7 @@ class _DashboardHomeState extends State<DashboardHome>
       return;
     }
     if (repo.active != null) {
-      message('Уже есть активный сеанс. Сначала заверши его.');
+      await showActiveTimerConflict(ActiveTimerConflict(repo.active!));
       return;
     }
     final initial = {
@@ -860,6 +861,50 @@ class _DashboardHomeState extends State<DashboardHome>
     }
     setState(() => section = 2);
     await changeFocus(true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && pageScroll.hasClients) pageScroll.jumpTo(0);
+    });
+  }
+
+  Future<void> showActiveTimerConflict(ActiveTimerConflict conflict) async {
+    if (!mounted) return;
+    if (dialogOpen) {
+      message(conflict.toString());
+      return;
+    }
+    dialogOpen = true;
+    bool open = false;
+    try {
+      open =
+          await showDialog<bool>(
+            context: context,
+            builder: (c) => AlertDialog(
+              title: const Text('Уже есть активный таймер'),
+              content: Text(
+                '«${conflict.title}»${conflict.paused ? ' — на паузе' : ' — идёт сейчас'}.\n\n'
+                'Новая работа не запущена. Заверши и учти текущий сеанс или отмени его, затем запускай другую работу.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(c, false),
+                  child: const Text('Оставить как есть'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(c, true),
+                  child: const Text('Открыть текущий таймер'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+    } finally {
+      dialogOpen = false;
+    }
+    if (!open || !mounted) return;
+    // Open the player without resuming, finishing, or replacing the session.
+    await changeFocus(true);
+    if (!mounted) return;
+    setState(() => section = 2);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && pageScroll.hasClients) pageScroll.jumpTo(0);
     });
@@ -1249,6 +1294,8 @@ class _DashboardHomeState extends State<DashboardHome>
   Future<void> safe(Future<void> Function() action) async {
     try {
       await action();
+    } on ActiveTimerConflict catch (conflict) {
+      await showActiveTimerConflict(conflict);
     } catch (e) {
       message(
         e is StateError

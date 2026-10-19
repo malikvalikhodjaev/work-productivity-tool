@@ -11,6 +11,7 @@ import 'pomodoro_plan.dart';
 import 'durable_timer.dart';
 import 'grid_definitions.dart';
 import 'model_hierarchy.dart';
+import 'active_timer_conflict.dart';
 
 class ApiFailure implements Exception {
   final String message;
@@ -154,9 +155,7 @@ class DashboardRepository extends ChangeNotifier {
       final s = active;
       if (s != null) {
         if (s['workRef'] != ref) {
-          throw StateError(
-            'Сейчас в фокусе другая работа. Сначала заверши её.',
-          );
+          throw ActiveTimerConflict(s);
         }
         if (s['status'] == 'paused') await timerAction('resume');
         return;
@@ -942,6 +941,9 @@ class DashboardRepository extends ChangeNotifier {
   }
 
   Future<void> sharedAction(String action, Json input) async {
+    if (['start', 'startBreak'].contains(action) && active != null) {
+      throw ActiveTimerConflict(active!);
+    }
     if (durableTimer) {
       _queueSharedAction(action, input);
       return;
@@ -1418,7 +1420,7 @@ class DashboardRepository extends ChangeNotifier {
 
   void startLocal(Json input, {bool independentConfirmed = false}) {
     if (localActive != null) {
-      throw StateError('На устройстве уже есть активный сеанс.');
+      throw ActiveTimerConflict(localActive!);
     }
     if (cache('timer')['active'] != null && !independentConfirmed) {
       throw StateError(

@@ -1,6 +1,15 @@
 $ErrorActionPreference = 'Stop'
 $rhythmDirectory = $PSScriptRoot
 $rhythmUrl = 'http://127.0.0.1:8787'
+$rhythmDataDirectory = if ($env:DASHBOARD_DATA_DIR) { $env:DASHBOARD_DATA_DIR } else { Join-Path $PSScriptRoot 'data' }
+$rhythmMovedFile = Join-Path $rhythmDataDirectory 'server-moved.json'
+if (Test-Path -LiteralPath $rhythmMovedFile) {
+    $rhythmMoved = Get-Content -LiteralPath $rhythmMovedFile -Raw | ConvertFrom-Json
+    if ($rhythmMoved.version -ne 1 -or $rhythmMoved.url -cnotmatch '^https://[a-z0-9-]+\.[a-z0-9-]+\.ts\.net/?$') { throw 'Invalid moved-server address.' }
+    if (-not ($args -contains '-NoBrowser')) { Start-Process $rhythmMoved.url }
+    Write-Host "Dashboard was moved: $($rhythmMoved.url). Local server will remain stopped."
+    return
+}
 $rhythmReady = $false
 try {
     $rhythmHealth = Invoke-RestMethod -Uri "$rhythmUrl/api/health" -TimeoutSec 2

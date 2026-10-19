@@ -3,6 +3,10 @@ const randomUUID = () => globalThis.crypto.randomUUID();
 export const defaultTimerSettings = Object.freeze({ workMinutes: 25, shortBreakMinutes: 5, longBreakMinutes: 15, longBreakEvery: 4 });
 const fail = message => { throw new Error(message); };
 const conflict = message => { const error = new Error(message); error.status = 409; throw error; };
+export function activeTimerMessage(session) {
+  const title = typeof session?.title === 'string' && session.title.trim() ? session.title : 'Без названия';
+  return `Уже есть активный сеанс «${title}»${session?.status === 'paused' ? ' — на паузе' : ''}. Новая работа не запущена. Сначала заверши или отмени текущий сеанс.`;
+}
 const minutes = (value, name) => {
   if (!Number.isInteger(value) || value < 1 || value > 240) fail(`${name}: целое число от 1 до 240 минут.`);
   return value;
@@ -127,7 +131,7 @@ export function changeTimer(value, action, input, { now = Date.now(), validateWo
     const week = monday(input.week);
     timer.workPlans[week] = { ...(timer.workPlans[week] ?? {}), [ref]: hours };
   } else if (action === 'start' || action === 'startBreak') {
-    if (active) conflict('Уже есть активный сеанс. Сначала заверши его или отмени.');
+    if (active) conflict(activeTimerMessage(active));
     const settings = timerSettings(input.settings ?? timer.settings);
     const phase = action === 'start' ? 'work' : timer.cycleCount >= settings.longBreakEvery ? 'long_break' : 'short_break';
     const mode = phase === 'work' ? input.mode : 'pomodoro';

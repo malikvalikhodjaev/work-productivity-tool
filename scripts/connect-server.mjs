@@ -2,9 +2,12 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, copyFileSync, existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {parseArgs} from 'node:util';
 import { replaceFile } from '../lib/atomic-file.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=process.env.DASHBOARD_DATA_DIR??path.join(root,'data');
+const {values}=parseArgs({options:{provider:{type:'string',default:'computer'}}});
+if(!['computer','digitalocean'].includes(values.provider))throw new Error('Выбери provider: computer или digitalocean.');
 const read=args=>JSON.parse(execFileSync('tailscale',args,{encoding:'utf8',stdio:['ignore','pipe','inherit']}));
 const status=read(['status','--json']);
 if(status.BackendState!=='Running') throw new Error('Войди в Tailscale на этом сервере: tailscale up.');
@@ -18,7 +21,7 @@ for(const [host,web] of Object.entries(existing.Web??{})) for(const [route,handl
 }
 mkdirSync(dataDir,{recursive:true});
 const stamp=new Date().toISOString().replaceAll(':','-');
-for(const [name,value] of [['remote-access.json',{version:1,url:'https://'+dns,allowedLogin:login,access:'read-write'}],['hosting.json',{version:1,provider:'computer'}]]) {
+for(const [name,value] of [['remote-access.json',{version:1,url:'https://'+dns,allowedLogin:login,access:'read-write'}],['hosting.json',{version:1,provider:values.provider}]]) {
   const file=path.join(dataDir,name);if(existsSync(file)) copyFileSync(file,file+'.before-'+stamp);
   writeFileSync(file+'.tmp',JSON.stringify(value,null,2)+'\n');replaceFile(file+'.tmp',file);
 }

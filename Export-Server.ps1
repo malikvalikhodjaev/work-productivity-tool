@@ -1,7 +1,11 @@
 ﻿[CmdletBinding()]
-param()
+param([switch]$FinalTransfer)
 $ErrorActionPreference = 'Stop'
 $bundleRoot = $PSScriptRoot
+$bundlePort = if ($env:DASHBOARD_PORT) { [int]$env:DASHBOARD_PORT } else { 8787 }
+if ($FinalTransfer -and @(Get-NetTCPConnection -State Listen -LocalPort $bundlePort -ErrorAction SilentlyContinue).Count -gt 0) {
+    throw 'Stop the old dashboard server before a final transfer. The preview export remains available without -FinalTransfer.'
+}
 $bundleStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $bundleOutputs = Join-Path $bundleRoot 'outputs'
 $bundleStage = Join-Path $bundleOutputs ("server-transfer-$bundleStamp")
@@ -11,19 +15,29 @@ $bundleData = if ($env:DASHBOARD_DATA_DIR) { $env:DASHBOARD_DATA_DIR } else { Jo
 $bundleNode = (Get-Command node.exe -ErrorAction Stop).Source
 & $bundleNode (Join-Path $bundleRoot 'scripts/backup.mjs')
 if ($LASTEXITCODE -ne 0) { throw 'Backup failed; export stopped.' }
-foreach ($bundleItem in @('lib','public','docs','scripts','server.mjs','package.json','package-lock.json','tests','AGENTS.md','.dockerignore','Dockerfile','compose.yaml','README.md','Start-Dashboard.ps1','Start-Desktop.ps1','Install-Desktop.ps1','Install-Autostart.ps1','Connect-Android.ps1','Export-Server.ps1','Open-Alphas.cmd','Открыть дашборд.cmd','Подключить Android.cmd')) {
+foreach ($bundleItem in @('lib','public','docs','scripts','server.mjs','package.json','package-lock.json','tests','AGENTS.md','.dockerignore','Dockerfile','compose.yaml','README.md','Start-Dashboard.ps1','Start-Native.ps1','Start-Desktop.ps1','Install-Desktop.ps1','Install-Autostart.ps1','Connect-Android.ps1','Export-Server.ps1','Activate-Remote-Server.ps1','Open-Alphas.cmd','Открыть дашборд.cmd','Подключить Android.cmd')) {
     Copy-Item -LiteralPath (Join-Path $bundleRoot $bundleItem) -Destination (Join-Path $bundleStage $bundleItem) -Recurse
 }
 $bundleDestination = Join-Path $bundleStage 'data'
 New-Item -ItemType Directory -Path $bundleDestination -Force | Out-Null
 foreach ($bundleItem in Get-ChildItem -LiteralPath $bundleData -Force) {
-    if ($bundleItem.Name -eq 'backups' -or $bundleItem.Name.EndsWith('.tmp')) { continue }
+    if ($bundleItem.Name -in @('backups','native-signing','server-moved.json') -or $bundleItem.Name.EndsWith('.tmp')) { continue }
     Copy-Item -LiteralPath $bundleItem.FullName -Destination (Join-Path $bundleDestination $bundleItem.Name) -Recurse
 }
-$bundleManifest = @(Get-ChildItem -LiteralPath $bundleStage -File -Recurse -Force | ForEach-Object {
-    @{path=$_.FullName.Substring($bundleStage.Length + 1).Replace('\','/'); sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(); size=$_.Length}
-})
-[IO.File]::WriteAllText((Join-Path $bundleStage 'transfer-manifest.json'), ($bundleManifest | ConvertTo-Json -Depth 5), [Text.UTF8Encoding]::new($false))
+$bundleManifestScript = @'
+import {createTransferManifest,verifyTransfer} from './scripts/verify-transfer.mjs';
+import {writeFileSync} from 'node:fs';
+const final=process.argv[1]==='final';
+writeFileSync('transfer-manifest.json',JSON.stringify(createTransferManifest('.',{final}),null,2)+'\n');
+const result=verifyTransfer('.',{requireFinal:final});
+console.log(JSON.stringify({verified:result.verified,consistency:result.consistency,files:result.files}));
+'@
+Push-Location $bundleStage
+try {
+    $bundleMode = if ($FinalTransfer) { 'final' } else { 'preview' }
+    & $bundleNode --input-type=module -e $bundleManifestScript $bundleMode
+    if ($LASTEXITCODE -ne 0) { throw 'Transfer verification failed.' }
+} finally { Pop-Location }
 $bundleZip = Join-Path $bundleOutputs ("indicators-work-server-$bundleStamp.zip")
 Compress-Archive -Path (Join-Path $bundleStage '*') -DestinationPath $bundleZip -CompressionLevel Optimal
 Write-Host "Private transfer archive: $bundleZip"

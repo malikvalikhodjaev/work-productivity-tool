@@ -12,6 +12,8 @@ import { createWorkspaceStore } from './lib/workspace.mjs';
 import { parseFinanceCsv } from './lib/finance-csv.mjs';
 import { createReferenceStore } from './lib/references.mjs';
 import { createRemoteViewer } from './lib/remote-view.mjs';
+import {readHosting} from './lib/hosting.mjs';
+import {movedServer} from './lib/server-location.mjs';
 import { backupData, backupStatus } from './lib/backup.mjs';
 import { createWritingStore } from './lib/writing.mjs';
 import {createInboxStore} from './lib/inbox.mjs';
@@ -21,6 +23,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const serverVersion = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 const port = Number(process.env.DASHBOARD_PORT ?? 8787);
 const dataDir = process.env.DASHBOARD_DATA_DIR ?? path.join(root, 'data');
+if(movedServer(path.join(dataDir,'server-moved.json')))throw new Error('Этот сервер перенесён. Открой новый адрес; локальная запись отключена.');
 let store;
 const workspace = createWorkspaceStore(path.join(dataDir, 'workspace.json'), () => store.getPortfolio());
 store = createStore(process.env.DASHBOARD_DATA_FILE ?? path.join(dataDir, 'dashboard.json'), { getProjectTemplates:referenceTemplateReader(path.join(dataDir,'imports/alpha-reference.json')), validateWorkRef: workspace.validateRef, getEntities: () => workspace.view().entities });
@@ -69,7 +72,8 @@ for (const name of ['writing.js','writing-drafts.js','reflection-hints.js','work
 for (const name of ['writing.css','reflection-hints.css','work-board.css','focus-ambience.css','vendor/quill.snow.css']) assets['/'+name]=[name,'text/css; charset=utf-8'];
 const viewerPort = Number(process.env.DASHBOARD_VIEWER_PORT ?? 8789);
 if (!Number.isInteger(viewerPort) || viewerPort < 1 || viewerPort > 65535 || viewerPort === port) throw new Error('DASHBOARD_VIEWER_PORT должен быть отдельным портом 1–65535.');
-const remoteViewer = createRemoteViewer({ configFile: path.join(dataDir, 'remote-access.json'), ownerPort: port, viewerPort, assetPaths: new Set(Object.keys(assets)) });
+const hosting = () => readHosting(path.join(dataDir,'hosting.json'));
+const remoteViewer = createRemoteViewer({ configFile: path.join(dataDir, 'remote-access.json'), ownerPort: port, viewerPort, assetPaths: new Set(Object.keys(assets)), hosting });
 
 function json(res, status, value) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -149,14 +153,12 @@ const server = http.createServer(async (req, res) => {
       }
       throw new Error('Неизвестный модуль приложения.');
     }
-    if (req.method === 'GET' && url.pathname === '/api/server-status') return json(res, 200, { hosting: 'computer', persistence: 'files', timezone: 'Asia/Tashkent', backup: backupStatus(dataDir), remote: remoteViewer.status() });
+    if (req.method === 'GET' && url.pathname === '/api/server-status') return json(res, 200, { hosting: hosting().provider, persistence: 'files', timezone: 'Asia/Tashkent', backup: backupStatus(dataDir), remote: remoteViewer.status() });
     if (req.method === 'GET' && url.pathname === '/api/daily-norms') return json(res, 200, store.getDailyNorms(url.searchParams.get('date') ?? undefined, url.searchParams.get('week') ?? undefined));
     if (req.method === 'POST' && url.pathname === '/api/pomodoro-plan') return json(res, 200, store.nativeMutate({ ...(await body(req)), module: 'pomodoroTarget', action: 'save' }));
     if (req.method === 'GET' && url.pathname === '/api/mobile-access') {
       const file = path.join(dataDir, 'cloud-view.json');
-      const hosting = path.join(dataDir, 'hosting.json');
-      const prefersComputer = existsSync(hosting) && JSON.parse(readFileSync(hosting, 'utf8')).provider === 'computer';
-      if (existsSync(file) && !prefersComputer) {
+      if (existsSync(file) && !hosting().explicit) {
         const value = JSON.parse(readFileSync(file, 'utf8'));
         const site = new URL(value.url);
         if (site.protocol !== 'https:' || !site.hostname.endsWith('.chatgpt.site') || site.username || site.password || site.pathname !== '/' || site.search || site.hash) throw new Error('Неверный адрес закрытого Site.');

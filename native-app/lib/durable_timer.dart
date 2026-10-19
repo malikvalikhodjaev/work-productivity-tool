@@ -1,4 +1,5 @@
 import 'domain.dart';
+import 'active_timer_conflict.dart';
 
 /// Project an immutable queued command using its recorded time, never sync time.
 Json projectTimer(Json before, String action, Json input, int at) {
@@ -7,7 +8,7 @@ Json projectTimer(Json before, String action, Json input, int at) {
   Json? active = before['active'] is Map ? object(before['active']) : null;
   var cycle = before['cycleCount'] as int? ?? 0;
   if (['start', 'startBreak'].contains(action)) {
-    if (active != null) throw StateError('Сначала заверши текущий сеанс.');
+    if (active != null) throw ActiveTimerConflict(active);
     final settings = object(
       input['settings'] ?? before['settings'] ?? timerDefaults,
     );

@@ -58,6 +58,17 @@ test('Паузы и перерывы исключаются; факт переж
   assert.equal(f.store.getTimer(week).summary.breakSeconds,300); assert.equal(f.store.getTimer(week).summary.workSeconds,1500);
   assert.equal(f.store.getStoredEntries().entries.length,1); assert.equal(f.store.getStoredEntries().entries[0].durationSeconds,1500);
 });
+test('Занятый таймер называет работу и не меняется при запуске другой, в том числе на паузе',()=>{
+  const f=fixture(),s=f.start({title:'Продажа дома'});
+  const running=readFileSync(f.file,'utf8');
+  assert.throws(()=>f.start({title:'Руководства'}),e=>e.status===409&&e.message.includes('«Продажа дома»'));
+  assert.equal(readFileSync(f.file,'utf8'),running);
+  f.advance(10);f.act('pause',{sessionId:s.id});
+  const paused=readFileSync(f.file,'utf8');
+  assert.throws(()=>f.start({title:'Руководства'}),e=>e.status===409&&e.message.includes('на паузе'));
+  assert.equal(readFileSync(f.file,'utf8'),paused);
+  assert.equal(f.store.getStoredEntries().entries.length,0);
+});
 test('Один активный сеанс для двух клиентов; повтор завершения не удваивает время',()=>{
   const f=fixture(), raw=readFileSync(f.file,'utf8');
   assert.throws(()=>f.store.mutateTimer('start',{week:'bad-week',requestId:randomUUID(),expectedRevision:0,title:'Работа',mode:'pomodoro',metricId:'guides',workRef:'task:real'}),/корректную дату/);

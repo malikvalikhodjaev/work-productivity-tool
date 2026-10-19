@@ -1,5 +1,6 @@
 import {mountFocusAmbience} from './focus-ambience.js';
 import {mountTimerRingtones,playTimerRingtone} from './timer-ringtones.js';
+import {activeTimerMessage} from './timer-core.js';
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const duration = seconds => { if (seconds === null) return 'No Data'; const n = Math.max(0, Math.floor(seconds)); return `${Math.floor(n / 3600) ? Math.floor(n / 3600) + ':' : ''}${String(Math.floor(n / 60) % 60).padStart(2,'0')}:${String(n % 60).padStart(2,'0')}`; };
@@ -151,7 +152,7 @@ async function open(input={}) {
   if(embedded) { parent.postMessage({type:'rhythm:timer-work',work:input},location.origin); return; }
   window.dispatchEvent(new Event('rhythm:show-work'));
   await load(); if(!state) return;
-  if(state.active) { panel.scrollIntoView({behavior:'smooth',block:'start'}); notice('Сначала заверши текущий сеанс или отмени его.'); return; }
+  if(state.active) { panel.scrollIntoView({behavior:'smooth',block:'start'}); notice(activeTimerMessage(state.active),true); return; }
   try { await context(); } catch(error) { notice(error.message,true); return; }
   $('timer-input-title').value=(input.title??'').slice(0,300); $('timer-input-ref').value=input.workRef??''; $('timer-input-type').value=input.workType??'';
   $('timer-input-metric').value=input.metricId??'unclassified'; $('timer-mode').value='pomodoro'; $('timer-preset').value='custom';
@@ -222,7 +223,8 @@ async function focusWork(input) {
   await load();if(!state)return false;
   if(state.active){
     if(state.active.workRef===input.workRef&&state.active.status==='paused')return act('resume',{sessionId:state.active.id});
-    notice(state.active.workRef===input.workRef?'Эта работа уже в фокусе.':'Сейчас в фокусе другая работа. Заверши её или отмени перед переключением.',true);
+    if(state.active.workRef===input.workRef)notice(`«${state.active.title}» уже в фокусе.`);
+    else { window.dispatchEvent(new Event('rhythm:show-work')); panel.scrollIntoView({behavior:'smooth',block:'start'}); notice(activeTimerMessage(state.active),true); }
     return false;
   }
   return act('start',{title:input.title,workRef:input.workRef??null,metricId:input.metricId??null,allocation:input.allocation??'unclassified',workType:input.workType??'',mode:input.mode??'pomodoro',settings:state.settings});
