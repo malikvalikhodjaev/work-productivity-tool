@@ -11,6 +11,7 @@ export const portfolioGridColumns = {
     {id:'_gaps',title:'Зоны с пробелами',type:'computed',visible:true},
   ],
   alphas: [
+    {id:'_wbs',title:'WBS',type:'computed',visible:true},
     text('uniqueName','Проектное имя',180,true), text('typeName','Типовое имя',120,true),
     select('state','Состояние',{empty:'Пустой слот',described:'Описано',working:'В работе',verified:'Подтверждено',ready:'Готово к эксплуатации',not_applicable:'Не применяется'},true),
     text('description','Описание и заметки'), text('criteria','Критерий состояния'),
@@ -33,6 +34,7 @@ export function gridCellValue(row, column) {
   if (column.custom) return row.customValues?.[column.id] ?? null;
   if (column.id === '_slots') return `${row.summary?.filled ?? 0} / ${row.summary?.slots ?? 0}`;
   if (column.id === '_gaps') return row.summary?.totalZones ? `${row.summary.gaps} / ${row.summary.totalZones}` : null;
+  if (column.id === '_wbs') return row._wbs ?? null;
   return row[column.id] ?? null;
 }
 

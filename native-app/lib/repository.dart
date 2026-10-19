@@ -10,6 +10,7 @@ import 'local_database.dart';
 import 'pomodoro_plan.dart';
 import 'durable_timer.dart';
 import 'grid_definitions.dart';
+import 'model_hierarchy.dart';
 
 class ApiFailure implements Exception {
   final String message;
@@ -526,6 +527,10 @@ class DashboardRepository extends ChangeNotifier {
     if (serverId == null || cache('portfolio')['tableEditing'] != 1) {
       throw StateError('Подключи приложение к обновлённому серверу таблиц.');
     }
+    if (['moveAlpha', 'copyProject'].contains(action) &&
+        cache('portfolio')['hierarchyEditing'] != 1) {
+      throw StateError('Подключи обновлённый сервер моделера.');
+    }
     final id = uuid.v4();
     local.enqueue('grid:$id', '/api/native/command', {
       'requestId': id,
@@ -577,7 +582,157 @@ class DashboardRepository extends ChangeNotifier {
         .toList();
   }
 
+  Json portfolioProjection() {
+    final cached = cache('portfolio');
+    final result = <String, dynamic>{
+      for (final pair in {
+        'projects': 'project',
+        'alphas': 'alpha',
+        'tasks': 'task',
+      }.entries)
+        pair.key: [
+          for (final row in rows(cached[pair.key]))
+            Map<String, dynamic>.from(row),
+        ],
+    };
+    for (final queued in pending) {
+      final body = object(queued['body']), input = object(body['input']);
+      if (body['module'] != 'portfolio') continue;
+      final legacyTable = {
+        'createProject': 'projects',
+        'updateProject': 'projects',
+        'createAlpha': 'alphas',
+        'updateAlpha': 'alphas',
+        'createTask': 'tasks',
+        'setTaskDone': 'tasks',
+      }[body['action']];
+      if (legacyTable != null) {
+        final draft = local.draft(queued['entity'].toString());
+        if (draft != null) {
+          final list = rows(result[legacyTable]),
+              at = list.indexWhere((r) => r['id'] == draft['id']);
+          final row = {if (at >= 0) ...list[at], ...draft};
+          if (at < 0) {
+            list.add(row);
+          } else {
+            list[at] = row;
+          }
+          if (legacyTable == 'alphas') {
+            final parent = list
+                .where((r) => r['id'] == row['parentId'])
+                .firstOrNull;
+            if (parent != null) row['zoneId'] = parent['zoneId'];
+            final seen = <String>{};
+            void inherit(String id) {
+              if (!seen.add(id)) return;
+              for (final child in list.where((r) => r['parentId'] == id)) {
+                child['zoneId'] = row['zoneId'];
+                inherit(child['id'].toString());
+              }
+            }
+
+            inherit(row['id'].toString());
+          }
+          result[legacyTable] = list;
+        }
+      }
+      if (body['action'] == 'editCells') {
+        final table = input['table'].toString(),
+            items = rows(result[table]),
+            index = items.indexWhere((r) => r['id'] == input['id']);
+        if (index < 0) continue;
+        final row = Map<String, dynamic>.from(items[index]),
+            custom = Map<String, dynamic>.from(object(row['customValues'])),
+            columns = gridColumns(table, archived: true);
+        for (final cell in rows(input['changes'])) {
+          final col = columns
+              .where((c) => c['id'] == cell['columnId'])
+              .firstOrNull;
+          if (col == null) continue;
+          if (col['custom'] == true) {
+            custom[col['id'].toString()] = cell['value'];
+          } else {
+            row[col['id'].toString()] = cell['value'];
+          }
+        }
+        items[index] = {...row, 'customValues': custom};
+        result[table] = items;
+      }
+      if (body['action'] == 'moveAlpha') {
+        final all = rows(result['alphas']),
+            row = all.where((r) => r['id'] == input['id']).firstOrNull;
+        if (row == null) continue;
+        try {
+          final moved = relocateAlpha(
+            all.where((r) => r['projectId'] == row['projectId']).toList(),
+            input,
+          );
+          result['alphas'] = [
+            for (final a in all)
+              moved.where((r) => r['id'] == a['id']).firstOrNull ?? a,
+          ];
+        } catch (_) {
+          /* Preserve the command for conflict review. */
+        }
+      }
+      if (body['action'] == 'copyProject') {
+        final projects = rows(result['projects']),
+            alphas = rows(result['alphas']);
+        Json? definition;
+        if (input['localDefinition'] is Map) {
+          definition = object(input['localDefinition']);
+        } else if (input['templateId'] != null) {
+          definition = rows(cached['projectTemplates'])
+              .where((t) => t['id'] == input['templateId'])
+              .firstOrNull;
+        } else {
+          final source = projects
+              .where((p) => p['id'] == input['sourceProjectId'])
+              .firstOrNull;
+          if (source != null) {
+            definition = sourceProjectDefinition(
+              source,
+              alphas.where((a) => a['projectId'] == source['id']).toList(),
+            );
+          }
+        }
+        if (definition == null) continue;
+        final copy = materializeProject(definition, input),
+            projectMap = {for (final p in projects) p['id']: p},
+            alphaMap = {for (final a in alphas) a['id']: a};
+        final project = object(copy['project']);
+        projectMap.putIfAbsent(project['id'], () => project);
+        for (final alpha in rows(copy['alphas'])) {
+          alphaMap.putIfAbsent(alpha['id'], () => alpha);
+        }
+        result['projects'] = projectMap.values.toList();
+        result['alphas'] = alphaMap.values.toList();
+      }
+    }
+    final queuedEntities = pending.map((q) => q['entity']).toSet();
+    for (final pair in {
+      'projects': 'project',
+      'alphas': 'alpha',
+      'tasks': 'task',
+    }.entries) {
+      final map = {for (final row in rows(result[pair.key])) row['id']: row};
+      for (final d in local.drafts.where(
+        (d) =>
+            d['entity'].toString().startsWith('${pair.value}:') &&
+            !queuedEntities.contains(d['entity']),
+      )) {
+        final row = object(d['body']);
+        map[row['id']] = {...map[row['id']] ?? {}, ...row};
+      }
+      result[pair.key] = map.values.toList();
+    }
+    return result;
+  }
+
   List<Json> entities(String collection, String prefix) {
+    if (['projects', 'alphas', 'tasks'].contains(collection)) {
+      return rows(portfolioProjection()[collection]);
+    }
     final source = rows(
       cache(
         collection == 'alphas' ||
@@ -1068,8 +1223,12 @@ class DashboardRepository extends ChangeNotifier {
             body['expectedUpdatedAt'] = current['updatedAt'];
           }
         case 'portfolio':
-          if (body['action'] == 'editCells' ||
-              body['action'] == 'updateColumn') {
+          if ([
+            'editCells',
+            'updateColumn',
+            'moveAlpha',
+            'copyProject',
+          ].contains(body['action'])) {
             final fresh = await request('/api/portfolio');
             if (item['server_id'] != serverId) {
               throw StateError('Правка связана с другой установкой.');
@@ -1104,6 +1263,71 @@ class DashboardRepository extends ChangeNotifier {
                     };
                   })(),
               ];
+            } else if (body['action'] == 'moveAlpha') {
+              final row = rows(fresh['alphas'])
+                  .where((a) => a['id'] == input['id'])
+                  .firstOrNull;
+              if (row == null) {
+                throw StateError(
+                  'Строка не найдена. Исходное действие сохранено.',
+                );
+              }
+              input['expectedHierarchy'] = hierarchySignature(
+                rows(fresh['alphas'])
+                    .where((a) => a['projectId'] == row['projectId'])
+                    .toList(),
+              );
+            } else if (body['action'] == 'copyProject') {
+              Json? definition;
+              if (input['templateId'] != null) {
+                definition = rows(fresh['projectTemplates'])
+                    .where((t) => t['id'] == input['templateId'])
+                    .firstOrNull;
+              } else {
+                final source = rows(fresh['projects'])
+                    .where((p) => p['id'] == input['sourceProjectId'])
+                    .firstOrNull;
+                if (source != null) {
+                  definition = sourceProjectDefinition(
+                    source,
+                    rows(fresh['alphas'])
+                        .where((a) => a['projectId'] == source['id'])
+                        .toList(),
+                  );
+                }
+              }
+              if (definition == null) {
+                throw StateError(
+                  'Источник копии недоступен. Исходник сохранён.',
+                );
+              }
+              if (rows(fresh['projects'])
+                  .any((p) => p['id'] == input['clientId'])) {
+                throw StateError(
+                  'Проект с этим ID уже существует. Повтори исходную команду для проверки квитанции.',
+                );
+              }
+              final areas = (input['areaIds'] as List)
+                  .where(
+                    (id) =>
+                        rows(definition!['areas']).any((a) => a['id'] == id),
+                  )
+                  .toList();
+              if (areas.isEmpty) {
+                throw StateError(
+                  'Области источника изменились. Открой копирование заново.',
+                );
+              }
+              final previous = object(input['alphaIds']);
+              input['expectedVersion'] = definition['version'];
+              input['localDefinition'] = definition;
+              input['areaIds'] = areas;
+              input['alphaIds'] = {
+                for (final a in rows(
+                  definition['alphas'],
+                ).where((a) => areas.contains(a['areaId'])))
+                  a['sourceId']: previous[a['sourceId']] ?? uuid.v4(),
+              };
             } else {
               final column = rows(object(fresh['tableColumns'])[input['table']])
                   .where((c) => c['id'] == input['id'])

@@ -1,3 +1,4 @@
+import {ProjectViews} from './project-views.js';
 import {PortfolioGrid} from './portfolio-grid.js';
 const $ = id => document.getElementById(id);
 const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -12,13 +13,15 @@ let dataTables = null;
 let activeDataTable = 'timeEntries';
 let dataRequestId = 0;
 let currentView = null;
+const gridCommands=new Map();
 const projectStatus = { active: 'Активен', paused: 'На паузе', closed: 'Закрыт' };
 const phaseTitle = { pre_operation: 'До эксплуатации', operation: 'В эксплуатации' };
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tashkent', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const selected = () => portfolio?.projects.find(project => project.id === selectedProject);
 
 async function gridMutate(action,input) {
-  const command={action,input,requestId:crypto.randomUUID()};
+  const key=JSON.stringify({action,input});
+  const command=gridCommands.get(key) ?? {action,input,requestId:crypto.randomUUID()};gridCommands.set(key,command);
   // A lost response can be retried with the same command, never a new UUID.
   let response;
   for(let attempt=0;attempt<2;attempt++) {
@@ -26,15 +29,18 @@ async function gridMutate(action,input) {
     catch(error){if(attempt)throw error;}
   }
   const result=await response.json();if(!response.ok)throw new Error(result.error ?? 'Не удалось сохранить.');
-  portfolio=result;render();window.dispatchEvent(new Event('rhythm:portfolio-saved'));
+  portfolio=result;gridCommands.delete(key);render();window.dispatchEvent(new Event('rhythm:portfolio-saved'));return result;
 }
 async function selectGridProject(project) {
   const bridge=$('alpha-modeler-frame').contentWindow?.rhythmAlphaModeler;
   if(await bridge?.selectProject(project.id)===false)return;
   selectedProject=project.id;render();
+  $('modeler-workspace').scrollIntoView({behavior:'smooth',block:'start'});
 }
 const projectGrid=new PortfolioGrid($('project-list'),{table:'projects',portfolio:()=>portfolio,mutate:gridMutate,openRow:selectGridProject,addRow:()=>openProject()});
-const alphaGrid=new PortfolioGrid($('alpha-grid'),{table:'alphas',portfolio:()=>portfolio,mutate:gridMutate,openRow:alpha=>openAlpha(alpha.id),addRow:()=>openAlpha()});
+const alphaGrid=new PortfolioGrid($('alpha-grid'),{table:'alphas',portfolio:()=>portfolio,mutate:gridMutate,openRow:alpha=>openAlpha(alpha.id),addRow:()=>openAlpha(),addChild:row=>openAlpha(null,row.id)});
+
+const projectViews=new ProjectViews({portfolio:()=>portfolio,selected,select:selectGridProject,mutate:gridMutate,grid:projectGrid,rerender:render});
 
 async function request(action, input) {
   const knownProjects = new Set(portfolio?.projects.map(project => project.id) ?? []);
@@ -166,6 +172,7 @@ function render() {
   $('new-alpha').disabled = !selected();
   $('new-task').disabled = !selected();
   projectGrid.render(portfolio.projects);
+  projectViews.render();
   $('alpha-grid').hidden=!selected();
   alphaGrid.render(portfolio.alphas.filter(a=>a.projectId===selectedProject));
   const project = selected();

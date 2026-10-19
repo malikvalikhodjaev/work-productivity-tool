@@ -176,7 +176,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.14',
+        'clientVersion': '0.1.15',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -2139,9 +2139,11 @@ class _DashboardHomeState extends State<DashboardHome>
 
   Future<void> editProject([Json? previous]) async {
     final id = previous?['id'] ?? uuid.v4(), key = 'project:$id';
-    final base = rows(repo.cache('portfolio')['projects'])
-        .where((p) => p['id'] == id)
-        .firstOrNull;
+    final base =
+        rows(repo.cache('portfolio')['projects'])
+            .where((p) => p['id'] == id)
+            .firstOrNull ??
+        (previous?['pendingCopy'] == true ? previous : null);
     await editEntity(
       'Проект',
       key,
@@ -2180,7 +2182,11 @@ class _DashboardHomeState extends State<DashboardHome>
       (input) => repo.nativeSave(
         'portfolio',
         base == null ? 'createProject' : 'updateProject',
-        {...input, if (base == null) 'clientId': id},
+        {
+          ...input,
+          if (base == null) 'clientId': id,
+          if (base != null) 'expectedRevision': base['revision'] ?? 0,
+        },
         key,
         expectedUpdatedAt: base?['updatedAt'],
       ),
@@ -2194,9 +2200,11 @@ class _DashboardHomeState extends State<DashboardHome>
     Json? parent,
   }) async {
     final id = previous?['id'] ?? uuid.v4(), key = 'alpha:$id';
-    final base = rows(repo.cache('portfolio')['alphas'])
-        .where((a) => a['id'] == id)
-        .firstOrNull;
+    final base =
+        rows(repo.cache('portfolio')['alphas'])
+            .where((a) => a['id'] == id)
+            .firstOrNull ??
+        (previous?['pendingCopy'] == true ? previous : null);
     final alphas = repo
         .entities('alphas', 'alpha')
         .where((a) => a['projectId'] == project['id'] && a['id'] != id);
@@ -2708,7 +2716,7 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'I&W · Native 0.1.14',
+                          'I&W · Native 0.1.15',
                           style: TextStyle(fontSize: 11),
                         ),
                       ],

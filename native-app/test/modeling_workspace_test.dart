@@ -127,6 +127,9 @@ void main() {
       await tester.pump();
       expect(find.byType(DataTable), findsNWidgets(2));
       expect(db.get('modelerProjectId'), 'house');
+      await tester.ensureVisible(find.text('Зоны и пробелы'));
+      await tester.tap(find.text('Зоны и пробелы'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Добавить альфу в зону'));
       expect(zone, 'customers');
       await tester.ensureVisible(find.text('Карточка альфы'));

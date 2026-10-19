@@ -64,6 +64,7 @@ const Map<String, List<Map<String, dynamic>>> defaultGridColumns = {
     },
   ],
   "alphas": [
+    {"id": "_wbs", "title": "WBS", "type": "computed", "visible": true},
     {
       "id": "uniqueName",
       "title": "Проектное имя",

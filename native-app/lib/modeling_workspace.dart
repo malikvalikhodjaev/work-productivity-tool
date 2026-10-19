@@ -5,6 +5,7 @@ import 'modeler.dart';
 import 'project_review.dart';
 import 'repository.dart';
 import 'portfolio_grid.dart';
+import 'model_hierarchy.dart';
 
 class ModelingWorkspace extends StatefulWidget {
   final DashboardRepository repo;
@@ -37,10 +38,12 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
   String query = '';
   String? selected;
   String? inspected;
+  bool board = false;
   @override
   void initState() {
     super.initState();
     selected = widget.repo.local.get('modelerProjectId') as String?;
+    board = widget.repo.local.get('projectView') == 'board';
   }
 
   void open(Json project) {
@@ -50,6 +53,311 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
       inspected = null;
     });
   }
+
+  Future<void> copyProject([Json? source]) async {
+    if (source?['pendingCopy'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Сначала синхронизируй исходную копию, затем её можно копировать дальше.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (source != null) {
+      final ids = widget.repo
+          .entities('alphas', 'alpha')
+          .where((a) => a['projectId'] == source['id'])
+          .map((a) => a['id'])
+          .toSet();
+      final unsent = widget.repo.pending.any((q) {
+        final body = object(q['body']), input = object(body['input']);
+        return body['module'] == 'portfolio' &&
+            (input['id'] == source['id'] ||
+                input['projectId'] == source['id'] ||
+                ids.contains(input['id']));
+      });
+      if (unsent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Сначала синхронизируй изменения исходного проекта. Набор из руководств доступен для новой копии без сети.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
+    final repo = widget.repo,
+        catalog = rows(widget.repo.cache('portfolio')['projectTemplates']);
+    if (source == null && catalog.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            repo.cache('portfolio')['templateError']?.toString() ??
+                'No Data · пакет шаблонов пока не загружен.',
+          ),
+        ),
+      );
+      return;
+    }
+    Json definition = source == null
+        ? catalog.first
+        : sourceProjectDefinition(
+            source,
+            repo
+                .entities('alphas', 'alpha')
+                .where((a) => a['projectId'] == source['id'])
+                .toList(),
+          );
+    var areas = rows(definition['areas'])
+        .map((a) => a['id'].toString())
+        .toSet();
+    final draftKey = 'projectCopyForm:${source?['id'] ?? 'template'}',
+        draft = object(
+          repo.local.get('projectCopyForm:${source?['id'] ?? 'template'}'),
+        );
+    final name = TextEditingController(
+      text:
+          (draft['name'] ?? (source == null ? '' : '${source['name']} · копия'))
+              .toString(),
+    );
+    String? message;
+    bool saving = false;
+    void keep() {
+      repo.local.set(draftKey, {'name': name.text});
+    }
+
+    name.addListener(keep);
+    final projectId = uuid.v4(), ids = <String, String>{};
+    for (final item in source == null ? catalog : [definition]) {
+      for (final alpha in rows(item['alphas'])) {
+        ids.putIfAbsent(alpha['sourceId'].toString(), () => uuid.v4());
+      }
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialog) => AlertDialog(
+          title: Text(
+            source == null
+                ? 'Новый проект из шаблона'
+                : 'Копировать структуру проекта',
+          ),
+          content: SizedBox(
+            width: 650,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: name,
+                    autofocus: true,
+                    maxLength: 120,
+                    decoration: const InputDecoration(
+                      labelText: 'Название проекта',
+                    ),
+                  ),
+                  if (source == null)
+                    DropdownButtonFormField<String>(
+                      initialValue: definition['id'].toString(),
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Набор'),
+                      items: [
+                        for (final t in catalog)
+                          DropdownMenuItem(
+                            value: t['id'].toString(),
+                            child: Text(t['title'].toString()),
+                          ),
+                      ],
+                      onChanged: (id) => setDialog(() {
+                        definition = catalog.firstWhere((t) => t['id'] == id);
+                        areas = rows(definition['areas'])
+                            .map((a) => a['id'].toString())
+                            .toSet();
+                      }),
+                    ),
+                  const SizedBox(height: 12),
+                  Text(
+                    source == null
+                        ? 'Сохранённый пакет · ${definition['capturedAt'] ?? 'No Data'}'
+                        : 'Источник: ${source['name']}',
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Копируется структура и подсказки. Факты, время, проектные имена и подтверждённые состояния не переносятся.',
+                  ),
+                  for (final area in rows(definition['areas']))
+                    CheckboxListTile(
+                      value: areas.contains(area['id']),
+                      title: Text(area['title'].toString()),
+                      onChanged: (checked) => setDialog(() {
+                        checked == true
+                            ? areas.add(area['id'].toString())
+                            : areas.remove(area['id']);
+                      }),
+                    ),
+                  Text(
+                    'Будет создано альф и подальф: ${rows(definition['alphas']).where((a) => areas.contains(a['areaId'])).length}. Заполнено: 0.',
+                  ),
+                  if (message != null) Text(message!),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Закрыть'),
+            ),
+            FilledButton(
+              onPressed: saving
+                  ? null
+                  : () {
+                      try {
+                        if (name.text.trim().isEmpty || areas.isEmpty) {
+                          throw StateError(
+                            'Назови проект и выбери хотя бы одну область.',
+                          );
+                        }
+                        setDialog(() => saving = true);
+                        final nodes = rows(definition['alphas'])
+                            .where((a) => areas.contains(a['areaId']));
+                        repo.gridCommand('copyProject', {
+                          'clientId': projectId,
+                          'name': name.text,
+                          'expectedVersion': definition['version'],
+                          'areaIds': areas.toList(),
+                          'alphaIds': {
+                            for (final a in nodes)
+                              a['sourceId']: ids[a['sourceId']],
+                          },
+                          'localDefinition': definition,
+                          if (source == null)
+                            'templateId': definition['id']
+                          else
+                            'sourceProjectId': source['id'],
+                        });
+                        repo.local.remove(draftKey);
+                        repo.local.set('modelerProjectId', projectId);
+                        setState(() {
+                          selected = projectId;
+                          inspected = null;
+                        });
+                        Navigator.pop(dialogContext);
+                      } catch (e) {
+                        setDialog(() {
+                          message = e.toString();
+                          saving = false;
+                        });
+                      }
+                    },
+              child: const Text('Создать проект'),
+            ),
+          ],
+        ),
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    name.dispose();
+  }
+
+  Widget projectBoard(List<Json> projects) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final status in projectStatusNames.entries)
+          SizedBox(
+            width: 280,
+            child: Card(
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '${status.value} · ${projects.where((p) => p['status'] == status.key).length}',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    for (final p in projects.where(
+                      (p) => p['status'] == status.key,
+                    ))
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              TextButton(
+                                onPressed: () => open(p),
+                                child: Text(
+                                  p['name'].toString(),
+                                  textAlign: TextAlign.left,
+                                ),
+                              ),
+                              Text(
+                                '${projectPhaseNames[p['phase']]} · альф: ${object(p['summary'])['filled']} / ${object(p['summary'])['slots']}',
+                              ),
+                              const SizedBox(height: 8),
+                              DropdownButtonFormField<String>(
+                                key: ValueKey('${p['id']}:${p['status']}'),
+                                initialValue: p['status'].toString(),
+                                isExpanded: true,
+                                items: [
+                                  for (final item in projectStatusNames.entries)
+                                    DropdownMenuItem(
+                                      value: item.key,
+                                      child: Text(item.value),
+                                    ),
+                                ],
+                                onChanged: (value) {
+                                  if (value == null || value == p['status']) {
+                                    return;
+                                  }
+                                  try {
+                                    widget.repo.gridCommand('editCells', {
+                                      'table': 'projects',
+                                      'id': p['id'],
+                                      'changes': [
+                                        {
+                                          'columnId': 'status',
+                                          'before': p['status'],
+                                          'value': value,
+                                        },
+                                      ],
+                                    });
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(e.toString())),
+                                    );
+                                  }
+                                },
+                              ),
+                              TextButton(
+                                onPressed: () => copyProject(p),
+                                child: const Text('Копировать структуру'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (!projects.any((p) => p['status'] == status.key))
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('No Data'),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
 
   Widget cell(String text, {double width = 220}) => SizedBox(
     width: width,
@@ -112,25 +420,66 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
             ),
             onChanged: (value) => setState(() => query = value),
           ),
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            children: [
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(
+                    value: false,
+                    label: Text('Список'),
+                    icon: Icon(Icons.table_rows_outlined),
+                  ),
+                  ButtonSegment(
+                    value: true,
+                    label: Text('Доска'),
+                    icon: Icon(Icons.view_kanban_outlined),
+                  ),
+                ],
+                selected: {board},
+                onSelectionChanged: (value) {
+                  widget.repo.local.set(
+                    'projectView',
+                    value.single ? 'board' : 'list',
+                  );
+                  setState(() => board = value.single);
+                },
+              ),
+              TextButton.icon(
+                onPressed: copyProject,
+                icon: const Icon(Icons.copy_all_outlined),
+                label: const Text('Из шаблона'),
+              ),
+            ],
+          ),
           if (projects.isEmpty)
             const Padding(
               padding: EdgeInsets.all(16),
               child: Text('No Data · создай первый проект.'),
             ),
-          PortfolioGrid(
-            key: ValueKey('projects:${repo.serverId}'),
-            repo: repo,
-            table: 'projects',
-            items: shown,
-            addRow: widget.createProject,
-            openRow: open,
-          ),
+          if (board)
+            projectBoard(shown)
+          else
+            PortfolioGrid(
+              key: ValueKey('projects:${repo.serverId}'),
+              repo: repo,
+              table: 'projects',
+              items: shown,
+              addRow: widget.createProject,
+              openRow: open,
+            ),
           if (projects.isNotEmpty && shown.isEmpty)
             const Text('По этому запросу проектов нет.'),
           const SizedBox(height: 16),
           if (project == null && projects.isNotEmpty)
             const Text('Выбери проект в таблице, чтобы открыть его альфы.'),
           if (project != null) ...[
+            Text(
+              'Моделер проекта',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
             Wrap(
               spacing: 12,
               crossAxisAlignment: WrapCrossAlignment.center,
@@ -148,33 +497,16 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
                   icon: const Icon(Icons.add),
                   label: const Text('Альфа'),
                 ),
+                TextButton(
+                  onPressed: () => copyProject(project),
+                  child: const Text('Копировать структуру'),
+                ),
               ],
             ),
             const Text(
               'Опиши объект, его состояние и то, чем оно подтверждается. Можно начать с заметки; остальные поля заполнить позже.',
             ),
             const SizedBox(height: 12),
-            for (final zone in rows(project['zones']))
-              Card(
-                child: ListTile(
-                  leading: Icon(
-                    zone['covered'] == true
-                        ? Icons.check_circle_outline
-                        : Icons.circle_outlined,
-                  ),
-                  title: Text(zone['title'].toString()),
-                  subtitle: Text(
-                    zone['covered'] == true
-                        ? 'Состояние подтверждено'
-                        : (zone['issues'] as List).join(' · '),
-                  ),
-                  trailing: IconButton(
-                    tooltip: 'Добавить альфу в зону',
-                    onPressed: () => widget.createInZone(project, zone),
-                    icon: const Icon(Icons.add),
-                  ),
-                ),
-              ),
             if (alphas.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(16),
@@ -191,6 +523,7 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
               openRow: (row) {
                 setState(() => inspected = row['id'].toString());
               },
+              addChild: (row) => widget.createChild(project, row),
             ),
             if (alpha != null)
               Card(
@@ -224,6 +557,7 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
                         onPressed: () => widget.editAlpha(project, alpha),
                         child: const Text('Записать'),
                       ),
+                      TemplateHints(alpha: alpha),
                       AlphaHistoryPanel(
                         key: ValueKey('history:${repo.base}:${alpha['id']}'),
                         repo: repo,
@@ -233,6 +567,32 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
                   ),
                 ),
               ),
+            ExpansionTile(
+              title: const Text('Зоны и пробелы'),
+              children: [
+                for (final zone in rows(project['zones']))
+                  Card(
+                    child: ListTile(
+                      leading: Icon(
+                        zone['covered'] == true
+                            ? Icons.check_circle_outline
+                            : Icons.circle_outlined,
+                      ),
+                      title: Text(zone['title'].toString()),
+                      subtitle: Text(
+                        zone['covered'] == true
+                            ? 'Состояние подтверждено'
+                            : (zone['issues'] as List).join(' · '),
+                      ),
+                      trailing: IconButton(
+                        tooltip: 'Добавить альфу в зону',
+                        onPressed: () => widget.createInZone(project, zone),
+                        icon: const Icon(Icons.add),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             ExpansionTile(
               title: const Text('Характеристики системы'),
               children: [

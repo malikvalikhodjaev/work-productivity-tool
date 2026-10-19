@@ -1,11 +1,12 @@
 import {gridColumns,gridCellValue,gridCellText,visibleGridColumns} from './portfolio-grid-core.js';
+import {hierarchyRows,orderedSiblings,hierarchySignature} from './model-hierarchy.js';
 
 const escape=value=>String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const types={text:'Текст',number:'Число',date:'Дата',select:'Список вариантов',checkbox:'Галочка',computed:'Рассчитывается'};
 
 export class PortfolioGrid {
-  constructor(host,{table,portfolio,mutate,openRow,addRow}) {
-    Object.assign(this,{host,table,portfolio,mutate,openRow,addRow});
+  constructor(host,{table,portfolio,mutate,openRow,addRow,addChild}) {
+    Object.assign(this,{host,table,portfolio,mutate,openRow,addRow,addChild});
     try {this.view=JSON.parse(localStorage.getItem(`iw-grid-view:${table}`)) ?? {};}catch {this.view={};}
     host.addEventListener('click',event=>this.click(event));
   }
@@ -13,13 +14,24 @@ export class PortfolioGrid {
   saveView(){localStorage.setItem(`iw-grid-view:${this.table}`,JSON.stringify(this.view));this.render(this.items);}
   render(items){
     this.items=items;
+    if(this.table==='alphas'&&this.view.order?.length&&!this.view.order.includes('_wbs'))this.view.order=['_wbs',...this.view.order];
     const columns=visibleGridColumns(this.columns(),this.view);
-    this.host.innerHTML=`<div class="grid-toolbar"><span>Ячейка — изменить · ↗ — открыть строку</span><div><button type="button" class="text-button" data-grid-columns>Столбцы</button><button type="button" class="text-button" data-grid-add-column>＋ Столбец</button><button type="button" class="text-button" data-grid-add-row>＋ Строка</button></div></div><div class="grid-scroll"><table class="project-table editable-grid"><thead><tr><th></th>${columns.map(c=>`<th scope="col"><button type="button" class="grid-heading" data-grid-column="${escape(c.id)}">${escape(c.title)} <small>${types[c.type]}</small></button></th>`).join('')}<th></th></tr></thead><tbody>${items.map(row=>`<tr><td><button type="button" class="text-button" aria-label="Открыть строку ${escape(row.name || row.uniqueName || row.typeName)}" data-grid-row="${escape(row.id)}">↗</button></td>${columns.map(c=>`<td>${c.type==='computed'?`<span class="grid-computed" title="Рассчитывается из альф">${escape(gridCellText(row,c))}</span>`:`<button type="button" class="grid-cell" data-grid-cell="${escape(c.id)}" data-grid-id="${escape(row.id)}">${escape(gridCellText(row,c))}</button>`}</td>`).join('')}<td><button type="button" class="text-button" data-grid-open="${escape(row.id)}">${this.table==='projects'?'Моделер':'Карточка альфы'}</button></td></tr>`).join('')}</tbody></table></div>${items.length?'':'<p class="project-empty">No Data · добавь первую строку.</p>'}`;
+    this.treeKey=`iw-grid-tree:${items[0]?.projectId ?? ''}`;
+    try{this.collapsed=new Set(JSON.parse(localStorage.getItem(this.treeKey)) ?? []);}catch{this.collapsed=new Set();}
+    const tree=this.table==='alphas'?hierarchyRows(items,this.collapsed):items.map(row=>({row,depth:0}));
+    this.host.innerHTML=`<div class="grid-toolbar"><span>Ячейка — изменить · ↗ — строка · ⋯ — иерархия</span><div>${this.table==='alphas'?'<button type="button" class="text-button" data-tree-all="open">Развернуть всё</button><button type="button" class="text-button" data-tree-all="close">Свернуть всё</button>':''}<button type="button" class="text-button" data-grid-columns>Столбцы</button><button type="button" class="text-button" data-grid-add-column>＋ Столбец</button><button type="button" class="text-button" data-grid-add-row>＋ Строка</button></div></div>
+    <div class="grid-scroll"><table class="project-table editable-grid"><thead><tr><th></th>${columns.map(c=>`<th scope="col"><button type="button" class="grid-heading" data-grid-column="${escape(c.id)}">${escape(c.title)} <small>${types[c.type]}</small></button></th>`).join('')}<th></th></tr></thead><tbody>${tree.map(({row,depth,wbs,hasChildren})=>{
+      const shown={...row,_wbs:wbs};
+      return `<tr data-tree-row="${escape(row.id)}" aria-level="${depth+1}"><td><div class="tree-row-controls">${hasChildren?`<button type="button" class="text-button" data-tree-toggle="${escape(row.id)}" aria-label="Свернуть или развернуть ${escape(row.uniqueName || row.typeName)}" aria-expanded="${!this.collapsed.has(row.id)}">${this.collapsed.has(row.id)?'▸':'▾'}</button>`:''}<button type="button" class="text-button" aria-label="Открыть строку ${escape(row.name || row.uniqueName || row.typeName)}" data-grid-row="${escape(row.id)}">↗</button></div></td>${columns.map(c=>`<td>${c.type==='computed'?`<span class="grid-computed">${escape(gridCellText(shown,c))}</span>`:`<button type="button" class="grid-cell" ${c.id==='uniqueName'?`style="padding-left:${12+depth*22}px"`:''} data-grid-cell="${escape(c.id)}" data-grid-id="${escape(row.id)}">${escape(gridCellText(shown,c))}</button>`}</td>`).join('')}<td>${this.table==='alphas'?`<button type="button" class="text-button" aria-label="Иерархия ${escape(row.uniqueName || row.typeName)}" data-grid-hierarchy="${escape(row.id)}">⋯</button>`:''}<button type="button" class="text-button" data-grid-open="${escape(row.id)}">${this.table==='projects'?'Моделер':'Карточка альфы'}</button></td></tr>`;
+    }).join('')}</tbody></table></div>${items.length?'':'<p class="project-empty">No Data · добавь первую строку.</p>'}`;
   }
   click(event){
     const button=event.target.closest('button');if(!button)return;
     const d=button.dataset;
-    if('gridAddColumn'in d)this.columnDialog();
+    if(d.treeToggle){this.collapsed.has(d.treeToggle)?this.collapsed.delete(d.treeToggle):this.collapsed.add(d.treeToggle);localStorage.setItem(this.treeKey,JSON.stringify([...this.collapsed]));this.render(this.items);}
+    else if(d.treeAll){localStorage.setItem(this.treeKey,JSON.stringify(d.treeAll==='open'?[]:this.items.map(r=>r.id)));this.render(this.items);}
+    else if(d.gridHierarchy)this.hierarchyDialog(this.items.find(r=>r.id===d.gridHierarchy));
+    else if('gridAddColumn'in d)this.columnDialog();
     else if('gridAddRow'in d)this.addRow();
     else if('gridColumns'in d)this.columnsDialog();
     else if(d.gridColumn)this.columnDialog(this.columns().find(c=>c.id===d.gridColumn));
@@ -59,8 +71,35 @@ export class PortfolioGrid {
     dialog.querySelector('[name=value]').focus();
   }
   rowDialog(row){
-    const dialog=this.dialog(row.name || row.uniqueName || row.typeName || 'Строка',`<div class="grid-row-fields">${this.columns().map(c=>`<div><strong>${escape(c.title)}</strong><button type="button" data-field="${escape(c.id)}" ${c.type==='computed'?'disabled':''}>${escape(gridCellText(row,c))}</button></div>`).join('')}</div>`,null);
+    const path=hierarchyRows(this.items).find(r=>r.row.id===row.id)?.wbs;
+    const dialog=this.dialog(row.name || row.uniqueName || row.typeName || 'Строка',`${this.table==='alphas'?'<button type="button" class="text-button" data-structure>Иерархия · вложенность и порядок</button>':''}<div class="grid-row-fields">${this.columns().map(c=>`<div><strong>${escape(c.title)}</strong><button type="button" data-field="${escape(c.id)}" ${c.type==='computed'?'disabled':''}>${escape(gridCellText({...row,_wbs:path},c))}</button></div>`).join('')}</div>${this.hints(row)}`,null);
+    dialog.querySelector('[data-structure]')?.addEventListener('click',()=>{dialog.close();this.hierarchyDialog(row);});
     dialog.addEventListener('click',event=>{const field=event.target.closest('[data-field]');if(!field)return;dialog.close();this.cellDialog(row,this.columns().find(c=>c.id===field.dataset.field));});
+  }
+  hints(row){
+    if(!row.templateStates?.length&&!row.templateQuestions?.length)return '';
+    return `<details class="template-hints"><summary>Состояния и вопросы из шаблона · подсказки</summary><p>Это ориентиры для размышления. Фактическое состояние и свидетельства запиши в полях объекта.</p>${(row.templateStates ?? []).map(s=>`<details><summary>${escape(s.title)}</summary><ul>${(s.questions ?? []).map(q=>`<li>${escape(q.text)}</li>`).join('')}</ul></details>`).join('')}<ul>${(row.templateQuestions ?? []).map(q=>`<li>${escape(q.text)}</li>`).join('')}</ul></details>`;
+  }
+  hierarchyDialog(row){
+    const descendants=new Set([row.id]);let changed=true;
+    while(changed){changed=false;for(const r of this.items)if(descendants.has(r.parentId)&&!descendants.has(r.id)){descendants.add(r.id);changed=true;}}
+    const options=hierarchyRows(this.items).filter(r=>!descendants.has(r.row.id));
+    const dialog=this.dialog('Иерархия строки',`<p>${escape(row.uniqueName || row.typeName)}</p><label>Родитель<select name="parent"><option value="">Верхний уровень</option>${options.map(({row:r,wbs})=>`<option value="${escape(r.id)}" ${row.parentId===r.id?'selected':''}>${escape(wbs+' · '+(r.uniqueName || r.typeName))}</option>`).join('')}</select></label><div class="grid-toolbar">${[['up','↑ Выше'],['down','↓ Ниже'],['in','→ Вложить в предыдущую'],['out','← На уровень выше']].map(([v,l])=>`<button type="button" class="text-button" data-shift="${v}">${l}</button>`).join('')}<button type="button" class="text-button" data-child>＋ Вложенная строка</button></div>`,async form=>this.move(row,form.get('parent') || null));
+    dialog.querySelector('[data-child]').onclick=()=>{dialog.close();this.addChild?.(row);};
+    for(const button of dialog.querySelectorAll('[data-shift]'))button.onclick=async()=>{
+      const current=this.items.find(r=>r.id===row.id),siblings=orderedSiblings(this.items,current.parentId),i=siblings.findIndex(r=>r.id===row.id);
+      let parentId=current.parentId,beforeId;
+      if(button.dataset.shift==='up'){if(i===0)return;beforeId=siblings[i-1].id;}
+      if(button.dataset.shift==='down'){if(i===siblings.length-1)return;beforeId=siblings[i+2]?.id;}
+      if(button.dataset.shift==='in'){if(i===0)return;parentId=siblings[i-1].id;}
+      if(button.dataset.shift==='out'){const parent=this.items.find(r=>r.id===current.parentId);if(!parent)return;parentId=parent.parentId || null;const group=orderedSiblings(this.items,parentId);beforeId=group[group.findIndex(r=>r.id===parent.id)+1]?.id;}
+      button.disabled=true;
+      try{await this.move(current,parentId,beforeId);dialog.close();}catch(error){dialog.querySelector('[role=alert]').textContent=error.message;button.disabled=false;}
+    };
+  }
+  async move(row,parentId,beforeId){
+    await this.mutate('moveAlpha',{id:row.id,parentId:parentId || null,...(beforeId?{beforeId}:{}),expectedHierarchy:hierarchySignature(this.items)});
+    if(parentId){this.collapsed.delete(parentId);localStorage.setItem(this.treeKey,JSON.stringify([...this.collapsed]));this.render(this.items);}
   }
   columnsDialog(){
     const visible=new Set(visibleGridColumns(this.columns(),this.view).map(c=>c.id));
