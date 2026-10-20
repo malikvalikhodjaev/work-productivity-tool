@@ -60,6 +60,7 @@
 - [Понятный чек-лист приёмки](docs/acceptance/36-first-trial.feature).
 - [Flutter-клиент: устройство и сборка](native-app/README.md).
 - [Решения по серверу и переносу](docs/ADR-030-digitalocean-and-active-focus.md).
+- [VPS: запуск, резервные копии, диагностика и откат](docs/VPS-RUNBOOK.md).
 - [История версий и прежние подробные заметки](CHANGELOG.md).
 
 ## Разработка
