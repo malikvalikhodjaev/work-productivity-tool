@@ -16,9 +16,10 @@ import androidx.core.content.FileProvider
 
 class MainActivity:FlutterActivity(){
     private var bridge:MethodChannel?=null
+    private var backupPicker:MethodChannel.Result?=null
     private fun updateBackground(payload:JSONObject){
         val saved=getSharedPreferences(FocusService.PREFS,MODE_PRIVATE).getString("snapshot",null)?.let{JSONObject(it)}
-        if(saved!=null&&!payload.optBoolean("local")&&!saved.optBoolean("local")&&
+        if(saved!=null&&!payload.optBoolean("timerOnly")&&!payload.optBoolean("local")&&!saved.optBoolean("local")&&
             saved.optString("serverUrl")==payload.optString("serverUrl")&&saved.optLong("timerRevision")>payload.optLong("timerRevision")){
             payload.put("active",saved.optJSONObject("active"))
             payload.put("timerRevision",saved.optLong("timerRevision"))
@@ -49,6 +50,13 @@ class MainActivity:FlutterActivity(){
         bridge!!.setMethodCallHandler{call,result->
             try{
                 when(call.method){
+                    "pickBackup"->{
+                        if(backupPicker!=null){result.error("busy","File selection is already open",null)}else{
+                            backupPicker=result
+                            val picker=Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json")
+                            try{startActivityForResult(picker,17041)}catch(error:Exception){backupPicker=null;result.error("picker",error.message,null)}
+                        }
+                    }
                     "update"->{
                         val payload=JSONObject(call.arguments as Map<*,*>)
                         updateBackground(payload)
@@ -97,6 +105,21 @@ class MainActivity:FlutterActivity(){
                 }
             }catch(error:Exception){result.error("iw_background",error.message,null)}
         }
+    }
+    override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){
+        super.onActivityResult(requestCode,resultCode,data)
+        if(requestCode!=17041)return
+        val reply=backupPicker?:return
+        backupPicker=null
+        if(resultCode!=RESULT_OK||data?.data==null){reply.success(null);return}
+        try{
+            val output=java.io.ByteArrayOutputStream()
+            contentResolver.openInputStream(data.data!!)?.use { input ->
+                val buffer=ByteArray(8192)
+                while(true){val count=input.read(buffer);if(count<0)break;require(output.size()+count<=8*1024*1024){"Backup exceeds 8 MiB"};output.write(buffer,0,count)}
+            }?:throw IllegalArgumentException("Cannot read backup")
+            reply.success(output.toString("UTF-8"))
+        }catch(error:Exception){reply.error("backup",error.message,null)}
     }
     override fun onNewIntent(intent:Intent){super.onNewIntent(intent);setIntent(intent);bridge?.invokeMethod("open",intent.getStringExtra("iw_screen"));intent.removeExtra("iw_screen")}
 }

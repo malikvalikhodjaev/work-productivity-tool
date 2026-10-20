@@ -5,6 +5,14 @@ project(indicators_work LANGUAGES CXX)
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "indicators_work")
+option(IW_FOCUS_EDITION "Build the independent Focus & Norms client" OFF)
+if(DEFINED ENV{IW_FOCUS_EDITION} AND "$ENV{IW_FOCUS_EDITION}" STREQUAL "1")
+  set(IW_FOCUS_EDITION ON)
+endif()
+if(IW_FOCUS_EDITION)
+  set(BINARY_NAME "focus_norms")
+  add_definitions(-DIW_FOCUS_EDITION)
+endif()
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.

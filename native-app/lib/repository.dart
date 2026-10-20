@@ -22,6 +22,7 @@ class ApiFailure implements Exception {
 }
 
 class DashboardRepository extends ChangeNotifier {
+  bool get timerOnly => false;
   final LocalDatabase local;
   final http.Client _http;
   Timer? _poll;

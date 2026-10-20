@@ -105,12 +105,17 @@ class _PomodoroTargetEditorState extends State<_PomodoroTargetEditor> {
     try {
       await editFields(
         context,
-        title: 'Создать работу / кейс',
+        title: repo.timerOnly ? 'Создать работу' : 'Создать работу / кейс',
         initial: {'kind': 'work', 'title': '', 'description': ''},
-        fields: const [
-          FieldSpec('kind', 'Тип', options: {'work': 'Работа', 'case': 'Кейс'}),
-          FieldSpec('title', 'Название'),
-          FieldSpec('description', 'Описание и размышления', lines: 4),
+        fields: [
+          if (!repo.timerOnly)
+            const FieldSpec(
+              'kind',
+              'Тип',
+              options: {'work': 'Работа', 'case': 'Кейс'},
+            ),
+          const FieldSpec('title', 'Название'),
+          const FieldSpec('description', 'Описание и размышления', lines: 4),
         ],
         save: (input) async {
           final isCase = input['kind'] == 'case';
@@ -224,8 +229,10 @@ class _PomodoroTargetEditorState extends State<_PomodoroTargetEditor> {
                   key: ValueKey(selected),
                   initialValue: selected,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Работа / задача / кейс',
+                  decoration: InputDecoration(
+                    labelText: repo.timerOnly
+                        ? 'Работа'
+                        : 'Работа / задача / кейс',
                   ),
                   hint: Text(
                     entities.isEmpty
@@ -256,7 +263,11 @@ class _PomodoroTargetEditorState extends State<_PomodoroTargetEditor> {
                     child: TextButton.icon(
                       onPressed: saving || creating ? null : createWork,
                       icon: const Icon(Icons.add),
-                      label: const Text('Создать работу / кейс'),
+                      label: Text(
+                        repo.timerOnly
+                            ? 'Создать работу'
+                            : 'Создать работу / кейс',
+                      ),
                     ),
                   ),
                 const SizedBox(height: 8),

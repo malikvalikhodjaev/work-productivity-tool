@@ -10,6 +10,7 @@ plugins {
 val releaseKeys = Properties()
 val releaseKeyFile = System.getenv("IW_ANDROID_KEY_PROPERTIES")?.let { File(it) } ?: rootProject.file("key.properties")
 if (releaseKeyFile.exists()) releaseKeyFile.reader(Charsets.UTF_8).use { releaseKeys.load(it) }
+val focusEdition = providers.gradleProperty("target").orNull?.endsWith("focus_main.dart") == true || providers.gradleProperty("iwFocus").orNull == "true" || System.getenv("IW_FOCUS_EDITION") == "1"
 
 android {
     namespace = "uz.iw.indicators_work"
@@ -22,7 +23,8 @@ android {
     }
 
     defaultConfig {
-        applicationId = "uz.iw.indicators_work"
+        applicationId = if (focusEdition) "uz.iw.focus_norms" else "uz.iw.indicators_work"
+        manifestPlaceholders["iwAppLabel"] = if (focusEdition) "Focus & Norms" else "Indicators & Work Dashboard"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 26
@@ -48,6 +50,7 @@ android {
             signingConfig = signingConfigs.findByName("ownerRelease")
         }
     }
+    if (focusEdition) sourceSets.getByName("release").manifest.srcFile("src/focus/AndroidManifest.xml")
 }
 
 gradle.taskGraph.whenReady {

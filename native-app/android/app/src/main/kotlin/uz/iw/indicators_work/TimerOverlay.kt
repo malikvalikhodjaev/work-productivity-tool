@@ -10,6 +10,7 @@ import android.provider.Settings
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -49,6 +50,7 @@ class TimerOverlay(private val context: Context) {
         sessionId = active.optString("id")
         if (root == null && !attach()) return
         val now = System.currentTimeMillis() + if (snapshot.optBoolean("local")) 0 else snapshot.optLong("serverOffset")
+        problem?.visibility = if(snapshot.optBoolean("timerOnly")) View.GONE else View.VISIBLE
         val problemData = snapshot.optJSONObject("dailyProblem")
         val problemText = problemData?.opt("text")?.takeIf { it != JSONObject.NULL }?.toString() ?: ""
         problem?.text = "Главная проблема на сегодня\n" + when {
@@ -93,6 +95,7 @@ class TimerOverlay(private val context: Context) {
         }
         plan?.text = if (lines.isEmpty()) "Нормативы на сегодня не заданы" else lines.joinToString("\n\n")
         source?.text = when {
+            snapshot.optBoolean("timerOnly") -> "Сохранение на устройстве"
             snapshot.optBoolean("planLocalChanges") -> "Есть локальные изменения"
             !snapshot.optBoolean("planOnline", false) -> "Без связи · последний снимок плана"
             else -> "Общий дневной план"

@@ -14,6 +14,8 @@ import 'timer_ringtones.dart';
 class BackgroundRuntime {
   static const channel = MethodChannel('iw/background');
   final DashboardRepository repo;
+  final String appTitle;
+  final bool timerOnly;
   final AudioPlayer audio = AudioPlayer();
   final AudioPlayer alarm = AudioPlayer();
   final AudioPlayer preview = AudioPlayer();
@@ -21,7 +23,11 @@ class BackgroundRuntime {
   tray.Menu? menu;
   String? previous;
   DesktopTimerWindow? desktop;
-  BackgroundRuntime(this.repo);
+  BackgroundRuntime(
+    this.repo, {
+    this.appTitle = 'Indicators & Work Dashboard',
+    this.timerOnly = false,
+  });
   Future<void> initialize({
     required Future<void> Function() show,
     required Future<void> Function() exit,
@@ -44,7 +50,7 @@ class BackgroundRuntime {
         changed: windowChanged,
       );
       await windowManager.setMinimumSize(const Size(380, 540));
-      await windowManager.setTitle('Indicators & Work Dashboard');
+      await windowManager.setTitle(appTitle);
       trayIcon = tray.TrayIcon.create();
       if (trayIcon == null) {
         throw StateError(
@@ -52,7 +58,7 @@ class BackgroundRuntime {
         );
       }
       trayIcon!.icon = tray.ImageAsset.fromAsset('assets/iw.png');
-      trayIcon!.setTooltip('Indicators & Work Dashboard');
+      trayIcon!.setTooltip(appTitle);
       trayIcon!.addListener((event) {
         if (event is tray.TrayIconClickedEvent ||
             event is tray.TrayIconDoubleClickedEvent) {
@@ -62,7 +68,7 @@ class BackgroundRuntime {
       menu = tray.Menu.create();
       if (menu == null) throw StateError('Не удалось создать меню трея.');
       final open = tray.MenuItem.createWithLabelAndType(
-        'Открыть дашборд',
+        timerOnly ? 'Открыть таймер' : 'Открыть дашборд',
         tray.MenuItemType.normal,
       )!;
       open.addListener((event) {
@@ -100,6 +106,7 @@ class BackgroundRuntime {
     final enabled = repo.local.get('soundEnabled') == true;
     final volume = (repo.local.get('volume') as num? ?? .2).toDouble();
     final payload = {
+      'timerOnly': timerOnly,
       'active': s,
       'timerRingtone': validRingtone(repo.local.get('timerRingtone')),
       'dailyProblem': {
@@ -121,7 +128,7 @@ class BackgroundRuntime {
       'pomodoroCounts': repo.pomodoroTargetsForDate(),
       'pomodoroDay': today(),
       'overlayEnabled': repo.local.get('androidOverlayEnabled') != false,
-      'planOnline': repo.online,
+      'planOnline': timerOnly || repo.online,
       'planLocalChanges':
           repo.pomodoroFacts.any(
             (f) => f['date'] == today() && f['pending'] == true,

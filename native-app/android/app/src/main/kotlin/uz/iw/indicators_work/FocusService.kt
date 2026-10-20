@@ -184,7 +184,7 @@ class FocusService : Service() {
             overlay.update(snapshot)
             val active=snapshot.optJSONObject("active")
             val offset=if(snapshot.optBoolean("local"))0L else snapshot.optLong("serverOffset")
-            var title="Indicators & Work Dashboard"
+            var title=applicationInfo.loadLabel(packageManager).toString()
             var detail="Фоновый звук"
             if(active!=null){
                 val now=System.currentTimeMillis()+offset
@@ -209,7 +209,7 @@ class FocusService : Service() {
         val prefs=getSharedPreferences(PREFS,MODE_PRIVATE)
         val value=intent?.getStringExtra("snapshot")?:prefs.getString("snapshot","{}")?:"{}"
         snapshot=JSONObject(value);prefs.edit().putString("snapshot",value).apply()
-        val notification=Notification.Builder(this,CHANNEL).setSmallIcon(android.R.drawable.ic_lock_idle_alarm).setContentTitle("I&W · фоновый таймер").setContentIntent(open(this,"timer")).build()
+        val notification=Notification.Builder(this,CHANNEL).setSmallIcon(android.R.drawable.ic_lock_idle_alarm).setContentTitle(applicationInfo.loadLabel(packageManager).toString()+" · фоновый таймер").setContentIntent(open(this,"timer")).build()
         if(Build.VERSION.SDK_INT>=34){val type=if(snapshot.optString("sound","").let{it.isNotEmpty()&&it!="null"})ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE;startForeground(ONGOING,notification,type)}else{startForeground(ONGOING,notification)}
         configureSound();schedule(this,snapshot);handler.removeCallbacks(tick);handler.post(tick)
         return START_STICKY

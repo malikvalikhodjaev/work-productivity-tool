@@ -7,9 +7,16 @@
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
-  HANDLE single_instance = ::CreateMutexW(nullptr, FALSE, L"Local\\IndicatorsWorkNativeClient");
+#ifdef IW_FOCUS_EDITION
+  const wchar_t* client_mutex = L"Local\\FocusNormsNativeClient";
+  const wchar_t* client_title = L"Focus & Norms";
+#else
+  const wchar_t* client_mutex = L"Local\\IndicatorsWorkNativeClient";
+  const wchar_t* client_title = L"Indicators & Work Dashboard";
+#endif
+  HANDLE single_instance = ::CreateMutexW(nullptr, FALSE, client_mutex);
   if (::GetLastError() == ERROR_ALREADY_EXISTS) {
-    HWND existing = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"Indicators & Work Dashboard");
+    HWND existing = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", client_title);
     if (existing) { ::ShowWindow(existing, SW_RESTORE); ::SetForegroundWindow(existing); }
     if (single_instance) ::CloseHandle(single_instance);
     return EXIT_SUCCESS;
@@ -34,7 +41,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"Indicators & Work Dashboard", origin, size)) {
+  if (!window.Create(client_title, origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
