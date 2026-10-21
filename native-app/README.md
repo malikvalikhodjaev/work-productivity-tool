@@ -1,6 +1,6 @@
 # Indicators & Work · Flutter-клиент
 
-Полный дашборд: **0.1.18+19** для Windows x64 и Android arm64. Первое знакомство описано в [QUICKSTART](../docs/QUICKSTART.md), эксплуатация — в [RUNBOOK](../docs/RUNBOOK.md).
+Полный дашборд: версия **0.1.18** для Windows x64 и Android arm64. Опубликованные ZIP/APK имеют build 19; для первого Google Play AAB подготовлен build 20. Первое знакомство описано в [QUICKSTART](../docs/QUICKSTART.md), эксплуатация — в [RUNBOOK](../docs/RUNBOOK.md).
 
 Отдельная редакция **Focus & Norms 0.1.0+1** запускается через `lib/focus_main.dart`, работает с собственной локальной базой без сервера и описана в [своём README](../FOCUS-README.md).
 
@@ -47,6 +47,8 @@ flutter build apk --release --target-platform android-arm64
 ```
 
 APK — `build/app/outputs/flutter-apk/app-release.apk`. Текущий распространяемый вариант предназначен для arm64.
+
+Для Google Play из корня репозитория предусмотрен `Build-Android.ps1 -Format AppBundle`; результат — `build/app/outputs/bundle/release/app-release.aab` в каталоге сборки. [Порядок регистрации, подписи и выпуска](../docs/GOOGLE-PLAY.md). AAB не является устанавливаемым APK; первая публикация ещё требует настройки аккаунта и Play App Signing.
 
 ## Архитектура и проверки
 

@@ -61,6 +61,7 @@
 - [Flutter-клиент: устройство и сборка](native-app/README.md).
 - [Решения по серверу и переносу](docs/ADR-030-digitalocean-and-active-focus.md).
 - [VPS: запуск, резервные копии, диагностика и откат](docs/VPS-RUNBOOK.md).
+- [Google Play: подготовка личного аккаунта и Internal testing](docs/GOOGLE-PLAY.md). Первый выпуск ещё требует завершения регистрации и настройки подписи.
 - [История версий и прежние подробные заметки](CHANGELOG.md).
 
 ## Разработка

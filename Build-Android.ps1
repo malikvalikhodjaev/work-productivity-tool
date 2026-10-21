@@ -3,6 +3,7 @@ param(
     [string]$ToolsDirectory = 'C:\IWD-Tools',
     [string]$BuildDirectory = 'C:\IWD-Tools\iw-native-build',
     [string]$KeyPropertiesPath = $env:IW_ANDROID_KEY_PROPERTIES,
+    [ValidateSet('Apk','AppBundle')][string]$Format = 'Apk',
     [switch]$Online
 )
 $ErrorActionPreference = 'Stop'
@@ -43,16 +44,25 @@ try {
     [IO.File]::WriteAllText((Join-Path $taskBuild 'android\local.properties'),$taskProperties,[Text.UTF8Encoding]::new($false))
     Push-Location (Join-Path $taskBuild 'android')
     try {
-        $taskLog = Join-Path $taskBuild 'android-build.log'
+        $taskLog = Join-Path $taskBuild $(if ($Format -eq 'AppBundle') { 'android-appbundle-build.log' } else { 'android-build.log' })
         $taskCacheFlags = @()
         if (-not $Online) { $taskCacheFlags += '--offline' }
         # AGP otherwise marks an APK with an injected ABI as test-only.
-        & $taskGradle --no-daemon @taskCacheFlags '-Dorg.gradle.vfs.watch=false' '-Pandroid.injected.build.abi=arm64-v8a' '-Pandroid.injected.testOnly=false' '-Ptarget-platform=android-arm64' '-Ptarget=lib/main.dart' '-Ptree-shake-icons=true' assembleRelease *> $taskLog
+        $taskReleaseTask = if ($Format -eq 'AppBundle') { 'bundleRelease' } else { 'assembleRelease' }
+        & $taskGradle --no-daemon @taskCacheFlags '-Dorg.gradle.vfs.watch=false' '-Pandroid.injected.build.abi=arm64-v8a' '-Pandroid.injected.testOnly=false' '-Ptarget-platform=android-arm64' '-Ptarget=lib/main.dart' '-Ptree-shake-icons=true' $taskReleaseTask *> $taskLog
         $taskExit = $LASTEXITCODE
         Get-Content -LiteralPath $taskLog -Tail 24
         if ($taskExit -ne 0) { throw "Android build failed; see $taskLog" }
     } finally { Pop-Location }
 } finally { Pop-Location }
+if ($Format -eq 'AppBundle') {
+    $taskBundle = Join-Path $taskBuild 'build\app\outputs\bundle\release\app-release.aab'
+    if (-not (Test-Path -LiteralPath $taskBundle -PathType Leaf)) { throw 'Release App Bundle was not generated.' }
+    $taskSignature = & (Join-Path $env:JAVA_HOME 'bin\jarsigner.exe') -verify $taskBundle 2>&1
+    if ($LASTEXITCODE -ne 0 -or ($taskSignature -join "`n") -notmatch '(?i)(jar verified|jar проверен)') { throw 'App Bundle signature could not be verified.' }
+    [pscustomobject]@{aab=$taskBundle;versionName=$taskVersion.Matches[0].Groups[1].Value;versionCode=[int]$taskVersion.Matches[0].Groups[2].Value;signatureVerified=$true;sha256=(Get-FileHash -LiteralPath $taskBundle -Algorithm SHA256).Hash} | ConvertTo-Json
+    return
+}
 $taskApk = Join-Path $taskBuild 'build\app\outputs\flutter-apk\app-release.apk'
 if (-not (Test-Path -LiteralPath $taskApk -PathType Leaf)) { throw 'Release APK was not generated.' }
 $taskAapt = Join-Path $env:ANDROID_HOME 'build-tools\36.0.0\aapt.exe'
