@@ -56,6 +56,7 @@ assets['/timer-ringtones.css'] = ['timer-ringtones.css', 'text/css; charset=utf-
 assets['/ringtones/catalog.json'] = ['ringtones/catalog.json', 'application/json; charset=utf-8'];
 for (const id of ['bip_bip','sonar','glass','marimba','orbit','warm_bell','classic']) assets[`/ringtones/${id}.wav`] = [`ringtones/${id}.wav`, 'audio/wav'];
 assets['/pomodoro-plans.js'] = ['pomodoro-plans.js', 'text/javascript; charset=utf-8'];
+assets['/pomodoro-capacity.js'] = ['pomodoro-capacity.js', 'text/javascript; charset=utf-8'];
 assets['/pomodoro-plans.css'] = ['pomodoro-plans.css', 'text/css; charset=utf-8'];
 assets['/focus'] = ['focus.html', 'text/html; charset=utf-8'];
 assets['/focus-window.css'] = ['focus-window.css', 'text/css; charset=utf-8'];
@@ -145,7 +146,7 @@ const server = http.createServer(async (req, res) => {
       store.validateNativeDevice(command);
       if (command.module === 'inbox') return json(res, 200, inbox.mutate(command));
       if (command.module === 'workspace') return json(res, 200, workspace.nativeMutate(command));
-      if (['portfolio','target','dailyNorm','dailyCheck','pomodoroTarget'].includes(command.module)) return json(res, 200, store.nativeMutate(command));
+      if (['portfolio','target','dailyNorm','dailyCheck','pomodoroTarget','pomodoroCapacity'].includes(command.module)) return json(res, 200, store.nativeMutate(command));
       if (command.module === 'problem') {
         const problem = dailyProblems.nativeSave(command);
         const linked = workspace.ensureProblemCase(problem, command.caseClientId);
@@ -156,6 +157,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/server-status') return json(res, 200, { hosting: hosting().provider, persistence: 'files', timezone: 'Asia/Tashkent', backup: backupStatus(dataDir), remote: remoteViewer.status() });
     if (req.method === 'GET' && url.pathname === '/api/daily-norms') return json(res, 200, store.getDailyNorms(url.searchParams.get('date') ?? undefined, url.searchParams.get('week') ?? undefined));
     if (req.method === 'POST' && url.pathname === '/api/pomodoro-plan') return json(res, 200, store.nativeMutate({ ...(await body(req)), module: 'pomodoroTarget', action: 'save' }));
+    if (req.method === 'POST' && url.pathname === '/api/pomodoro-capacity') return json(res, 200, store.nativeMutate({ ...(await body(req)), module: 'pomodoroCapacity', action: 'save' }));
     if (req.method === 'GET' && url.pathname === '/api/mobile-access') {
       const file = path.join(dataDir, 'cloud-view.json');
       if (existsSync(file) && !hosting().explicit) {

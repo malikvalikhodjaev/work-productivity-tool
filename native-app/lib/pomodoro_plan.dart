@@ -1,5 +1,67 @@
 import 'domain.dart';
 
+void validatePomodoroCapacity(Json input) {
+  final date = input['date'];
+  if (date is! String ||
+      !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(date) ||
+      DateTime.tryParse('${date}T12:00:00Z')
+              ?.toIso8601String()
+              .substring(0, 10) !=
+          date) {
+    throw ArgumentError('Дата: YYYY-MM-DD.');
+  }
+  final limit = input['limit'];
+  if (limit != null && (limit is! int || limit < 1 || limit > 1440)) {
+    throw ArgumentError(
+      'Дневной лимит: целое число от 1 до 1440, либо пусто для снятия.',
+    );
+  }
+}
+
+int? pomodoroCapacityOn(List<Json> rules, String date) {
+  Json? selected;
+  for (final row in rules) {
+    if (row['date'].toString().compareTo(date) <= 0 &&
+        (selected == null ||
+            row['date'].toString().compareTo(selected['date'].toString()) >
+                0)) {
+      selected = row;
+    }
+  }
+  return selected?['limit'] as int?;
+}
+
+Json pomodoroCapacitySummary(
+  List<Json> targets,
+  List<Json> rules,
+  String date, {
+  Json? candidate,
+}) {
+  final effective = candidate == null
+      ? targets
+      : [
+          ...targets.where((t) => t['workRef'] != candidate['workRef']),
+          candidate,
+        ];
+  final planned = effective.fold<int>(
+    0,
+    (sum, t) => sum + (t['target'] as int? ?? 0),
+  );
+  final limit = pomodoroCapacityOn(rules, date),
+      over = limit != null && planned > limit;
+  return {
+    'date': date,
+    'planned': planned,
+    'limit': limit,
+    'over': over,
+    'message': limit == null
+        ? 'План: $planned помидорок · дневной лимит не задан.'
+        : over
+        ? 'В плане сейчас $planned помидорок, а твой лимит — $limit в день. Превышение: ${planned - limit}. Проверь план с учётом своих сил.'
+        : 'План: $planned помидорок · твой лимит: $limit в день.',
+  };
+}
+
 String pomodoroDate(int utcMs) => DateTime.fromMillisecondsSinceEpoch(
   utcMs,
   isUtc: true,

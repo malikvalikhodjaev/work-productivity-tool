@@ -5,6 +5,69 @@ import 'forms.dart';
 import 'pomodoro_plan.dart';
 import 'repository.dart';
 
+Future<void> editPomodoroCapacity(
+  BuildContext context,
+  DashboardRepository repo,
+) async {
+  final day = today(),
+      records = rows(repo.cache('dailyNorms')['pomodoroCapacities']);
+  await editFields(
+    context,
+    title: 'Дневной лимит по силам',
+    initial: {
+      'date': day,
+      'limit': pomodoroCapacityOn(repo.pomodoroCapacityRows, day),
+    },
+    fields: const [
+      FieldSpec('date', 'Действует с · YYYY-MM-DD'),
+      FieldSpec(
+        'limit',
+        'Максимум помидорок в день · пусто для снятия',
+        integer: true,
+      ),
+    ],
+    save: (input) async {
+      validatePomodoroCapacity(input);
+      final previous = records
+          .where((r) => r['date'] == input['date'])
+          .firstOrNull;
+      repo.nativeSave(
+        'pomodoroCapacity',
+        'save',
+        input,
+        'capacity:${input['date']}',
+        expectedUpdatedAt: previous?['updatedAt'],
+      );
+    },
+  );
+}
+
+class PomodoroCapacityNotice extends StatelessWidget {
+  final Json summary;
+  const PomodoroCapacityNotice({super.key, required this.summary});
+  @override
+  Widget build(BuildContext context) {
+    final over = summary['over'] == true;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: over ? const Color(0xffffeded) : const Color(0xfff2f5f3),
+        borderRadius: BorderRadius.circular(10),
+        border: over ? Border.all(color: const Color(0xffb3261e)) : null,
+      ),
+      child: Text(
+        summary['message'].toString(),
+        style: TextStyle(
+          fontSize: 12,
+          color: over ? const Color(0xffb3261e) : const Color(0xff45584c),
+        ),
+      ),
+    );
+  }
+}
+
 Future<bool> editPomodoroTarget(
   BuildContext context,
   DashboardRepository repo, {
@@ -83,6 +146,8 @@ class _PomodoroTargetEditorState extends State<_PomodoroTargetEditor> {
     baseRecords = rows(repo.cache('dailyNorms')['pomodoroTargets'])
         .map((n) => Map<String, dynamic>.from(n))
         .toList();
+    date.addListener(refresh);
+    target.addListener(refresh);
     repo.addListener(refresh);
   }
 
@@ -93,6 +158,8 @@ class _PomodoroTargetEditorState extends State<_PomodoroTargetEditor> {
   @override
   void dispose() {
     repo.removeListener(refresh);
+    date.removeListener(refresh);
+    target.removeListener(refresh);
     date.dispose();
     title.dispose();
     target.dispose();
@@ -291,6 +358,22 @@ class _PomodoroTargetEditorState extends State<_PomodoroTargetEditor> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(date.text) &&
+                    (target.text.isEmpty ||
+                        (int.tryParse(target.text) ?? 0) > 0))
+                  PomodoroCapacityNotice(
+                    summary: pomodoroCapacitySummary(
+                      repo.pomodoroTargetsForDate(date.text),
+                      repo.pomodoroCapacityRows,
+                      date.text,
+                      candidate: workRef == null
+                          ? null
+                          : {
+                              'workRef': workRef,
+                              'target': int.tryParse(target.text),
+                            },
+                    ),
+                  ),
                 const Text(
                   'Ежедневно, без срока окончания — пока не изменишь или не снимешь.',
                   style: TextStyle(fontSize: 12),
@@ -392,12 +475,23 @@ class PomodoroChecklist extends StatelessWidget {
                     ),
                   ),
                   IconButton(
+                    onPressed: () => editPomodoroCapacity(context, repo),
+                    icon: const Icon(Icons.speed_outlined),
+                    tooltip: 'Дневной лимит по силам',
+                  ),
+                  IconButton(
                     onPressed: () => editPomodoroTarget(context, repo),
                     icon: const Icon(Icons.add),
                     tooltip: 'Норматив на день',
                   ),
                 ],
               ),
+              PomodoroCapacityNotice(summary: repo.pomodoroCapacityForDate()),
+              if (!compact)
+                TextButton(
+                  onPressed: () => editPomodoroCapacity(context, repo),
+                  child: const Text('Изменить дневной лимит'),
+                ),
               if (norms.isEmpty) const Text('Нормативы на сегодня не заданы.'),
               ConstrainedBox(
                 constraints: BoxConstraints(maxHeight: compact ? 180 : 280),
@@ -495,6 +589,33 @@ class PomodoroWeek extends StatelessWidget {
               style: TextStyle(fontWeight: FontWeight.w600),
             ),
             Text('$week — ${days.last}'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final day in days)
+                  (() {
+                    final cap = repo.pomodoroCapacityForDate(day);
+                    return Chip(
+                      backgroundColor: cap['over'] == true
+                          ? const Color(0xffffeded)
+                          : null,
+                      label: Text(
+                        '${day.substring(8)}.${day.substring(5, 7)} · ${cap['planned']} / ${cap['limit'] ?? '—'}',
+                        style: TextStyle(
+                          color: cap['over'] == true
+                              ? const Color(0xffb3261e)
+                              : null,
+                        ),
+                      ),
+                    );
+                  })(),
+              ],
+            ),
+            const Text(
+              'Суммарный план / дневной лимит · «—» — лимит не задан',
+              style: TextStyle(fontSize: 12),
+            ),
             if (groups.isEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: 12),

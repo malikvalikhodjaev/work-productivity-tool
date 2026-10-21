@@ -452,6 +452,7 @@ class DashboardRepository extends ChangeNotifier {
     if (module == 'pomodoroTarget') {
       input = {...input, 'repeat': input['repeat'] ?? 'daily'};
     }
+    if (module == 'pomodoroCapacity') validatePomodoroCapacity(input);
     final projected =
         draft ??
         {
@@ -927,6 +928,29 @@ class DashboardRepository extends ChangeNotifier {
 
   bool get hasPomodoroPlan => pomodoroTargetsForDate().isNotEmpty;
 
+  List<Json> get pomodoroCapacityRows {
+    final result = <String, Json>{
+      for (final r in rows(cache('dailyNorms')['pomodoroCapacities']))
+        r['date'].toString(): r,
+    };
+    for (final d in local.drafts.where(
+      (d) => d['entity'].toString().startsWith('capacity:'),
+    )) {
+      final r = object(d['body']);
+      result[r['date'].toString()] = r;
+    }
+    return result.values.toList();
+  }
+
+  Json pomodoroCapacityForDate([String? date]) {
+    final day = date ?? today();
+    return pomodoroCapacitySummary(
+      pomodoroTargetsForDate(day),
+      pomodoroCapacityRows,
+      day,
+    );
+  }
+
   List<Json> get dailyChecks {
     final result = {
       for (final check in rows(cache('dailyNorms')['checks']))
@@ -1363,6 +1387,11 @@ class DashboardRepository extends ChangeNotifier {
               .where((r) => r['date'] == input['date'])
               .firstOrNull;
           input['expectedUpdatedAt'] = current?['updatedAt'];
+        case 'pomodoroCapacity':
+          current = rows(cache('dailyNorms')['pomodoroCapacities'])
+              .where((r) => r['date'] == input['date'])
+              .firstOrNull;
+          body['expectedUpdatedAt'] = current?['updatedAt'];
         case 'pomodoroTarget':
           current = rows(cache('dailyNorms')['pomodoroTargets'])
               .where(

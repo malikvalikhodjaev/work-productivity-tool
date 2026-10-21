@@ -6,6 +6,7 @@ import 'package:file_selector_windows/file_selector_windows.dart';
 
 import 'background.dart';
 import 'domain.dart';
+import 'pomodoro_plan.dart';
 
 Future<String?> pickFocusBackup() async {
   if (Platform.isAndroid) {
@@ -118,6 +119,21 @@ Json validateFocusBackup(String raw, int now) {
     rows(norms['pomodoroTargets']).length ==
         (norms['pomodoroTargets'] as List).length,
     'структура норматива',
+  );
+  final capacities = norms['pomodoroCapacities'];
+  _require(
+    capacities == null || capacities is List,
+    'структура дневных лимитов',
+  );
+  final capacityDays = <String>{};
+  for (final rule in rows(capacities)) {
+    validatePomodoroCapacity(rule);
+    _require(capacityDays.add(rule['date']), 'повтор дневного лимита');
+  }
+  _require(
+    capacities == null ||
+        rows(capacities).length == (capacities as List).length,
+    'структура дневного лимита',
   );
   final sessions = rows(timer['sessions']), sessionIds = <String>{};
   for (final s in sessions) {

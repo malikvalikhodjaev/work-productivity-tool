@@ -1,6 +1,7 @@
 [CmdletBinding()]
-param([string]$BinaryDirectory = (Join-Path $PSScriptRoot 'outputs\native-windows'), [switch]$CheckOnly)
+param([string]$BinaryDirectory, [switch]$CheckOnly)
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($BinaryDirectory)) { $BinaryDirectory = Join-Path $PSScriptRoot 'outputs\native-windows' }
 $nativeBinary = Join-Path ([IO.Path]::GetFullPath($BinaryDirectory)) 'indicators_work.exe'
 $nativeDataDirectory = if ($env:DASHBOARD_DATA_DIR) { $env:DASHBOARD_DATA_DIR } else { Join-Path $PSScriptRoot 'data' }
 $nativeMovedFile = Join-Path $nativeDataDirectory 'server-moved.json'

@@ -82,6 +82,10 @@ test('Рабочий шлюз допускает запись только вл�
   assert.equal((await send('/api/writing/context',{method:'GET',body:''})).status,200);
   assert.equal((await send('/api/writing/00000000-0000-4000-8000-000000000001',{method:'GET',body:''})).status,200);
   assert.equal(writes.length,7);
+  assert.equal((await send('/api/pomodoro-capacity',{headers:{'Tailscale-User-Login':'other@example.com'}})).status,403);
+  assert.equal((await send('/api/pomodoro-capacity',{headers:{Origin:'https://attacker.example'}})).status,403);
+  assert.equal((await send('/api/pomodoro-capacity')).status,200);
+  assert.equal(writes.at(-1).path,'/api/pomodoro-capacity');
 });
 
 test('Офлайн-режим не перехватывает и не сохраняет личные API-ответы', async () => {

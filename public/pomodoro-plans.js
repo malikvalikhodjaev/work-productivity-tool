@@ -1,5 +1,6 @@
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 import './timer.js';
+import { pomodoroCapacityOn, pomodoroCapacitySummary } from './pomodoro-capacity.js';
 
 const today = () => new Date(Date.now() + 5 * 3600000).toISOString().slice(0, 10);
 const shift = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
@@ -25,6 +26,50 @@ const settings = document.createElement('dialog'); settings.className = 'modal p
 settings.innerHTML = '<div class="modal-heading"><h2>Настройки · помидорки на сегодня</h2><button type="button" class="icon-button" data-pom-settings-close aria-label="Закрыть настройки">×</button></div><div data-pom-list></div><div class="modal-footer"><button type="button" class="button secondary" data-pom-stats>Статистика недели</button><button type="button" class="button primary" data-pom-add>＋ Ежедневный норматив</button></div>';
 document.body.append(settings);
 
+const capacityEditor = document.createElement('dialog'); capacityEditor.className='modal pom-editor';
+capacityEditor.innerHTML='<form><h2>Дневной лимит по силам</h2><p class="pom-note">Твой максимум на сумму всех нормативов. Повторяется каждый день с выбранной даты. Превышение подсвечивается; таймер и учёт времени остаются доступны.</p><label class="field">Действует с<input name="date" type="date" required></label><label class="field">Максимум помидорок в день · пусто для снятия<input name="limit" type="number" min="1" max="1440" step="1" inputmode="numeric"></label><p class="form-error" role="alert"></p><div class="modal-footer"><button type="button" class="button secondary" data-cap-close>Закрыть</button><button type="submit" class="button primary">Сохранить</button></div></form>';
+document.body.append(capacityEditor);
+let capacityRetry, capacitySaving=false, capacityBase=[];
+for(const container of [host,settings]) {
+  const button=document.createElement('button'); button.type='button'; button.className='button secondary';
+  button.dataset.pomCapacity=''; button.textContent='Дневной лимит по силам'; button.disabled=readOnly;
+  container.querySelector('[data-pom-list]').insertAdjacentElement('beforebegin',button);
+}
+const capacityPreview=document.createElement('p'); capacityPreview.className='pom-capacity'; capacityPreview.setAttribute('role','status');
+form.querySelector('.form-error').insertAdjacentElement('beforebegin',capacityPreview);
+const capacityHtml = summary => `<p class="pom-capacity ${summary?.over?'pom-over':''}" role="status">${esc(summary?.message ?? '')}</p>`;
+function updateCapacityPreview() {
+  const day=field('date').value, selected=field('workRef').value, value=field('target').value;
+  const summary=pomodoroCapacitySummary(targetsOn(day),data?.pomodoroCapacities,day,
+    selected && value!=='' && Number.isInteger(Number(value)) ? {workRef:selected,target:Number(value)} : null);
+  capacityPreview.textContent=summary.message; capacityPreview.classList.toggle('pom-over',summary.over);
+}
+function targetsOn(day) {
+  const selected=new Map();
+  for(const row of data?.pomodoroTargets??[]) {
+    if(row.date!==day&&!(row.repeat==='daily'&&row.date<=day))continue;
+    if(!selected.has(row.workRef)||row.date>selected.get(row.workRef).date)selected.set(row.workRef,row);
+  }
+  return [...selected.values()].filter(t=>t.target!=null);
+}
+function editCapacity() {
+  if(readOnly||capacitySaving||!data)return;
+  const cf=capacityEditor.querySelector('form'); capacityBase=structuredClone(data.pomodoroCapacities??[]);
+  cf.elements.date.value=today(); cf.elements.limit.value=pomodoroCapacityOn(capacityBase,today())??'';
+  cf.querySelector('.form-error').textContent=''; capacityRetry=null; capacityEditor.showModal();
+}
+capacityEditor.querySelector('form').addEventListener('submit',async event=>{
+  event.preventDefault(); if(capacitySaving||readOnly)return;
+  const cf=event.currentTarget; if(!cf.reportValidity())return;
+  const input={date:cf.elements.date.value,limit:cf.elements.limit.value===''?null:Number(cf.elements.limit.value)};
+  const content=JSON.stringify({input,expectedUpdatedAt:capacityBase.find(r=>r.date===input.date)?.updatedAt??null});
+  if(capacityRetry?.content!==content)capacityRetry={content,command:{...JSON.parse(content),requestId:crypto.randomUUID()}};
+  capacitySaving=true; for(const b of cf.querySelectorAll('button'))b.disabled=true;
+  try { await api('/api/pomodoro-capacity',capacityRetry.command); capacityEditor.close(); await load(); }
+  catch(error){cf.querySelector('.form-error').textContent=error.message;}
+  finally{capacitySaving=false;for(const b of cf.querySelectorAll('button'))b.disabled=false;}
+});
+
 async function api(route, body) {
   const response = await fetch(route, {cache:'no-store', ...(body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {})});
   const result = await response.json(); if (!response.ok) throw new Error(result.error ?? 'Не удалось сохранить план.'); return result;
@@ -36,10 +81,13 @@ function listHtml() {
 }
 function render() {
   if (!data) return;
-  for (const list of document.querySelectorAll('[data-pom-list]')) list.innerHTML = listHtml();
+  for (const list of document.querySelectorAll('[data-pom-list]')) list.innerHTML = capacityHtml(data.pomodoroPlan.capacity)+listHtml();
   const w = data.pomodoroWeek;
   document.getElementById('pom-week-label').textContent = `${w.week} — ${w.end}`;
   document.getElementById('pom-week-table').innerHTML = w.rows.length ? `<table><caption class="sr-only">Помидорки: факт / план по дням</caption><thead><tr><th>Норматив</th>${w.days.map(d => `<th>${d.slice(8)}.${d.slice(5,7)}</th>`).join('')}<th>Неделя</th></tr></thead><tbody>${w.rows.map(row => `<tr><th>${esc(row.title)}</th>${w.days.map(d => { const n=row.days.find(t=>t.date===d); return `<td>${n ? `${n.actualPomodoros}/${n.target}` : '<span title="Норма не задана">—</span>'}</td>`; }).join('')}<td><strong>${row.actualPomodoros}/${row.target}</strong></td></tr>`).join('')}</tbody></table>` : '<p class="pom-empty">No Data — на выбранную неделю нормы ещё не заданы.</p>';
+  document.getElementById('pom-week-table').insertAdjacentHTML('afterbegin',
+    '<p class="pom-note">Суммарный план / дневной лимит · «—» — лимит не задан</p><div class="pom-capacity-week">'+
+    (w.capacities??[]).map(c=>`<span class="pom-capacity ${c.over?'pom-over':''}" title="${esc(c.message)}">${c.date.slice(8)}.${c.date.slice(5,7)} · ${c.planned} / ${c.limit??'—'}</span>`).join('')+'</div>');
   for (const button of document.querySelectorAll('[data-pom-add],[data-pom-edit],[data-pom-focus]')) button.disabled = readOnly;
   if (data.pomodoroPlan.hasPlan && prompt.open) prompt.close();
 }
@@ -66,6 +114,7 @@ function fillPrevious() {
   document.getElementById('pom-remove').hidden = !editing || !row || row.target == null;
   form.querySelector('.form-error').textContent=!editing&&row?.target!=null?'Для этой работы уже есть норматив. Выбери другую карточку; прежнюю норму можно изменить через карандаш.':'';
   retryBody = null;
+  updateCapacityPreview();
 }
 async function edit(ref) {
   if (readOnly || submitting) return;
@@ -95,6 +144,8 @@ async function save(remove = false) {
 document.addEventListener('click', event => {
   const b=event.target.closest('button'); if(!b)return;
   if(b.hasAttribute('data-pom-add'))void edit();
+  if(b.hasAttribute('data-pom-capacity'))editCapacity();
+  if(b.hasAttribute('data-cap-close')&&!capacitySaving)capacityEditor.close();
   if(b.hasAttribute('data-pom-edit'))void edit(b.dataset.pomEdit);
   if(b.hasAttribute('data-pom-settings')) { render(); settings.showModal(); }
   if(b.hasAttribute('data-pom-settings-close'))settings.close();
@@ -105,6 +156,7 @@ document.addEventListener('click', event => {
 });
 field('date').addEventListener('change',fillPrevious); field('workRef').addEventListener('change',fillPrevious);
 form.addEventListener('submit',e=>{e.preventDefault();void save();});
+field('target').addEventListener('input',updateCapacityPreview);
 document.getElementById('pom-remove').addEventListener('click',()=>void save(true));
 document.getElementById('pom-later').addEventListener('click',()=>{nextPrompt=Date.now()+3600000;prompt.close();});
 prompt.addEventListener('cancel',()=>{nextPrompt=Date.now()+3600000;});

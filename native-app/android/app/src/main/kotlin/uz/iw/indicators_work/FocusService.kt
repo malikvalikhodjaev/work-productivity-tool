@@ -51,6 +51,23 @@ class FocusService : Service() {
             val running = if(s.optString("status")=="running") max(0L, now-s.optLong("runningSince")) else 0L
             return past + if(s.optString("mode")=="pomodoro") min(running,max(0L,s.optLong("plannedMs")-past)) else running
         }
+        fun pomodoroCapacity(data: JSONObject, day: String): JSONObject {
+            val rules=data.optJSONArray("pomodoroCapacities")?:JSONArray()
+            var selected: JSONObject?=null
+            for(i in 0 until rules.length()) {
+                val row=rules.getJSONObject(i)
+                if(row.optString("date")<=day&&(selected==null||row.optString("date")>selected.optString("date")))selected=row
+            }
+            val plans=pomodoroPlans(data,day)
+            var planned=0
+            for(i in 0 until plans.length())planned+=plans.getJSONObject(i).optInt("target")
+            val limit=selected?.takeUnless{it.isNull("limit")}?.optInt("limit")
+            val over=limit!=null&&planned>limit
+            val message=if(limit==null) "План: $planned помидорок · дневной лимит не задан."
+                else if(over) "В плане сейчас $planned помидорок, а твой лимит — $limit в день. Превышение: ${planned-limit}. Проверь план с учётом своих сил."
+                else "План: $planned помидорок · твой лимит: $limit в день."
+            return JSONObject().put("over",over).put("message",message)
+        }
         fun open(context: Context, screen: String): PendingIntent = PendingIntent.getActivity(context,screen.hashCode(),Intent(context,MainActivity::class.java).putExtra("iw_screen",screen).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         fun leisureKey(active: JSONObject): String? {
             val l=active.optJSONObject("leisure")?:return null
@@ -256,6 +273,7 @@ class FocusService : Service() {
                     }
                     if(!snapshot.optBoolean("planLocalChanges")&&plans!=null){
                         snapshot.put("pomodoroTargets",plans.optJSONArray("pomodoroTargets"))
+                        snapshot.put("pomodoroCapacities",plans.optJSONArray("pomodoroCapacities"))
                         snapshot.put("pomodoroCounts",plans.optJSONObject("pomodoroPlan")?.optJSONArray("targets"))
                         snapshot.put("pomodoroDay",plans.optString("today"))
                     }

@@ -141,6 +141,33 @@ class FocusRepository extends DashboardRepository {
           ],
         }),
       );
+    } else if (module == 'pomodoroCapacity' && action == 'save') {
+      validatePomodoroCapacity(input);
+      final snapshot = cache('dailyNorms'),
+          records = rows(snapshot['pomodoroCapacities']);
+      final previous = records
+          .where((r) => r['date'] == input['date'])
+          .firstOrNull;
+      if (expectedUpdatedAt != previous?['updatedAt']) {
+        throw StateError('Лимит изменён. Открой настройки снова.');
+      }
+      final next = <String, dynamic>{
+        ...input,
+        'updatedAt': DateTime.now().toUtc().toIso8601String(),
+        'revisions': [
+          ...rows(previous?['revisions']),
+          if (previous != null) {...previous}..remove('revisions'),
+        ],
+      };
+      local.atomic(
+        () => local.capture('dailyNorms', {
+          ...snapshot,
+          'pomodoroCapacities': [
+            ...records.where((r) => r['date'] != input['date']),
+            next,
+          ],
+        }),
+      );
     } else if (module == 'pomodoroTarget' && action == 'save') {
       final date = input['date']?.toString() ?? '';
       if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(date) ||

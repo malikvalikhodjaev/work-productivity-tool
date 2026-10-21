@@ -27,4 +27,10 @@ test('Native HTTP bridge validates identity, keeps receipts, and exposes daily n
   const norm=await post('/api/native/command',{requestId:randomUUID(),deviceId,serverId,module:'dailyNorm',action:'save',expectedUpdatedAt:null,input:{workRef:`case:${caseId}`,minutes:60,time:'09:30',days:[1,2,3,4,5,6,7],enabled:true}});assert.equal(norm.status,200);
   const daily=await (await fetch(origin+'/api/daily-norms')).json();assert.equal(daily.repeatMinutes,60);assert.equal(daily.norms[0].actualMinutes,null);
   const entries=await (await fetch(origin+'/api/time-entries')).json();assert.equal(entries.entries.length,0);
+  const capCommand={requestId:randomUUID(),deviceId,serverId,module:'pomodoroCapacity',action:'save',expectedUpdatedAt:null,input:{date:'2026-10-21',limit:15}};
+  const cap=await post('/api/native/command',capCommand);assert.equal(cap.status,200);
+  assert.equal(cap.body.dailyNorms.pomodoroCapacities[0].limit,15);
+  assert.equal((await post('/api/native/command',capCommand)).body.duplicate,true);
+  assert.equal((await fetch(origin+'/pomodoro-capacity.js')).status,200);
+  assert.equal((await post('/api/pomodoro-capacity',{requestId:randomUUID(),expectedUpdatedAt:null,input:{date:'2026-10-22',limit:30}})).status,200);
 });

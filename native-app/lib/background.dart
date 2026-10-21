@@ -125,6 +125,7 @@ class BackgroundRuntime {
       'volume': volume,
       'norms': repo.dailyNorms,
       'pomodoroTargets': repo.pomodoroRows,
+      'pomodoroCapacities': repo.pomodoroCapacityRows,
       'pomodoroCounts': repo.pomodoroTargetsForDate(),
       'pomodoroDay': today(),
       'overlayEnabled': repo.local.get('androidOverlayEnabled') != false,
@@ -134,10 +135,15 @@ class BackgroundRuntime {
             (f) => f['date'] == today() && f['pending'] == true,
           ) ||
           repo.local.drafts.any(
-            (d) => d['entity'].toString().startsWith('pomodoro:'),
+            (d) =>
+                d['entity'].toString().startsWith('pomodoro:') ||
+                d['entity'].toString().startsWith('capacity:'),
           ) ||
           repo.pending.any(
-            (q) => object(q['body'])['module'] == 'pomodoroTarget',
+            (q) => [
+              'pomodoroTarget',
+              'pomodoroCapacity',
+            ].contains(object(q['body'])['module']),
           ),
       'planningReady': repo.cache('dailyNorms').isNotEmpty,
       'pomodoroHiddenUntil': repo.local.get('pomodoroReminder:${today()}') ?? 0,

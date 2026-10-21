@@ -28,6 +28,7 @@ class TimerOverlay(private val context: Context) {
     private var clock: TextView? = null
     private var problem: TextView? = null
     private var title: TextView? = null
+    private var capacity: TextView? = null
     private var plan: TextView? = null
     private var source: TextView? = null
     private var sessionId: String? = null
@@ -74,6 +75,9 @@ class TimerOverlay(private val context: Context) {
             else if (active.optString("workRef").startsWith("case:")) "Working on a problem: " else "Working on: ") + active.optString("title")
         val date = FocusService.date(now)
         val rows = FocusService.pomodoroPlans(snapshot,date)
+        val cap=FocusService.pomodoroCapacity(snapshot,date)
+        capacity?.text=cap.optString("message")
+        capacity?.setTextColor(if(cap.optBoolean("over"))Color.rgb(255,165,159)else Color.rgb(205,225,212))
         val counts = snapshot.optJSONArray("pomodoroCounts")
         val day = snapshot.optString("pomodoroDay", snapshot.optString("today"))
         val lines = mutableListOf<String>()
@@ -143,6 +147,8 @@ class TimerOverlay(private val context: Context) {
         title = text(13f).apply { maxLines = 3; setPadding(0, dp(4), 0, dp(12)) }
         panel.addView(title)
         panel.addView(text(12f).apply { text = "Помидорки · сегодня"; setTypeface(typeface, Typeface.BOLD) })
+        capacity=text(11f).apply { setPadding(0,dp(8),0,0) }
+        panel.addView(capacity)
         plan = text(12f).apply { setPadding(0, dp(10), 0, dp(8)) }
         val scroll = ScrollView(context).apply { addView(plan) }
         panel.addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,

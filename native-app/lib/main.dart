@@ -177,7 +177,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.17',
+        'clientVersion': '0.1.18',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -2763,7 +2763,7 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'I&W · Native 0.1.16',
+                          'I&W · Native 0.1.18',
                           style: TextStyle(fontSize: 11),
                         ),
                       ],
