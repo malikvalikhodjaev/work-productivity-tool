@@ -2,3 +2,11 @@
 .focus-screen .timer-current,.focus-screen>.timer-note{display:none}.focus-screen .focus-scene{min-height:min(42vh,380px)}
 @media(max-width:600px){.focus-screen .focus-scene{min-height:34vh}}
 .focus-youtube{margin-top:16px;font-size:12px}.focus-youtube summary{cursor:pointer;color:#526659}.focus-youtube-form{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-top:14px}.focus-youtube-form label{display:grid;gap:7px;flex:1;min-width:200px}.focus-youtube-form input{border:1px solid #dfe4df;border-radius:10px;padding:10px;font:inherit;width:100%;box-sizing:border-box}.focus-youtube iframe{display:block;width:100%;min-height:200px;aspect-ratio:16/9;border:0;border-radius:14px;margin-top:12px}.focus-youtube a{display:inline-block;color:#526659;margin-top:10px}.focus-youtube a[hidden]{display:none}.timer-widget-top span{max-width:calc(100% - 76px)}
+
+/* Claude Monet, Water Lilies (1906), Art Institute of Chicago, CC0.
+   Bundled image and quiet central water; no external request or animation. */
+.focus-ambience[data-theme=monet]{--scene-bg:#293e4a;--scene-ink:#fff}
+.focus-ambience[data-theme=monet] .focus-scene{
+  background:linear-gradient(#0c172080,#0c172080),url('/art/monet-water-lilies-1906.jpg') 35% 47.5%/cover no-repeat;
+}
+.focus-ambience[data-theme=monet] .focus-scene-content{text-shadow:0 1px 10px #09151e80}

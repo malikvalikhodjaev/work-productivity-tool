@@ -7,7 +7,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'active_timer_conflict.dart';
 import 'background.dart';
-import 'compact_timer.dart';
+import 'focus_theme.dart';
 import 'domain.dart';
 import 'focus_repository.dart';
 import 'focus_backup.dart';
@@ -512,12 +512,10 @@ class _FocusHomeState extends State<FocusHome>
 
   Widget player({bool compact = false}) {
     final s = repo.active;
-    return Container(
+    return FocusSurface(
+      theme: (repo.local.get('theme') ?? 'green').toString(),
+      radius: 22,
       padding: EdgeInsets.all(compact ? 18 : 26),
-      decoration: BoxDecoration(
-        color: focusColors[repo.local.get('theme') ?? 'green'],
-        borderRadius: BorderRadius.circular(22),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -613,12 +611,7 @@ class _FocusHomeState extends State<FocusHome>
             Wrap(
               spacing: 8,
               children: [
-                for (final pair in {
-                  'green': 'Зелень',
-                  'evening': 'Вечер',
-                  'desert': 'Пустыня',
-                  'lofi': 'Лофи',
-                }.entries)
+                for (final pair in focusThemes.entries)
                   ChoiceChip(
                     label: Text(pair.value),
                     selected: (repo.local.get('theme') ?? 'green') == pair.key,

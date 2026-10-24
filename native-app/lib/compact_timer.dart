@@ -1,14 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'domain.dart';
+import 'focus_theme.dart';
 import 'leisure.dart';
-
-const focusColors = {
-  'green': Color(0xff243b30),
-  'evening': Color(0xff40394f),
-  'desert': Color(0xff826246),
-  'lofi': Color(0xff343e57),
-};
 
 class CompactTimer extends StatelessWidget {
   final Json? session;
@@ -37,12 +31,10 @@ class CompactTimer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = session;
-    return Container(
+    return FocusSurface(
+      theme: theme,
+      radius: 20,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: focusColors[theme] ?? focusColors['green'],
-        borderRadius: BorderRadius.circular(20),
-      ),
       child: DefaultTextStyle(
         style: const TextStyle(color: Colors.white, fontSize: 14),
         child: Column(

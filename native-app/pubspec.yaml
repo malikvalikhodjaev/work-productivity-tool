@@ -30,6 +30,7 @@ flutter:
   assets:
     - assets/audio/
     - assets/audio/ringtones/
+    - assets/art/
     - assets/iw.ico
     - assets/iw.png
     - assets/reflection-hints.json

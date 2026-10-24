@@ -60,6 +60,7 @@ assets['/pomodoro-capacity.js'] = ['pomodoro-capacity.js', 'text/javascript; cha
 assets['/pomodoro-plans.css'] = ['pomodoro-plans.css', 'text/css; charset=utf-8'];
 assets['/focus'] = ['focus.html', 'text/html; charset=utf-8'];
 assets['/focus-window.css'] = ['focus-window.css', 'text/css; charset=utf-8'];
+assets['/art/monet-water-lilies-1906.jpg'] = ['art/monet-water-lilies-1906.jpg', 'image/jpeg'];
 assets['/write'] = ['writing-sheet.html', 'text/html; charset=utf-8'];
 assets['/writing-sheet.js'] = ['writing-sheet.js', 'text/javascript; charset=utf-8'];
 assets['/writing-editor.js'] = ['writing-editor.js', 'text/javascript; charset=utf-8'];

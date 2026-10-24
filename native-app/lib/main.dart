@@ -22,6 +22,7 @@ import 'writing_screen.dart';
 import 'reflection_hints.dart';
 import 'data_table.dart';
 import 'compact_timer.dart';
+import 'focus_theme.dart';
 import 'timer_command_notice.dart';
 import 'daily_problem_banner.dart';
 import 'modeling_workspace.dart';
@@ -1037,10 +1038,8 @@ class _DashboardHomeState extends State<DashboardHome>
   Widget focusCard() {
     final s = repo.active;
     final theme = (repo.local.get('theme') ?? 'green').toString();
-    const colors = focusColors;
-    return Material(
-      color: colors[theme],
-      borderRadius: BorderRadius.circular(24),
+    return FocusSurface(
+      theme: theme,
       child: Padding(
         padding: const EdgeInsets.all(26),
         child: DefaultTextStyle(
@@ -1211,19 +1210,12 @@ class _DashboardHomeState extends State<DashboardHome>
               Wrap(
                 spacing: 8,
                 children: [
-                  for (final name in colors.keys)
+                  for (final entry in focusThemes.entries)
                     ChoiceChip(
-                      label: Text(
-                        {
-                          'green': 'Зелень',
-                          'evening': 'Вечер',
-                          'desert': 'Пустыня',
-                          'lofi': 'Лофи',
-                        }[name]!,
-                      ),
-                      selected: theme == name,
+                      label: Text(entry.value),
+                      selected: theme == entry.key,
                       onSelected: (_) {
-                        repo.local.set('theme', name);
+                        repo.local.set('theme', entry.key);
                         setState(() {});
                       },
                     ),
