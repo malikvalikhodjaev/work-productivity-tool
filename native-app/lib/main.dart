@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:file_selector_platform_interface/file_selector_platform_interface.dart';
+import 'package:file_selector_windows/file_selector_windows.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart' as q;
@@ -19,14 +21,13 @@ import 'repository.dart';
 import 'sync_panel.dart';
 import 'pomodoro_widgets.dart';
 import 'writing_screen.dart';
-import 'reflection_hints.dart';
 import 'data_table.dart';
-import 'compact_timer.dart';
+import 'adaptive_focus_player.dart';
+import 'work_stage_board.dart';
 import 'focus_theme.dart';
 import 'timer_command_notice.dart';
 import 'daily_problem_banner.dart';
 import 'weekly_problem_card.dart';
-import 'focus_viewport.dart';
 import 'section_analytics.dart';
 import 'modeling_workspace.dart';
 import 'leisure.dart';
@@ -121,7 +122,7 @@ class _DashboardHomeState extends State<DashboardHome>
   Timer? ticker;
   int section = 0;
   bool focusMode = false,
-      board = false,
+      board = true,
       foreground = true,
       dialogOpen = false,
       trayReady = false,
@@ -143,18 +144,12 @@ class _DashboardHomeState extends State<DashboardHome>
     Icons.edit_note_outlined,
     Icons.table_chart_outlined,
   ];
-  static const stages = {
-    'planned': 'Запланировано',
-    'active': 'В работе',
-    'blocked': 'Требует разбора',
-    'ready': 'Готово к эксплуатации',
-    'operation': 'В эксплуатации',
-    'retired': 'Выведено',
-  };
+  static const stages = workStageLabels;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    board = repo.local.get('workView') != 'list';
     background = BackgroundRuntime(repo);
     repo.addListener(changed);
     if (widget.backgroundEnabled && Platform.isWindows) {
@@ -181,7 +176,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.22',
+        'clientVersion': '0.1.23',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -1048,6 +1043,7 @@ class _DashboardHomeState extends State<DashboardHome>
     final theme = (repo.local.get('theme') ?? 'green').toString();
     return FocusSurface(
       theme: theme,
+      customImage: repo.local.get('customFocusImage') as String?,
       child: Padding(
         padding: const EdgeInsets.all(26),
         child: DefaultTextStyle(
@@ -1055,7 +1051,10 @@ class _DashboardHomeState extends State<DashboardHome>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              WeeklyProblemBanner(repo: repo),
+              WeeklyProblemBanner(
+                repo: repo,
+                edit: () => editWeeklyProblem(weekStart()),
+              ),
               DailyProblemBanner(repo: repo, edit: editProblem),
               Row(
                 children: [
@@ -1196,120 +1195,284 @@ class _DashboardHomeState extends State<DashboardHome>
                 focus: (ref, title) => startTimer(ref: ref, title: title),
               ),
               const SizedBox(height: 18),
-              TextButton.icon(
-                onPressed: focusSettings,
-                icon: const Icon(Icons.tune, color: Colors.white70, size: 18),
-                label: const Text(
-                  'Настройки таймера',
-                  style: TextStyle(color: Colors.white70),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: ringtoneSettings,
-                icon: const Icon(
-                  Icons.music_note_outlined,
-                  color: Colors.white70,
-                  size: 18,
-                ),
-                label: Text(
-                  'Сигнал таймера · ${timerRingtones[validRingtone(repo.local.get('timerRingtone'))]!.$1}',
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              ),
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final entry in focusThemes.entries)
-                    ChoiceChip(
-                      label: Text(entry.value),
-                      selected: theme == entry.key,
-                      onSelected: (_) {
-                        repo.local.set('theme', entry.key);
-                        setState(() {});
-                      },
-                    ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      isExpanded: true,
-                      initialValue: (repo.local.get('sound') ?? 'brown')
-                          .toString(),
-                      decoration: const InputDecoration(
-                        labelText: 'Фоновый звук',
-                        isDense: true,
-                      ),
-                      items:
-                          const {
-                                'white': 'Белый шум',
-                                'pink': 'Розовый шум',
-                                'brown': 'Коричневый шум',
-                                'rain': 'Дождь',
-                                'wind': 'Ветер',
-                                'lofi': 'Лофи',
-                              }.entries
-                              .map(
-                                (e) => DropdownMenuItem(
-                                  value: e.key,
-                                  child: Text(
-                                    e.value,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                      onChanged: (value) {
-                        repo.local.set('sound', value);
-                        unawaited(background.update());
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  IconButton(
-                    onPressed: () {
-                      repo.local.set(
-                        'soundEnabled',
-                        repo.local.get('soundEnabled') != true,
-                      );
-                      setState(() {});
-                      unawaited(background.update());
-                    },
-                    icon: Icon(
-                      repo.local.get('soundEnabled') == true
-                          ? Icons.volume_off_outlined
-                          : Icons.volume_up_outlined,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-              Slider(
-                value: (repo.local.get('volume') as num? ?? .2).toDouble(),
-                onChanged: (value) {
-                  repo.local.set('volume', value);
-                  setState(() {});
-                  unawaited(background.update());
-                },
-              ),
-              if (Platform.isWindows && focusMode)
-                SwitchListTile(
-                  title: const Text(
-                    'Поверх других окон',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  value: repo.local.get('pinFocus') == true,
-                  onChanged: (value) {
-                    repo.local.set('pinFocus', value);
-                    setState(() {});
-                    windowManager.setAlwaysOnTop(value);
-                  },
-                ),
+              focusOptions(),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Future<void> chooseFocusPainting() async {
+    final picked = await FileSelectorWindows().openFile(
+      acceptedTypeGroups: [
+        const XTypeGroup(
+          label: 'Картина',
+          extensions: ['jpg', 'jpeg', 'png', 'webp'],
+        ),
+      ],
+    );
+    if (picked == null) return;
+    if (await picked.length() > 8 * 1024 * 1024) {
+      message('Выбери изображение до 8 МБ.');
+      return;
+    }
+    final destination = p.join(
+      widget.folder,
+      'focus-custom-${uuid.v4()}${p.extension(picked.path)}',
+    );
+    await picked.saveTo(destination);
+    repo.setUiPreference('customFocusImage', destination);
+    repo.setUiPreference('theme', 'custom');
+  }
+
+  Widget focusOptions() {
+    final theme = (repo.local.get('theme') ?? 'green').toString();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextButton.icon(
+          onPressed: focusSettings,
+          icon: const Icon(Icons.tune, color: Colors.white70, size: 18),
+          label: const Text(
+            'Настройки таймера',
+            style: TextStyle(color: Colors.white70),
+          ),
+        ),
+        TextButton.icon(
+          onPressed: ringtoneSettings,
+          icon: const Icon(
+            Icons.music_note_outlined,
+            color: Colors.white70,
+            size: 18,
+          ),
+          label: Text(
+            'Сигнал таймера · ${timerRingtones[validRingtone(repo.local.get('timerRingtone'))]!.$1}',
+            style: const TextStyle(color: Colors.white70),
+          ),
+        ),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final entry in focusThemes.entries.where(
+              (e) =>
+                  e.key != 'custom' ||
+                  repo.local.get('customFocusImage') != null,
+            ))
+              ChoiceChip(
+                label: Text(entry.value),
+                selected: theme == entry.key,
+                onSelected: (_) {
+                  repo.setUiPreference('theme', entry.key);
+                  setState(() {});
+                },
+              ),
+          ],
+        ),
+        if (Platform.isWindows)
+          TextButton.icon(
+            onPressed: () => safe(chooseFocusPainting),
+            icon: const Icon(Icons.image_outlined),
+            label: const Text('Своя картина · выбрать файл'),
+          ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                isExpanded: true,
+                initialValue: (repo.local.get('sound') ?? 'brown').toString(),
+                decoration: const InputDecoration(
+                  labelText: 'Фоновый звук',
+                  isDense: true,
+                ),
+                items:
+                    const {
+                          'white': 'Белый шум',
+                          'pink': 'Розовый шум',
+                          'brown': 'Коричневый шум',
+                          'rain': 'Дождь',
+                          'wind': 'Ветер',
+                          'lofi': 'Лофи',
+                        }.entries
+                        .map(
+                          (e) => DropdownMenuItem(
+                            value: e.key,
+                            child: Text(
+                              e.value,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                onChanged: (value) {
+                  repo.setUiPreference('sound', value);
+                  unawaited(background.update());
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            IconButton(
+              onPressed: () {
+                repo.setUiPreference(
+                  'soundEnabled',
+                  repo.local.get('soundEnabled') != true,
+                );
+                setState(() {});
+                unawaited(background.update());
+              },
+              icon: Icon(
+                repo.local.get('soundEnabled') == true
+                    ? Icons.volume_off_outlined
+                    : Icons.volume_up_outlined,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+        Slider(
+          value: (repo.local.get('volume') as num? ?? .2).toDouble(),
+          onChanged: (value) {
+            repo.setUiPreference('volume', value);
+            setState(() {});
+            unawaited(background.update());
+          },
+        ),
+        if (Platform.isWindows && focusMode)
+          SwitchListTile(
+            title: const Text(
+              'Поверх других окон',
+              style: TextStyle(color: Colors.white),
+            ),
+            value: repo.local.get('pinFocus') == true,
+            onChanged: (value) {
+              repo.setUiPreference('pinFocus', value);
+              setState(() {});
+              windowManager.setAlwaysOnTop(value);
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget focusPlayer() {
+    final s = repo.active;
+    return AdaptiveFocusPlayer(
+      changes: repo,
+      clock: s == null ? '25:00' : clockOf(s, repo.now),
+      mode: s == null
+          ? 'Пространство для важного'
+          : inLeisure(s)
+          ? 'Leisure · до ${leisureTime(s)}'
+          : pomodoroExpired(s, repo.now)
+          ? 'Помидорка завершена · ожидает учёта'
+          : s['status'] == 'paused'
+          ? 'Пауза'
+          : s['mode'] == 'pomodoro'
+          ? 'Pomodoro'
+          : 'Stopwatch',
+      contextPanel: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          WeeklyProblemBanner(
+            repo: repo,
+            edit: () => editWeeklyProblem(weekStart()),
+          ),
+          DailyProblemBanner(repo: repo, edit: editProblem),
+        ],
+      ),
+      description: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            s == null ? 'Выбери карточку работы' : caption(s),
+            style: const TextStyle(fontSize: 17, height: 1.4),
+          ),
+          if (s != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${(elapsedMs(s, repo.now) / 60000).toStringAsFixed(1)} мин',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            if (inLeisure(s)) LeisureInfo(session: s, now: repo.now),
+          ],
+          TimerCommandNotice(
+            repo: repo,
+            retry: () => safe(repo.checkPendingTimer),
+          ),
+        ],
+      ),
+      actions: Wrap(
+        spacing: 10,
+        runSpacing: 6,
+        children: [
+          if (s == null)
+            FilledButton(
+              onPressed: () => startTimer(),
+              child: const Text('Новая активность'),
+            )
+          else ...[
+            FilledButton.tonal(
+              onPressed: repo.timerBusy || pomodoroExpired(s, repo.now)
+                  ? null
+                  : () => safe(
+                      () => repo.timerAction(
+                        s['status'] == 'paused' ? 'resume' : 'pause',
+                      ),
+                    ),
+              child: Text(
+                inLeisure(s)
+                    ? 'Вернуться к работе'
+                    : s['status'] == 'paused'
+                    ? 'Продолжить'
+                    : 'Пауза',
+              ),
+            ),
+            FilledButton(
+              onPressed: repo.timerBusy ? null : finishTimer,
+              child: const Text('Учесть'),
+            ),
+          ],
+        ],
+      ),
+      norms: PomodoroChecklist(
+        repo: repo,
+        compact: true,
+        focus: (ref, title) => startTimer(ref: ref, title: title),
+      ),
+      settings: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (s == null)
+            TextButton(
+              onPressed: () => safe(startBreak),
+              child: const Text('Начать перерыв'),
+            ),
+          if (s != null)
+            Wrap(
+              children: [
+                if (s['phase'] == 'work')
+                  TextButton(
+                    onPressed: repo.timerBusy || pomodoroExpired(s, repo.now)
+                        ? null
+                        : () => safe(() => chooseLeisure(context, repo)),
+                    child: const Text('Leisure'),
+                  ),
+                if (s['mode'] == 'pomodoro')
+                  TextButton(
+                    onPressed: repo.timerBusy
+                        ? null
+                        : () => safe(() => repo.timerAction('extend')),
+                    child: const Text('＋ 5 мин'),
+                  ),
+                TextButton(
+                  onPressed: repo.timerBusy ? null : cancelTimer,
+                  child: const Text('Отменить сеанс'),
+                ),
+              ],
+            ),
+          focusOptions(),
+        ],
       ),
     );
   }
@@ -1422,7 +1585,11 @@ class _DashboardHomeState extends State<DashboardHome>
     );
   }
 
-  Future<void> editWork([Json? previous, Json? origin]) async {
+  Future<void> editWork([
+    Json? previous,
+    Json? origin,
+    String? initialStage,
+  ]) async {
     final id = previous?['id'] ?? uuid.v4(), key = 'work:$id';
     final base = rows(repo.cache('workspace')['workItems'])
         .where((w) => w['id'] == id)
@@ -1435,7 +1602,7 @@ class _DashboardHomeState extends State<DashboardHome>
         'id': id,
         'title': previous?['title'] ?? '',
         'kind': previous?['kind'] ?? 'work',
-        'stage': previous?['stage'] ?? 'planned',
+        'stage': previous?['stage'] ?? initialStage ?? 'planned',
         'allocation': previous?['allocation'] ?? 'unclassified',
         'metricId': previous?['metricId'] ?? '',
       },
@@ -1589,7 +1756,7 @@ class _DashboardHomeState extends State<DashboardHome>
             const SizedBox(height: 8),
             Text(
               isCase
-                  ? 'Кейс · ${item['status']}'
+                  ? 'Кейс · ${caseStatusText(item)}'
                   : isTask
                   ? 'Задача проекта · ${item['done'] == true ? 'Сделано' : 'Открыта'}'
                   : '${item['kind'] == 'issue' ? 'Issue' : 'Работа'} · ${stages[item['stage']] ?? item['stage']}',
@@ -1676,17 +1843,7 @@ class _DashboardHomeState extends State<DashboardHome>
         (w) => {'item': w, 'ref': 'work:${w['id']}', 'stage': w['stage']},
       ),
       ...cases.map(
-        (c) => {
-          'item': c,
-          'ref': 'case:${c['id']}',
-          'stage': c['status'] == 'closed'
-              ? 'retired'
-              : c['status'] == 'new'
-              ? 'planned'
-              : c['status'] == 'watching'
-              ? 'blocked'
-              : 'active',
-        },
+        (c) => {'item': c, 'ref': 'case:${c['id']}', 'stage': caseStage(c)},
       ),
       ...tasks.map(
         (t) => {
@@ -1705,10 +1862,27 @@ class _DashboardHomeState extends State<DashboardHome>
           'Работы и кейсы',
           trailing: Wrap(
             children: [
-              IconButton(
-                onPressed: () => setState(() => board = !board),
-                icon: Icon(board ? Icons.view_list : Icons.view_kanban),
-                tooltip: board ? 'Список' : 'Доска',
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(
+                    value: true,
+                    icon: Icon(Icons.view_kanban_outlined),
+                    label: Text('Доска'),
+                  ),
+                  ButtonSegment(
+                    value: false,
+                    icon: Icon(Icons.view_list_outlined),
+                    label: Text('Список'),
+                  ),
+                ],
+                selected: {board},
+                onSelectionChanged: (value) {
+                  repo.setUiPreference(
+                    'workView',
+                    value.first ? 'board' : 'list',
+                  );
+                  setState(() => board = value.first);
+                },
               ),
               TextButton(
                 onPressed: () => editWork(),
@@ -1727,74 +1901,39 @@ class _DashboardHomeState extends State<DashboardHome>
             child: Text('No Data · создай работу или запиши проблему дня.'),
           )
         else if (board)
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final stage in stages.entries)
-                  SizedBox(
-                    width: 300,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            '${stage.value} · ${all.where((a) => a['stage'] == stage.key).length}',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 14),
-                          for (final entry in all.where(
-                            (a) => a['stage'] == stage.key,
-                          ))
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: workCard(
-                                object(entry['item']),
-                                entry['ref'].toString(),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+          WorkStageBoard(
+            repo: repo,
+            entries: all,
+            card: workCard,
+            create: (stage) => editWork(null, null, stage),
           )
         else
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            children: all
-                .map(
-                  (entry) => SizedBox(
-                    width: 330,
-                    child: workCard(
-                      object(entry['item']),
-                      entry['ref'].toString(),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final stage in stages.entries)
+                if (all.any((e) => e['stage'] == stage.key)) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      '${stage.value} · ${all.where((e) => e['stage'] == stage.key).length}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
-                )
-                .toList(),
+                  for (final entry in all.where((e) => e['stage'] == stage.key))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: workCard(
+                        object(entry['item']),
+                        entry['ref'].toString(),
+                      ),
+                    ),
+                ],
+            ],
           ),
         const SizedBox(height: 24),
         focusCard(),
         const SizedBox(height: 18),
-        ReflectionHints(repo: repo),
-        ExpansionTile(
-          title: const Text('Источники и мысли'),
-          children: rows(repo.cache('references')['entries'])
-              .map(
-                (r) => ListTile(
-                  title: Text(r['title'].toString()),
-                  subtitle: SelectableText(
-                    '${r['note'] ?? ''}\n${r['url'] ?? 'No Data'}',
-                  ),
-                ),
-              )
-              .toList(),
-        ),
         WorkAnalytics(repo: repo),
       ],
     );
@@ -2717,186 +2856,186 @@ class _DashboardHomeState extends State<DashboardHome>
         await SystemNavigator.pop();
       }
     },
-    child: Scaffold(
-      appBar: AppBar(
-        title: Text(
-          background.desktop?.compact == true
-              ? 'I&W · Фокус'
-              : 'Indicators & Work Dashboard',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        actions: [
-          if (background.desktop?.compact == true) ...[
-            IconButton(
-              onPressed: show,
-              icon: const Icon(Icons.dashboard_outlined),
-              tooltip: 'Все разделы',
-            ),
-            IconButton(
-              onPressed: () async {
-                foreground = false;
-                await background.desktop?.hide();
-              },
-              icon: const Icon(Icons.visibility_off_outlined),
-              tooltip: 'Скрыть таймер в трей',
-            ),
-          ] else ...[
-            IconButton(
-              onPressed: repo.syncing ? null : repo.synchronize,
-              icon: Icon(repo.online ? Icons.sync : Icons.cloud_off_outlined),
-              tooltip: repo.status,
-            ),
-            IconButton(
-              onPressed: settings,
-              icon: const Icon(Icons.settings_outlined),
-              tooltip: 'Настройки и нормативы',
-            ),
-          ],
-        ],
-      ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          if (background.desktop?.compact == true) {
-            return FocusViewport(
-              child: CompactTimer(
-                dailyProblem: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    WeeklyProblemBanner(repo: repo, compact: true),
-                    DailyProblemBanner(repo: repo, compact: true),
-                  ],
-                ),
-                busy: repo.timerBusy,
-                commandStatus: TimerCommandNotice(
-                  repo: repo,
-                  retry: () => safe(repo.checkPendingTimer),
-                ),
-                session: repo.active,
-                now: repo.now,
-                theme: (repo.local.get('theme') ?? 'green').toString(),
-                pause: () => safe(
-                  () => repo.timerAction(
-                    repo.active?['status'] == 'paused' ? 'resume' : 'pause',
+    child: FocusBackdrop(
+      theme: (repo.local.get('theme') ?? 'green').toString(),
+      enabled: focusMode || background.desktop?.compact == true,
+      customImage: repo.local.get('customFocusImage') as String?,
+      child: Scaffold(
+        backgroundColor: focusMode || background.desktop?.compact == true
+            ? Colors.transparent
+            : null,
+        appBar: AppBar(
+          backgroundColor: focusMode || background.desktop?.compact == true
+              ? Colors.transparent
+              : null,
+          foregroundColor: focusMode || background.desktop?.compact == true
+              ? Colors.white
+              : null,
+          title: focusMode || background.desktop?.compact == true
+              ? Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 5,
                   ),
-                ),
-                finish: () async {
-                  await show();
-                  if (mounted) await finishTimer();
-                },
-                checklist: PomodoroChecklist(
-                  repo: repo,
-                  compact: true,
-                  focus: (ref, title) => startTimer(ref: ref, title: title),
-                ),
-              ),
-            );
-          }
-          if (focusMode) return FocusViewport(child: focusCard());
-          final wide = constraints.maxWidth >= 950 && !focusMode;
-          final page = focusMode
-              ? focusCard()
-              : [
-                  indicatorsPage,
-                  projectsPage,
-                  workPage,
-                  () => WritingScreen(repo: repo),
-                  dataPage,
-                ][section]();
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (wide)
-                SizedBox(
-                  width: 220,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 16),
-                        for (var i = 0; i < sections.length; i++)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: FilledButton.tonal(
-                              onPressed: () => setState(() => section = i),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: section == i
-                                    ? const Color(0xffdfe7e1)
-                                    : Colors.transparent,
-                                alignment: Alignment.centerLeft,
-                                minimumSize: const Size(double.infinity, 48),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(icons[i], size: 20),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      sections[i],
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        const Spacer(),
-                        Text(
-                          repo.status,
-                          maxLines: 4,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Color(0xff727780),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'I&W · Native 0.1.22',
-                          style: TextStyle(fontSize: 11),
-                        ),
-                      ],
+                  decoration: BoxDecoration(
+                    color: Colors.black26,
+                    border: Border.all(color: Colors.white70),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'I&W · Фокус',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
                     ),
                   ),
+                )
+              : const Text(
+                  'Indicators & Work Dashboard',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 ),
-              Expanded(
-                child: ListView(
-                  controller: pageScroll,
-                  padding: EdgeInsets.all(wide ? 28 : 16),
-                  children: [
-                    if (!wide && !focusMode)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Text(
-                          repo.status,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Color(0xff727780),
-                          ),
-                        ),
-                      ),
-                    page,
-                  ],
-                ),
+          actions: [
+            if (focusMode || background.desktop?.compact == true) ...[
+              IconButton(
+                onPressed: show,
+                icon: const Icon(Icons.dashboard_outlined),
+                tooltip: 'Все разделы',
+              ),
+              IconButton(
+                onPressed: () async {
+                  foreground = false;
+                  await background.desktop?.hide();
+                },
+                icon: const Icon(Icons.visibility_off_outlined),
+                tooltip: 'Скрыть таймер в трей',
+              ),
+            ] else ...[
+              IconButton(
+                onPressed: repo.syncing ? null : repo.synchronize,
+                icon: Icon(repo.online ? Icons.sync : Icons.cloud_off_outlined),
+                tooltip: repo.status,
+              ),
+              IconButton(
+                onPressed: settings,
+                icon: const Icon(Icons.settings_outlined),
+                tooltip: 'Настройки и нормативы',
               ),
             ],
-          );
-        },
-      ),
-      bottomNavigationBar:
-          MediaQuery.sizeOf(context).width < 950 &&
-              !focusMode &&
-              background.desktop?.compact != true
-          ? NavigationBar(
-              selectedIndex: section,
-              onDestinationSelected: (value) => setState(() => section = value),
-              destinations: [
-                for (var i = 0; i < sections.length; i++)
-                  NavigationDestination(
-                    icon: Icon(icons[i]),
-                    label: sections[i],
+          ],
+        ),
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            if (background.desktop?.compact == true || focusMode) {
+              return focusPlayer();
+            }
+            final wide = constraints.maxWidth >= 950 && !focusMode;
+            final page = focusMode
+                ? focusCard()
+                : [
+                    indicatorsPage,
+                    projectsPage,
+                    workPage,
+                    () => WritingScreen(repo: repo),
+                    dataPage,
+                  ][section]();
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (wide)
+                  SizedBox(
+                    width: 220,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 16),
+                          for (var i = 0; i < sections.length; i++)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: FilledButton.tonal(
+                                onPressed: () => setState(() => section = i),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: section == i
+                                      ? const Color(0xffdfe7e1)
+                                      : Colors.transparent,
+                                  alignment: Alignment.centerLeft,
+                                  minimumSize: const Size(double.infinity, 48),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(icons[i], size: 20),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        sections[i],
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          const Spacer(),
+                          Text(
+                            repo.status,
+                            maxLines: 4,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xff727780),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'I&W · Native 0.1.23',
+                            style: TextStyle(fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
+                Expanded(
+                  child: ListView(
+                    controller: pageScroll,
+                    padding: EdgeInsets.all(wide ? 28 : 16),
+                    children: [
+                      if (!wide && !focusMode)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Text(
+                            repo.status,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xff727780),
+                            ),
+                          ),
+                        ),
+                      page,
+                    ],
+                  ),
+                ),
               ],
-            )
-          : null,
+            );
+          },
+        ),
+        bottomNavigationBar:
+            MediaQuery.sizeOf(context).width < 950 &&
+                !focusMode &&
+                background.desktop?.compact != true
+            ? NavigationBar(
+                selectedIndex: section,
+                onDestinationSelected: (value) =>
+                    setState(() => section = value),
+                destinations: [
+                  for (var i = 0; i < sections.length; i++)
+                    NavigationDestination(
+                      icon: Icon(icons[i]),
+                      label: sections[i],
+                    ),
+                ],
+              )
+            : null,
+      ),
     ),
   );
   @override

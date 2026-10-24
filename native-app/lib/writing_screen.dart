@@ -8,6 +8,7 @@ import 'section_analytics.dart';
 import 'repository.dart';
 import 'reflection_hints.dart';
 import 'inbox_widget.dart';
+import 'focus_theme.dart';
 
 Json editorDocument(Json source, {bool toServer = false}) => {
   'ops': rows(source['ops']).map((op) {
@@ -34,7 +35,14 @@ class DividerBuilder extends q.EmbedBuilder {
 
 class WritingScreen extends StatefulWidget {
   final DashboardRepository repo;
-  const WritingScreen({super.key, required this.repo});
+  final bool clean;
+  final Json? initialEntry;
+  const WritingScreen({
+    super.key,
+    required this.repo,
+    this.clean = false,
+    this.initialEntry,
+  });
   @override
   State<WritingScreen> createState() => _WritingScreenState();
 }
@@ -62,6 +70,32 @@ class _WritingScreenState extends State<WritingScreen> {
       repo.writingEntries.any(
         (entry) => entry['id'] == selected && entry['trashedAt'] != null,
       );
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialEntry != null) open(widget.initialEntry!);
+  }
+
+  void closeClean() {
+    persistDraft();
+    Navigator.pop(context, article());
+  }
+
+  Future<void> openClean() async {
+    persistDraft();
+    final result = await Navigator.push<Json>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            WritingScreen(repo: repo, clean: true, initialEntry: article()),
+      ),
+    );
+    if (mounted && result != null) {
+      selected = null;
+      open(result);
+    }
+  }
+
   void open(Json article) {
     debounce?.cancel();
     if (selected != null) persistDraft();
@@ -261,6 +295,16 @@ class _WritingScreenState extends State<WritingScreen> {
         : Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (!widget.clean)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    key: const ValueKey('writing-clean-sheet'),
+                    onPressed: openClean,
+                    icon: const Icon(Icons.open_in_full),
+                    label: const Text('Чистый лист'),
+                  ),
+                ),
               TextField(
                 controller: title,
                 readOnly: trashed,
@@ -437,6 +481,44 @@ class _WritingScreenState extends State<WritingScreen> {
               ReflectionHints(repo: repo),
             ],
           );
+    if (widget.clean) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (!didPop) closeClean();
+        },
+        child: FocusBackdrop(
+          theme: (repo.local.get('theme') ?? 'green').toString(),
+          enabled: true,
+          customImage: repo.local.get('customFocusImage') as String?,
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            appBar: AppBar(
+              backgroundColor: Colors.transparent,
+              foregroundColor: Colors.white,
+              leading: IconButton(
+                onPressed: closeClean,
+                tooltip: 'Вернуться к записям',
+                icon: const Icon(Icons.arrow_back),
+              ),
+              title: const Text('Чистый лист'),
+            ),
+            body: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 840),
+                child: Material(
+                  color: const Color(0xfffafbf9),
+                  child: ListView(
+                    padding: const EdgeInsets.all(24),
+                    children: [editor],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

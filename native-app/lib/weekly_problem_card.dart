@@ -134,10 +134,12 @@ class _WeeklyProblemCardState extends State<WeeklyProblemCard> {
 class WeeklyProblemBanner extends StatelessWidget {
   final DashboardRepository repo;
   final bool compact;
+  final VoidCallback? edit;
   const WeeklyProblemBanner({
     super.key,
     required this.repo,
     this.compact = false,
+    this.edit,
   });
   @override
   Widget build(BuildContext context) => Padding(
@@ -155,6 +157,14 @@ class WeeklyProblemBanner extends StatelessWidget {
           repo.weeklyProblemText,
           style: const TextStyle(fontSize: 14, color: Colors.white),
         ),
+        if (edit != null)
+          TextButton(
+            onPressed: edit,
+            child: const Text(
+              'Записать / уточнить',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
       ],
     ),
   );

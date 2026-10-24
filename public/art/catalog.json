@@ -1,0 +1,68 @@
+[
+  {
+    "key": "modigliani",
+    "label": "Модильяни · Мадам Помпадур",
+    "file": "modigliani-painting.jpg",
+    "title": "Amedeo Modigliani 004.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Amedeo_Modigliani_004.jpg",
+    "image": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e9/Amedeo_Modigliani_004.jpg/1280px-Amedeo_Modigliani_004.jpg",
+    "license": "Public domain",
+    "licenseUrl": "https://commons.wikimedia.org/wiki/Commons:Public_domain",
+    "sha256": "6837bed1e7e5d8bd66f5a0d5db01ed972e9c0c5c2d19611128ea105bff825f24"
+  },
+  {
+    "key": "renoir",
+    "label": "Ренуар · Букет хризантем",
+    "file": "renoir-painting.jpg",
+    "title": "WLA metmuseum Bouquet of Chrysanthemums by Auguste Renoir.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:WLA_metmuseum_Bouquet_of_Chrysanthemums_by_Auguste_Renoir.jpg",
+    "image": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/35/WLA_metmuseum_Bouquet_of_Chrysanthemums_by_Auguste_Renoir.jpg/1280px-WLA_metmuseum_Bouquet_of_Chrysanthemums_by_Auguste_Renoir.jpg",
+    "license": "Public domain",
+    "licenseUrl": "https://commons.wikimedia.org/wiki/Commons:Public_domain",
+    "sha256": "59eadfbda941c89adea8c97a30117caf337e718c81aa1e5103f5a0444a830deb"
+  },
+  {
+    "key": "pissarro",
+    "label": "Писсарро · Хрустальный дворец",
+    "file": "pissarro-painting.jpg",
+    "title": "Camille Pissarro - Le Crystal Palace, Londres.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Camille_Pissarro_-_Le_Crystal_Palace,_Londres.jpg",
+    "image": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/34/Camille_Pissarro_-_Le_Crystal_Palace%2C_Londres.jpg/1280px-Camille_Pissarro_-_Le_Crystal_Palace%2C_Londres.jpg",
+    "license": "Public domain",
+    "licenseUrl": "https://commons.wikimedia.org/wiki/Commons:Public_domain",
+    "sha256": "0168ed3b39836594fa17d07acba88be808463f53dd922156110e31c75539dae3"
+  },
+  {
+    "key": "soutine",
+    "label": "Сутин · Пейзаж Сере",
+    "file": "soutine-painting.jpg",
+    "title": "'Landscape with Figures-Céret' by Chaïm Soutine, 1922, High Museum of Art.JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:%27Landscape_with_Figures-C%C3%A9ret%27_by_Cha%C3%AFm_Soutine,_1922,_High_Museum_of_Art.JPG",
+    "image": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/91/%27Landscape_with_Figures-C%C3%A9ret%27_by_Cha%C3%AFm_Soutine%2C_1922%2C_High_Museum_of_Art.JPG/1280px-%27Landscape_with_Figures-C%C3%A9ret%27_by_Cha%C3%AFm_Soutine%2C_1922%2C_High_Museum_of_Art.JPG",
+    "license": "Public domain",
+    "licenseUrl": "https://commons.wikimedia.org/wiki/Commons:Public_domain",
+    "sha256": "dad9e4c7c2ac5253078b43af2a57dd8374d498cea6f260e346bc83fbd6cca59a"
+  },
+  {
+    "key": "levitan",
+    "label": "Левитан · Золотая осень",
+    "file": "levitan-painting.jpg",
+    "title": "Levitan Zolotaya Osen.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Levitan_Zolotaya_Osen.jpg",
+    "image": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/57/Levitan_Zolotaya_Osen.jpg/1280px-Levitan_Zolotaya_Osen.jpg",
+    "license": "Public domain",
+    "licenseUrl": "https://commons.wikimedia.org/wiki/Commons:Public_domain",
+    "sha256": "f525c73c75c83b4e90a46e08485828d9c36e5691f6b7f513849fb8f4f83ba1ad"
+  },
+  {
+    "key": "shishkin",
+    "label": "Шишкин · Рожь",
+    "file": "shishkin-painting.jpg",
+    "title": "Ivan Shishkin - Рожь - Google Art Project.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Ivan_Shishkin_-_%D0%A0%D0%BE%D0%B6%D1%8C_-_Google_Art_Project.jpg",
+    "image": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/eb/Ivan_Shishkin_-_%D0%A0%D0%BE%D0%B6%D1%8C_-_Google_Art_Project.jpg/1280px-Ivan_Shishkin_-_%D0%A0%D0%BE%D0%B6%D1%8C_-_Google_Art_Project.jpg",
+    "license": "Public domain",
+    "licenseUrl": "https://commons.wikimedia.org/wiki/Commons:Public_domain",
+    "sha256": "a85d3bb080c30c923ddb4fb1b0f83026cd31137ea9e4c13c49c933ff27b7d3ec"
+  }
+]

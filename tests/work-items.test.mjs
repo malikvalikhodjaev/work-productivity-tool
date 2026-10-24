@@ -57,3 +57,11 @@ test('Заметки существующей задачи имеют верси
   f.workspace.mutate('saveWorkNote',{workRef:ref,text:'Уточнение',expectedRevision:1,requestId:randomUUID()});
   const note=f.workspace.view().workNotes[0];assert.equal(note.revisions[0].text,'\nРазмышление\n');assert.deepEqual(f.store.getPortfolio().tasks[0],task);
 });
+
+test('Заметка и ввод в эксплуатацию сохраняют прежнюю карточку и её историю',()=>{
+ const f=fixture(), first=f.workspace.mutate('saveWorkItem',f.input({stage:'note'})).workItems[0];
+ assert.equal(first.stage,'note');
+ assert.throws(()=>f.workspace.mutate('saveWorkItem',f.input({id:first.id,expectedRevision:1,stage:'commissioning',result:''})),/результат/);
+ f.workspace.mutate('saveWorkItem',f.input({id:first.id,expectedRevision:1,stage:'commissioning',result:'Передаю для реального использования'}));
+ const item=f.workspace.view().workItems[0];assert.equal(item.id,first.id);assert.equal(item.stage,'commissioning');assert.equal(item.revisions[0].stage,'note');assert.equal(item.originalDescription,first.description);
+});

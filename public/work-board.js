@@ -1,6 +1,7 @@
 const $=id=>document.getElementById(id),host=$('work-board');
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const stages={planned:'Запланировано',active:'В работе',blocked:'Препятствие',ready:'Готово',operation:'В эксплуатации',retired:'Выведено / отложено'};
+const stages={note:'Заметка',planned:'План · не начато',active:'В работе',commissioning:'Вводится в эксплуатацию',ready:'Готово к эксплуатации',operation:'В эксплуатации',blocked:'Препятствие',retired:'Выведено / отложено'};
+let collapsed={};try{collapsed=JSON.parse(localStorage.getItem('iw-work-stage-collapse')??'{}');}catch{}
 const kinds={work:'Работа',issue:'Issue',task:'Задача проекта',case:'Кейс'};
 const actions={start:'Запуск',pause:'Пауза',resume:'Продолжение',finish:'Завершение',cancel:'Отмена',extend:'Продление',startBreak:'Перерыв'};
 const clock=value=>{if(value===null||value===undefined)return 'No Data';const seconds=Math.floor(value);return `${Math.floor(seconds/3600)?Math.floor(seconds/3600)+':':''}${String(Math.floor(seconds/60)%60).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;};
@@ -37,7 +38,8 @@ function render(){
   for(const button of host.querySelectorAll('[data-wb-view]'))button.setAttribute('aria-pressed',String(button.dataset.wbView===mode));
   $('wb-cards').className='wb-'+mode;
   $('wb-cards').style.setProperty('--wb-columns',$('wb-retired').checked?'6':'5');
-  $('wb-cards').innerHTML=mode==='board'?Object.entries(stages).filter(([id])=>id!=='retired'||$('wb-retired').checked).map(([id,label])=>{const column=rows.filter(item=>item.stage===id);return `<section class="wb-column"><h3>${label}<span>${column.length}</span></h3><div>${column.map(card).join('')||'<p class="wb-empty">No Data</p>'}</div></section>`;}).join(''):rows.map(item=>`<div class="wb-list-row"><span class="wb-stage-label">${stages[item.stage]}</span>${card(item)}</div>`).join('')||'<p class="wb-empty">No Data · создай работу или возьми строку из Coda.</p>';
+  $('wb-cards').innerHTML=mode==='board'?Object.entries(stages).filter(([id])=>id!=='retired'||$('wb-retired').checked).map(([id,label])=>{const column=rows.filter(item=>item.stage===id);return `<details class="wb-column" data-stage="${id}" ${collapsed[id]===true||(collapsed[id]===undefined&&!column.length)?'':'open'}><summary>${label}<span>${column.length}</span></summary><div>${column.map(card).join('')||'<p class="wb-empty">Нет карточек</p>'}</div></details>`;}).join(''):rows.map(item=>`<div class="wb-list-row"><span class="wb-stage-label">${stages[item.stage]}</span>${card(item)}</div>`).join('')||'<p class="wb-empty">No Data · создай работу или возьми строку из Coda.</p>';
+  for(const column of host.querySelectorAll('details[data-stage]'))column.addEventListener('toggle',()=>{collapsed[column.dataset.stage]=!column.open;try{localStorage.setItem('iw-work-stage-collapse',JSON.stringify(collapsed));}catch{}});
   $('wb-new').disabled=readonly;notice(`${rows.length} ${{one:'карточка',few:'карточки',many:'карточек',other:'карточки'}[new Intl.PluralRules('ru').select(rows.length)]} · время и события сохраняются на ПК`);
 }
 function renderImports(){

@@ -66,6 +66,13 @@ assets['/pomodoro-plans.css'] = ['pomodoro-plans.css', 'text/css; charset=utf-8'
 assets['/focus'] = ['focus.html', 'text/html; charset=utf-8'];
 assets['/focus-window.css'] = ['focus-window.css', 'text/css; charset=utf-8'];
 assets['/art/monet-water-lilies-1906.jpg'] = ['art/monet-water-lilies-1906.jpg', 'image/jpeg'];
+assets['/art/catalog.json'] = ['art/catalog.json', 'application/json; charset=utf-8'];
+assets['/art/modigliani-painting.jpg'] = ['art/modigliani-painting.jpg', 'image/jpeg'];
+assets['/art/renoir-painting.jpg'] = ['art/renoir-painting.jpg', 'image/jpeg'];
+assets['/art/pissarro-painting.jpg'] = ['art/pissarro-painting.jpg', 'image/jpeg'];
+assets['/art/soutine-painting.jpg'] = ['art/soutine-painting.jpg', 'image/jpeg'];
+assets['/art/levitan-painting.jpg'] = ['art/levitan-painting.jpg', 'image/jpeg'];
+assets['/art/shishkin-painting.jpg'] = ['art/shishkin-painting.jpg', 'image/jpeg'];
 assets['/write'] = ['writing-sheet.html', 'text/html; charset=utf-8'];
 assets['/writing-sheet.js'] = ['writing-sheet.js', 'text/javascript; charset=utf-8'];
 assets['/writing-editor.js'] = ['writing-editor.js', 'text/javascript; charset=utf-8'];

@@ -83,6 +83,28 @@ void main() {
         'Моя мысль · 思考 — продолжаю без клика\n',
       );
       expect(tester.takeException(), isNull);
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('writing-clean-sheet')),
+      );
+      await tester.tap(find.byKey(const ValueKey('writing-clean-sheet')));
+      await tester.pumpAndSettle();
+      expect(find.text('Чистый лист'), findsOneWidget);
+      expect(find.text('Архив записей').hitTestable(), findsNothing);
+      final cleanEditor = tester.widget<q.QuillEditor>(
+        find.byType(q.QuillEditor).last,
+      );
+      cleanEditor.controller.replaceText(0, 0, 'Из чистого листа · ', null);
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.byTooltip('Вернуться к записям'));
+      await tester.pumpAndSettle();
+      final returnedEditor = tester.widget<q.QuillEditor>(
+        find.byType(q.QuillEditor),
+      );
+      expect(
+        returnedEditor.controller.document.toPlainText(),
+        'Из чистого листа · Моя мысль · 思考 — продолжаю без клика\n',
+      );
+      expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       repo.dispose();
     },
