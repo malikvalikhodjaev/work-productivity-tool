@@ -28,8 +28,9 @@ dynamic gridValue(Json row, Json col) {
 
 String gridText(Json row, Json col) {
   final value = gridValue(row, col);
-  if (col['id'] == 'parentId' && (value == null || value == ''))
+  if (col['id'] == 'parentId' && (value == null || value == '')) {
     return 'Верхний уровень';
+  }
   if (value == null || value == '') return 'No Data';
   if (col['type'] == 'checkbox') return value == true ? '✓' : '—';
   return (object(col['options'])[value] ?? value).toString();
