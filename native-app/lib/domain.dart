@@ -15,6 +15,26 @@ String today() => DateTime.now()
     .add(const Duration(hours: 5))
     .toIso8601String()
     .substring(0, 10);
+String weekStart([String? date]) {
+  final value = date ?? today();
+  final parsed = DateTime.tryParse('${value}T00:00:00Z');
+  if (parsed == null || parsed.toIso8601String().substring(0, 10) != value) {
+    throw ArgumentError('Укажи дату недели в формате ГГГГ-ММ-ДД.');
+  }
+  return parsed
+      .subtract(Duration(days: parsed.weekday - 1))
+      .toIso8601String()
+      .substring(0, 10);
+}
+
+String weekRange(String week) {
+  final end = DateTime.parse('${week}T00:00:00Z')
+      .add(const Duration(days: 6))
+      .toIso8601String()
+      .substring(0, 10);
+  return '$week — $end';
+}
+
 List<Json> rows(dynamic value) => (value is List ? value : const [])
     .whereType<Map>()
     .map((r) => Map<String, dynamic>.from(r))

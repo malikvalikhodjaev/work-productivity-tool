@@ -73,8 +73,6 @@ class CompactTimer extends StatelessWidget {
               s == null
                   ? 'Открой дашборд, чтобы выбрать следующую работу'
                   : caption(s),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 16, height: 1.35),
             ),
             if (s != null) ...[

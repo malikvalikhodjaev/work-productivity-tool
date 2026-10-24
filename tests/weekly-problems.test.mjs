@@ -1,0 +1,56 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { replaceFile } from '../lib/atomic-file.mjs';
+import { createWeeklyProblemStore, weekStart } from '../lib/weekly-problems.mjs';
+import { createDailyProblemStore } from '../lib/daily-problems.mjs';
+
+test('Monday boundaries include Sunday and the previous year', () => {
+  assert.equal(weekStart('2026-10-25'), '2026-10-19');
+  assert.equal(weekStart('2026-10-26'), '2026-10-26');
+  assert.equal(weekStart('2027-01-01'), '2026-12-28');
+  for (const date of ['2026-02-30', '19.10.2026', null]) assert.throws(() => weekStart(date));
+});
+test('raw weekly text, revisions and separate weeks survive restart without changing daily problems', t => {
+  const dir = fs.mkdtempSync(join(tmpdir(), 'iw-weekly-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  let day = '2026-10-25';
+  const file = join(dir, 'weekly-problems.json');
+  const store = createWeeklyProblemStore(file, { currentDate: () => day });
+  const daily = createDailyProblemStore(join(dir, 'daily-problems.json'));
+  const first = store.save({ week: '2026-10-19', text: '  =Разрыв · 中文\nЧто изменю?  ', expectedUpdatedAt: null });
+  assert.equal(first.text, '  =Разрыв · 中文\nЧто изменю?  ');
+  const changed = store.save({ week: first.week, text: 'Проверить изменение системы', expectedUpdatedAt: first.updatedAt });
+  assert.equal(changed.revisions[0].text, first.text);
+  assert.equal(daily.view().entries.length, 0);
+  assert.throws(() => store.save({ week: first.week, text: 'Устарело', expectedUpdatedAt: first.updatedAt }), { status: 409 });
+  for (const week of ['2026-10-20', '2026-10-26', '2026-02-30']) assert.throws(() => store.save({ week, text: 'Разрыв', expectedUpdatedAt: null }));
+  day = '2026-10-26';
+  assert.equal(store.view().week, '2026-10-26');
+  assert.equal(store.view().entries.find(e => e.week === store.view().week), undefined);
+  store.save({ week: '2026-10-26', text: 'Новая неделя', expectedUpdatedAt: null });
+  assert.equal(createWeeklyProblemStore(file).view().entries.length, 2);
+  assert.equal(store.view().entries[1].text, changed.text);
+  const snapshot = store.view(); snapshot.entries[1].revisions[0].text = 'извне';
+  assert.equal(store.view().entries[1].revisions[0].text, first.text);
+  assert.ok(fs.readFileSync(join(dir, 'weekly-problems.csv'), 'utf8').includes('week_start'));
+});
+test('lost reply is idempotent and failed atomic writes do not consume a command', t => {
+  const dir = fs.mkdtempSync(join(tmpdir(), 'iw-weekly-retry-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, 'weekly-problems.json'); let reject = false;
+  const options = { storage: { ...fs, replaceFile: (...args) => { if (reject) throw Error('disk unavailable'); replaceFile(...args); } } };
+  let store = createWeeklyProblemStore(file, options);
+  const command = { requestId: randomUUID(), module: 'weeklyProblem', action: 'save', input: { week: weekStart(), text: 'Главный разрыв', expectedUpdatedAt: null } };
+  reject = true;
+  assert.throws(() => store.nativeSave(command), /disk unavailable/);
+  assert.deepEqual(store.view().entries, []);
+  reject = false;
+  const entry = store.nativeSave(command);
+  store = createWeeklyProblemStore(file, options);
+  assert.deepEqual(store.nativeSave(command), entry);
+  assert.equal(store.view().entries.length, 1);
+  assert.equal(store.view().entries[0].revisions.length, 0);
+  assert.throws(() => store.nativeSave({ ...command, input: { ...command.input, text: 'Иной текст' } }), { status: 409 });
+});

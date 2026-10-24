@@ -35,8 +35,6 @@ class DailyProblemBanner extends StatelessWidget {
           message: repo.todayProblemText,
           child: Text(
             repo.todayProblemText,
-            maxLines: compact ? 2 : 4,
-            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: Colors.white,
               fontSize: compact ? 13 : 15,

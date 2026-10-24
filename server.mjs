@@ -7,6 +7,7 @@ import path from 'node:path';
 import { createStore } from './lib/store.mjs';
 import { createIndicatorStore } from './lib/indicators.mjs';
 import { createDailyProblemStore } from './lib/daily-problems.mjs';
+import { createWeeklyProblemStore } from './lib/weekly-problems.mjs';
 import { createDailyResultStore } from './lib/daily-results.mjs';
 import { createWorkspaceStore } from './lib/workspace.mjs';
 import { parseFinanceCsv } from './lib/finance-csv.mjs';
@@ -29,6 +30,7 @@ const workspace = createWorkspaceStore(path.join(dataDir, 'workspace.json'), () 
 store = createStore(process.env.DASHBOARD_DATA_FILE ?? path.join(dataDir, 'dashboard.json'), { getProjectTemplates:referenceTemplateReader(path.join(dataDir,'imports/alpha-reference.json')), validateWorkRef: workspace.validateRef, getEntities: () => workspace.view().entities });
 const indicators = createIndicatorStore(path.join(dataDir, 'indicators.json'));
 const dailyProblems = createDailyProblemStore(path.join(dataDir, 'daily-problems.json'));
+const weeklyProblems = createWeeklyProblemStore(path.join(dataDir, 'weekly-problems.json'));
 const dailyResults = createDailyResultStore(path.join(dataDir, 'daily-results.json'), { validateWorkRef: workspace.validateRef });
 const references = createReferenceStore(path.join(dataDir, 'references.json'));
 const writing = createWritingStore(path.join(dataDir, 'writing.json'));
@@ -40,6 +42,8 @@ assets['/workspace.css'] = ['workspace.css', 'text/css; charset=utf-8'];
 assets['/sections.css'] = ['sections.css', 'text/css; charset=utf-8'];
 assets['/daily-problem.js'] = ['daily-problem.js', 'text/javascript; charset=utf-8'];
 assets['/daily-problem.css'] = ['daily-problem.css', 'text/css; charset=utf-8'];
+assets['/weekly-problem.js'] = ['weekly-problem.js', 'text/javascript; charset=utf-8'];
+assets['/weekly-problem.css'] = ['weekly-problem.css', 'text/css; charset=utf-8'];
 assets['/today.js'] = ['today.js', 'text/javascript; charset=utf-8'];
 assets['/work.css'] = ['work.css', 'text/css; charset=utf-8'];
 assets['/references.js'] = ['references.js', 'text/javascript; charset=utf-8'];
@@ -145,6 +149,10 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/native/command') {
       const command = await body(req);
       store.validateNativeDevice(command);
+      if (command.module === 'weeklyProblem') {
+        const entry = weeklyProblems.nativeSave(command);
+        return json(res, 200, { entry, weeklyProblems: weeklyProblems.view() });
+      }
       if (command.module === 'inbox') return json(res, 200, inbox.mutate(command));
       if (command.module === 'workspace') return json(res, 200, workspace.nativeMutate(command));
       if (['portfolio','target','dailyNorm','dailyCheck','pomodoroTarget','pomodoroCapacity'].includes(command.module)) return json(res, 200, store.nativeMutate(command));
@@ -185,6 +193,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/daily-results') return json(res, 200, dailyResults.view());
     if (req.method === 'POST' && url.pathname === '/api/daily-results') return json(res, 200, dailyResults.save(await body(req)));
+    if (req.method === 'GET' && url.pathname === '/api/weekly-problems') return json(res, 200, weeklyProblems.view());
+    if (req.method === 'POST' && url.pathname === '/api/weekly-problems') return json(res, 200, { entry: weeklyProblems.save(await body(req)), weeklyProblems: weeklyProblems.view() });
     if (req.method === 'GET' && url.pathname === '/api/daily-problems') {const value=dailyProblems.view();return json(res,200,{...value,entries:value.entries.map(problem=>{const linked=workspace.problemCase(problem.date);return {...problem,caseRef:linked?'case:'+linked.id:null,caseTitle:linked?.title??null};})});}
     if (req.method === 'POST' && url.pathname === '/api/daily-problems') {
       const input=await body(req);

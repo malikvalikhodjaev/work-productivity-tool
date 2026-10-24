@@ -43,6 +43,7 @@ class DashboardRepository extends ChangeNotifier {
     'workspace': '/api/workspace',
     'portfolio': '/api/portfolio',
     'problems': '/api/daily-problems',
+    'weeklyProblems': '/api/weekly-problems',
     'timer': '/api/timer',
     'writing': '/api/writing',
     'writingExport': '/api/writing/export',
@@ -103,6 +104,50 @@ class DashboardRepository extends ChangeNotifier {
     return text.trim().isEmpty
         ? 'Главная проблема на сегодня не записана'
         : text;
+  }
+
+  List<Json> get weeklyProblems {
+    final entries = {
+      for (final e in rows(cache('weeklyProblems')['entries']))
+        e['week'].toString(): e,
+    };
+    for (final draft in local.drafts.where(
+      (d) => d['entity'].toString().startsWith('weeklyProblem:'),
+    )) {
+      final entry = object(draft['body']);
+      entries[entry['week'].toString()] = {
+        ...entries[entry['week'].toString()] ?? {},
+        ...entry,
+      };
+    }
+    return entries.values.toList()
+      ..sort((a, b) => b['week'].toString().compareTo(a['week'].toString()));
+  }
+
+  Json weeklyProblem(String week) =>
+      weeklyProblems.where((e) => e['week'] == week).firstOrNull ?? {};
+  String get weeklyProblemText =>
+      (weeklyProblem(weekStart())['text'] ??
+              'No Data · главная проблема недели не записана')
+          .toString();
+
+  void saveWeeklyProblem(String week, String text) {
+    if (weekStart(week) != week || week.compareTo(weekStart()) > 0) {
+      throw ArgumentError('Выбери текущую или прошедшую неделю.');
+    }
+    if (text.trim().isEmpty || text.length > 2000) {
+      throw ArgumentError('Проблема: 1–2000 символов.');
+    }
+    final previous = rows(cache('weeklyProblems')['entries'])
+        .where((e) => e['week'] == week)
+        .firstOrNull;
+    nativeSave(
+      'weeklyProblem',
+      'save',
+      {'week': week, 'text': text, 'expectedUpdatedAt': previous?['updatedAt']},
+      'weeklyProblem:$week',
+      draft: {...previous ?? {}, 'week': week, 'text': text},
+    );
   }
 
   List<Json> get pending => local.queue;
@@ -360,6 +405,7 @@ class DashboardRepository extends ChangeNotifier {
               'inbox',
               'writing',
               'writingExport',
+              'weeklyProblems',
             ]) {
               if (response[key] is Map) {
                 local.capture(key, object(response[key]));
@@ -1393,6 +1439,11 @@ class DashboardRepository extends ChangeNotifier {
         case 'problem':
           current = rows(cache('problems')['entries'])
               .where((r) => r['date'] == input['date'])
+              .firstOrNull;
+          input['expectedUpdatedAt'] = current?['updatedAt'];
+        case 'weeklyProblem':
+          current = rows(cache('weeklyProblems')['entries'])
+              .where((r) => r['week'] == input['week'])
               .firstOrNull;
           input['expectedUpdatedAt'] = current?['updatedAt'];
         case 'pomodoroCapacity':

@@ -8,6 +8,7 @@ import {spawn} from 'node:child_process';
 import {once} from 'node:events';
 import net from 'node:net';
 import {setTimeout as delay} from 'node:timers/promises';
+import {weekStart} from '../lib/weekly-problems.mjs';
 
 async function port(){const server=net.createServer();server.listen(0,'127.0.0.1');await once(server,'listening');const value=server.address().port;await new Promise(resolve=>server.close(resolve));return value;}
 test('Native HTTP bridge validates identity, keeps receipts, and exposes daily norms without fabricating time',async t=>{
@@ -20,6 +21,13 @@ test('Native HTTP bridge validates identity, keeps receipts, and exposes daily n
   const post=async(route,body)=>{const response=await fetch(origin+route,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body)});return {status:response.status,body:await response.json()};};
   const deviceId=randomUUID();const connected=await post('/api/offline/connect',{deviceId});assert.equal(connected.status,200);
   const serverId=connected.body.serverId,caseId=randomUUID();
+  const weeklyCommand = {requestId:randomUUID(),deviceId,serverId,module:'weeklyProblem',action:'save',input:{week:weekStart(),text:'  Главная проблема недели\n原文  ',expectedUpdatedAt:null}};
+  const weekly = await post('/api/native/command',weeklyCommand);
+  assert.equal(weekly.status,200);assert.equal(weekly.body.weeklyProblems.entries[0].text,weeklyCommand.input.text);
+  assert.equal((await post('/api/native/command',weeklyCommand)).body.weeklyProblems.entries.length,1);
+  assert.equal((await fetch(origin+'/api/weekly-problems')).status,200);
+  assert.equal((await fetch(origin+'/weekly-problem.js')).status,200);
+  assert.equal((await post('/api/weekly-problems',{...weeklyCommand.input,text:'Не затереть',expectedUpdatedAt:null})).status,409);
   const command={requestId:randomUUID(),deviceId,serverId,module:'workspace',action:'saveCase',expectedUpdatedAt:null,input:{clientId:caseId,title:'Важный разрыв · 问题',status:'active'}};
   const first=await post('/api/native/command',command);assert.equal(first.status,200);assert.equal(first.body.workspace.cases[0].id,caseId);assert.equal(first.body.workspace.nativeRequests,undefined);
   const retry=await post('/api/native/command',command);assert.equal(retry.body.duplicate,true);assert.equal(retry.body.workspace.cases.length,1);

@@ -25,6 +25,8 @@ import 'compact_timer.dart';
 import 'focus_theme.dart';
 import 'timer_command_notice.dart';
 import 'daily_problem_banner.dart';
+import 'weekly_problem_card.dart';
+import 'focus_viewport.dart';
 import 'modeling_workspace.dart';
 import 'leisure.dart';
 import 'timer_ringtones.dart';
@@ -178,7 +180,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.20',
+        'clientVersion': '0.1.21',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -1052,6 +1054,7 @@ class _DashboardHomeState extends State<DashboardHome>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              WeeklyProblemBanner(repo: repo),
               DailyProblemBanner(repo: repo, edit: editProblem),
               Row(
                 children: [
@@ -1108,12 +1111,6 @@ class _DashboardHomeState extends State<DashboardHome>
                   '${(elapsedMs(s, repo.now) / 60000).toStringAsFixed(1)} мин · ${repo.isLocal || repo.durableTimer ? 'сохранение на устройстве' : 'общий сеанс'}',
                   style: const TextStyle(color: Colors.white70),
                 ),
-              const SizedBox(height: 18),
-              PomodoroChecklist(
-                repo: repo,
-                compact: true,
-                focus: (ref, title) => startTimer(ref: ref, title: title),
-              ),
               const SizedBox(height: 18),
               TimerCommandNotice(
                 repo: repo,
@@ -1192,6 +1189,12 @@ class _DashboardHomeState extends State<DashboardHome>
                 ],
               ),
               const SizedBox(height: 14),
+              PomodoroChecklist(
+                repo: repo,
+                compact: true,
+                focus: (ref, title) => startTimer(ref: ref, title: title),
+              ),
+              const SizedBox(height: 18),
               TextButton.icon(
                 onPressed: focusSettings,
                 icon: const Icon(Icons.tune, color: Colors.white70, size: 18),
@@ -1695,6 +1698,7 @@ class _DashboardHomeState extends State<DashboardHome>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        weeklyProblemCard(),
         problemCard(),
         sectionTitle(
           'Работы и кейсы',
@@ -1833,6 +1837,34 @@ class _DashboardHomeState extends State<DashboardHome>
     );
   }
 
+  Widget weeklyProblemCard() =>
+      WeeklyProblemCard(repo: repo, edit: editWeeklyProblem);
+
+  Future<void> editWeeklyProblem(String week) async {
+    final key = 'weeklyProblemComposer:$week';
+    final draft = object(repo.local.get(key));
+    await editFields(
+      context,
+      title: 'Главная проблема недели · ${weekRange(week)}',
+      initial: draft.isEmpty
+          ? {'text': repo.weeklyProblem(week)['text'] ?? ''}
+          : draft,
+      fields: const [
+        FieldSpec(
+          'text',
+          'The biggest problem of the week is…',
+          lines: 6,
+          labelAbove: true,
+        ),
+      ],
+      draft: (input) => repo.local.set(key, input),
+      save: (input) async {
+        repo.saveWeeklyProblem(week, input['text'].toString());
+        repo.local.remove(key);
+      },
+    );
+  }
+
   Future<void> editProblem() async {
     final day = today();
     await editFields(
@@ -1937,6 +1969,7 @@ class _DashboardHomeState extends State<DashboardHome>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        weeklyProblemCard(),
         problemCard(),
         sectionTitle(
           'Цели и индикаторы',
@@ -2408,6 +2441,7 @@ class _DashboardHomeState extends State<DashboardHome>
           .toList(),
       'Публикации': repo.cache('writing')['entries'],
       'Источники': repo.cache('references')['entries'],
+      'Проблемы недели': repo.weeklyProblems,
     };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2693,37 +2727,41 @@ class _DashboardHomeState extends State<DashboardHome>
       body: LayoutBuilder(
         builder: (context, constraints) {
           if (background.desktop?.compact == true) {
-            return ListView(
-              padding: const EdgeInsets.all(12),
-              children: [
-                CompactTimer(
-                  dailyProblem: DailyProblemBanner(repo: repo, compact: true),
-                  busy: repo.timerBusy,
-                  commandStatus: TimerCommandNotice(
-                    repo: repo,
-                    retry: () => safe(repo.checkPendingTimer),
-                  ),
-                  session: repo.active,
-                  now: repo.now,
-                  theme: (repo.local.get('theme') ?? 'green').toString(),
-                  pause: () => safe(
-                    () => repo.timerAction(
-                      repo.active?['status'] == 'paused' ? 'resume' : 'pause',
-                    ),
-                  ),
-                  finish: () async {
-                    await show();
-                    if (mounted) await finishTimer();
-                  },
-                  checklist: PomodoroChecklist(
-                    repo: repo,
-                    compact: true,
-                    focus: (ref, title) => startTimer(ref: ref, title: title),
+            return FocusViewport(
+              child: CompactTimer(
+                dailyProblem: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    WeeklyProblemBanner(repo: repo, compact: true),
+                    DailyProblemBanner(repo: repo, compact: true),
+                  ],
+                ),
+                busy: repo.timerBusy,
+                commandStatus: TimerCommandNotice(
+                  repo: repo,
+                  retry: () => safe(repo.checkPendingTimer),
+                ),
+                session: repo.active,
+                now: repo.now,
+                theme: (repo.local.get('theme') ?? 'green').toString(),
+                pause: () => safe(
+                  () => repo.timerAction(
+                    repo.active?['status'] == 'paused' ? 'resume' : 'pause',
                   ),
                 ),
-              ],
+                finish: () async {
+                  await show();
+                  if (mounted) await finishTimer();
+                },
+                checklist: PomodoroChecklist(
+                  repo: repo,
+                  compact: true,
+                  focus: (ref, title) => startTimer(ref: ref, title: title),
+                ),
+              ),
             );
           }
+          if (focusMode) return FocusViewport(child: focusCard());
           final wide = constraints.maxWidth >= 950 && !focusMode;
           final page = focusMode
               ? focusCard()
@@ -2782,7 +2820,7 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'I&W · Native 0.1.20',
+                          'I&W · Native 0.1.21',
                           style: TextStyle(fontSize: 11),
                         ),
                       ],
