@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:indicators_work/adaptive_focus_player.dart';
 import 'package:indicators_work/focus_theme.dart';
 import 'package:indicators_work/local_database.dart';
+import 'package:indicators_work/domain.dart';
+import 'package:indicators_work/pomodoro_widgets.dart';
 import 'package:indicators_work/repository.dart';
 import 'package:indicators_work/section_analytics.dart';
 import 'package:indicators_work/work_stage_board.dart';
@@ -30,6 +32,7 @@ void main() {
     expect(result[1]['entries'], 0);
   });
   for (final size in [
+    const Size(340, 330),
     const Size(430, 330),
     const Size(430, 718),
     const Size(1840, 900),
@@ -41,8 +44,25 @@ void main() {
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
-        final changes = ValueNotifier(0);
-        addTearDown(changes.dispose);
+        final db = LocalDatabase(':memory:');
+        db.set('automaticSync', false);
+        final repo = DashboardRepository(db);
+        addTearDown(repo.dispose);
+        db.capture('dailyNorms', {
+          'pomodoroTargets': [
+            for (var i = 0; i < 30; i++)
+              {
+                'date': today(),
+                'repeat': 'daily',
+                'workRef': 'work:$i',
+                'title': 'Норматив $i',
+                'target': 1,
+              },
+          ],
+          'pomodoroCapacities': [
+            {'date': today(), 'limit': 15},
+          ],
+        });
         var paused = false;
         final boundary = GlobalKey();
         await tester.pumpWidget(
@@ -56,7 +76,7 @@ void main() {
                   backgroundColor: Colors.transparent,
                   appBar: AppBar(title: const Text('I&W · Фокус')),
                   body: AdaptiveFocusPlayer(
-                    changes: changes,
+                    changes: repo,
                     clock: '24:48',
                     mode: 'Pomodoro',
                     contextPanel: const Text(
@@ -77,11 +97,11 @@ void main() {
                         ),
                       ],
                     ),
-                    norms: Column(
-                      children: [
-                        for (var i = 0; i < 30; i++)
-                          ListTile(title: Text('Норматив $i · 0/1')),
-                      ],
+                    norms: PomodoroChecklist(
+                      repo: repo,
+                      compact: true,
+                      rowsFirst: true,
+                      focus: (_, _) async {},
                     ),
                     settings: const Text('Фоновый звук'),
                   ),
@@ -96,19 +116,36 @@ void main() {
         expect(find.text('Учесть').hitTestable(), findsOneWidget);
         await tester.tap(find.text('Пауза'));
         expect(paused, isTrue);
-        if (size.height < 620) {
-          await tester.tap(find.byTooltip('Нормативы'));
-          await tester.pumpAndSettle();
-          await tester.scrollUntilVisible(
-            find.text('Норматив 29 · 0/1'),
-            400,
-            scrollable: find.byType(Scrollable).last,
-          );
-          expect(find.text('Норматив 29 · 0/1').hitTestable(), findsOneWidget);
-          await tester.tap(find.byTooltip('Закрыть панель'));
-          await tester.pumpAndSettle();
-          expect(find.text('24:48').hitTestable(), findsOneWidget);
-        }
+        expect(
+          find.byIcon(Icons.check_box_outline_blank).hitTestable(),
+          findsWidgets,
+        );
+        expect(find.text('Норматив 0').hitTestable(), findsOneWidget);
+        expect(find.byTooltip('Нормативы'), findsNothing);
+        await tester.scrollUntilVisible(
+          find.text('Норматив 29'),
+          400,
+          scrollable: find.descendant(
+            of: find.byKey(const ValueKey('focus-checklist-scroll')),
+            matching: find.byType(Scrollable),
+          ),
+        );
+        expect(find.text('Норматив 29').hitTestable(), findsOneWidget);
+        expect(find.text('24:48').hitTestable(), findsOneWidget);
+        expect(find.text('Учесть').hitTestable(), findsOneWidget);
+        await tester.drag(
+          find.byKey(const ValueKey('focus-checklist-scroll')),
+          const Offset(0, 5000),
+        );
+        await tester.pumpAndSettle();
+        final settings = size.height < 596
+            ? find.byTooltip('Тема и звук')
+            : find.text('Тема и звук');
+        await tester.tap(settings);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Закрыть панель'));
+        await tester.pumpAndSettle();
+        expect(find.text('Норматив 0').hitTestable(), findsOneWidget);
         await tester.pumpWidget(const SizedBox());
       },
     );

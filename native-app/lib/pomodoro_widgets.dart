@@ -539,19 +539,67 @@ void _savePomodoroTarget(
 class PomodoroChecklist extends StatelessWidget {
   final DashboardRepository repo;
   final bool compact;
+  final bool rowsFirst;
   final Future<void> Function(String ref, String title)? focus;
   const PomodoroChecklist({
     super.key,
     required this.repo,
     this.compact = false,
+    this.rowsFirst = false,
     this.focus,
   });
   @override
   Widget build(BuildContext context) {
     final norms = repo.pomodoroTargetsForDate();
+    final checks = Column(
+      children: [
+        for (final n in norms)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(
+              children: [
+                Icon(
+                  n['actualPomodoros'] >= n['target']
+                      ? Icons.check_box_outlined
+                      : Icons.check_box_outline_blank,
+                  size: 19,
+                  color: n['actualPomodoros'] >= n['target']
+                      ? const Color(0xff347558)
+                      : Colors.grey,
+                ),
+                const SizedBox(width: 9),
+                Expanded(child: Text(n['title'].toString())),
+                Text(
+                  '${n['actualPomodoros']}/${n['target']}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                if (focus != null)
+                  IconButton(
+                    tooltip: 'Фокус',
+                    onPressed: () =>
+                        focus!(n['workRef'].toString(), n['title'].toString()),
+                    icon: const Icon(Icons.play_arrow_outlined),
+                  ),
+                IconButton(
+                  tooltip: 'Изменить норматив',
+                  onPressed: () =>
+                      editPomodoroTarget(context, repo, previous: n),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
     return Card(
       child: Padding(
-        padding: EdgeInsets.all(compact ? 14 : 18),
+        padding: EdgeInsets.all(
+          rowsFirst
+              ? 8
+              : compact
+              ? 14
+              : 18,
+        ),
         child: DefaultTextStyle(
           style: Theme.of(context).textTheme.bodyMedium!,
           child: Column(
@@ -577,65 +625,23 @@ class PomodoroChecklist extends StatelessWidget {
                   ),
                 ],
               ),
-              PomodoroCapacityNotice(summary: repo.pomodoroCapacityForDate()),
+              if (!rowsFirst)
+                PomodoroCapacityNotice(summary: repo.pomodoroCapacityForDate()),
               if (!compact)
                 TextButton(
                   onPressed: () => editPomodoroCapacity(context, repo),
                   child: const Text('Изменить дневной лимит'),
                 ),
               if (norms.isEmpty) const Text('Нормативы на сегодня не заданы.'),
-              ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: compact ? 180 : 280),
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      for (final n in norms)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 5),
-                          child: Row(
-                            children: [
-                              Icon(
-                                n['actualPomodoros'] >= n['target']
-                                    ? Icons.check_box_outlined
-                                    : Icons.check_box_outline_blank,
-                                size: 19,
-                                color: n['actualPomodoros'] >= n['target']
-                                    ? const Color(0xff347558)
-                                    : Colors.grey,
-                              ),
-                              const SizedBox(width: 9),
-                              Expanded(child: Text(n['title'].toString())),
-                              Text(
-                                '${n['actualPomodoros']}/${n['target']}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              if (focus != null)
-                                IconButton(
-                                  tooltip: 'Фокус',
-                                  onPressed: () => focus!(
-                                    n['workRef'].toString(),
-                                    n['title'].toString(),
-                                  ),
-                                  icon: const Icon(Icons.play_arrow_outlined),
-                                ),
-                              IconButton(
-                                tooltip: 'Изменить норматив',
-                                onPressed: () => editPomodoroTarget(
-                                  context,
-                                  repo,
-                                  previous: n,
-                                ),
-                                icon: const Icon(Icons.edit_outlined, size: 18),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
+              if (rowsFirst)
+                checks
+              else
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: compact ? 180 : 280),
+                  child: SingleChildScrollView(child: checks),
                 ),
-              ),
+              if (rowsFirst)
+                PomodoroCapacityNotice(summary: repo.pomodoroCapacityForDate()),
               if (norms.any((n) => (n['pendingPomodoros'] as int) > 0))
                 const Text(
                   'Есть помидорки, ожидающие синхронизации.',
