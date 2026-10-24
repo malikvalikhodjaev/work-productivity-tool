@@ -1,6 +1,6 @@
 # Indicators & Work · Flutter-клиент
 
-Полный дашборд: версия **0.1.19**, build **21**, для Windows x64 и Android arm64. Прежний Google Play AAB build 20 предшествует этим изменениям: для первого выпуска в Play нужна свежая сборка с code больше 21. Первое знакомство описано в [QUICKSTART](../docs/QUICKSTART.md), эксплуатация — в [RUNBOOK](../docs/RUNBOOK.md).
+Полный дашборд: версия **0.1.19**, build **21**, для Windows x64 и Android arm64. ZIP/APK подготовлены; их публикация ещё не завершена. Прежний Google Play AAB build 20 предшествует этим изменениям: для первого выпуска в Play нужна свежая сборка с code больше 21. Первое знакомство описано в [QUICKSTART](../docs/QUICKSTART.md), эксплуатация — в [RUNBOOK](../docs/RUNBOOK.md).
 
 Отдельная редакция **Focus & Norms 0.1.0+1** запускается через `lib/focus_main.dart`, работает с собственной локальной базой без сервера и описана в [своём README](../FOCUS-README.md).
 
