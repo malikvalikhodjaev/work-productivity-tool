@@ -5,6 +5,11 @@ export function pomodoroCapacityOn(rules, date) {
     .reduce((latest, r) => !latest || r.date > latest.date ? r : latest, null)?.limit ?? null;
 }
 
+export function completedPomodorosOn(facts, date) {
+  return new Set((facts ?? []).filter(f => f.date === date && f.sessionId)
+    .map(f => f.sessionId)).size;
+}
+
 export function pomodoroCapacitySummary(targets, rules, date, candidate) {
   const effective = candidate
     ? [...targets.filter(t => t.workRef !== candidate.workRef), candidate]

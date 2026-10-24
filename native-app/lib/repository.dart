@@ -155,6 +155,7 @@ class DashboardRepository extends ChangeNotifier {
       }
       final s = active;
       if (s != null) {
+        if (pomodoroExpired(s, now)) throw ExpiredTimerConflict(s);
         if (s['workRef'] != ref) {
           throw ActiveTimerConflict(s);
         }
@@ -944,11 +945,18 @@ class DashboardRepository extends ChangeNotifier {
 
   Json pomodoroCapacityForDate([String? date]) {
     final day = date ?? today();
-    return pomodoroCapacitySummary(
-      pomodoroTargetsForDate(day),
-      pomodoroCapacityRows,
-      day,
-    );
+    return {
+      ...pomodoroCapacitySummary(
+        pomodoroTargetsForDate(day),
+        pomodoroCapacityRows,
+        day,
+      ),
+      'actualPomodoros': pomodoroFacts
+          .where((f) => f['date'] == day)
+          .map((f) => f['sessionId'])
+          .toSet()
+          .length,
+    };
   }
 
   List<Json> get dailyChecks {

@@ -66,6 +66,30 @@ class FakeWindow implements DesktopWindowPort {
 
 void main() {
   test(
+    'player and compact window return to original dashboard geometry',
+    () async {
+      final window = FakeWindow()..isMaximized = true;
+      final original = window.rectangle;
+      final controller = DesktopTimerWindow(window, changed: () {});
+      await controller.showPlayer(pinned: true);
+      expect(controller.player, true);
+      expect(controller.compact, false);
+      expect(window.rectangle.size, const Size(460, 720));
+      await controller.showPlayer(pinned: true);
+      await controller.minimize(active: true, enabled: true);
+      expect(controller.compact, true);
+      expect(controller.player, false);
+      await controller.showPlayer(pinned: false);
+      await controller.showDashboard();
+      expect(controller.compact, false);
+      expect(controller.player, false);
+      expect(window.rectangle, original);
+      expect(window.isMaximized, true);
+      expect(window.isPinned, false);
+    },
+  );
+
+  test(
     'opening from tray during shrinking waits and restores dashboard',
     () async {
       final window = FakeWindow();

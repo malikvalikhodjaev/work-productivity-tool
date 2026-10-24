@@ -372,6 +372,7 @@ void main() {
     expect(find.text('Начать фокус'), findsNothing);
     expect(find.byType(AlertDialog), findsNothing);
     expect(repo.active?['workRef'], 'case:one');
+    expect(find.byTooltip('Все разделы'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     repo.dispose();
   });

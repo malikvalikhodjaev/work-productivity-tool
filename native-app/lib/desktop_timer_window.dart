@@ -51,6 +51,7 @@ class DesktopTimerWindow {
   final DesktopWindowPort window;
   final void Function() changed;
   bool compact = false;
+  bool player = false;
   bool transitioning = false;
   Rect? _previousBounds;
   bool _previousMaximized = false;
@@ -67,13 +68,14 @@ class DesktopTimerWindow {
       // A minimized Win32 window reports an off-screen rectangle. Restore
       // first, then capture the actual dashboard geometry before shrinking.
       await window.restore();
-      if (!compact) {
+      if (!compact && !player) {
         _previousBounds = await window.bounds();
         _previousMaximized = await window.maximized();
         _previousPinned = await window.pinned();
-        compact = true;
-        changed();
       }
+      compact = true;
+      player = false;
+      changed();
       await window.unmaximize();
       await window.minimum(const Size(340, 330));
       final origin = _previousBounds!.topLeft;
@@ -94,14 +96,43 @@ class DesktopTimerWindow {
     transitioning = true;
     try {
       await window.restore();
-      if (compact) {
+      if (compact || player) {
         await window.minimum(const Size(380, 540));
         await window.resize(_previousBounds!);
         await window.pin(_previousPinned);
         if (_previousMaximized) await window.maximize();
         compact = false;
+        player = false;
         changed();
       }
+      await window.show();
+      await window.focus();
+    } finally {
+      transitioning = false;
+      _transitionDone!.complete();
+    }
+  }
+
+  Future<void> showPlayer({required bool pinned}) async {
+    while (transitioning) {
+      await _transitionDone!.future;
+    }
+    _transitionDone = Completer<void>();
+    transitioning = true;
+    try {
+      await window.restore();
+      if (!compact && !player) {
+        _previousBounds = await window.bounds();
+        _previousMaximized = await window.maximized();
+        _previousPinned = await window.pinned();
+      }
+      await window.unmaximize();
+      await window.minimum(const Size(380, 540));
+      await window.resize(_previousBounds!.topLeft & const Size(460, 720));
+      await window.pin(pinned);
+      compact = false;
+      player = true;
+      changed();
       await window.show();
       await window.focus();
     } finally {

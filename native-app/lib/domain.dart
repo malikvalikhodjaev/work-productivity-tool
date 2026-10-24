@@ -44,6 +44,11 @@ int elapsedMs(Json s, int now) {
   );
 }
 
+bool pomodoroExpired(Json? s, int now) =>
+    s != null &&
+    s['mode'] == 'pomodoro' &&
+    elapsedMs(s, now) >= (s['plannedMs'] as num);
+
 bool inLeisure(Json? s) => s?['leisure'] is Map;
 bool leisureDue(Json? s, int now) =>
     inLeisure(s) && object(s?['leisure'])['until'] <= now;

@@ -177,7 +177,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.18',
+        'clientVersion': '0.1.19',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -212,6 +212,7 @@ class _DashboardHomeState extends State<DashboardHome>
 
   Future<void> show() async {
     await background.show();
+    if (mounted) setState(() => focusMode = false);
     foreground = true;
     planEntryPending = true;
   }
@@ -682,7 +683,11 @@ class _DashboardHomeState extends State<DashboardHome>
     );
   }
 
-  Future<void> finishTimer() async {
+  Future<void> finishTimer({
+    String? nextRef,
+    String nextTitle = '',
+    Json? nextItem,
+  }) async {
     final s = repo.active;
     if (s == null || dialogOpen) return;
     if (s['phase'] != 'work') {
@@ -690,12 +695,14 @@ class _DashboardHomeState extends State<DashboardHome>
       return;
     }
     dialogOpen = true;
+    var finished = false;
     try {
       await editFields(
         context,
         title: s['phase'] == 'work'
             ? 'Как прошла помидорка?'
             : 'Завершить перерыв',
+        submitLabel: nextRef == null ? 'Учесть' : 'Учесть и запустить',
         initial: {
           'minutes': ((elapsedMs(s, repo.now) ~/ 1000) / 60).toStringAsFixed(2),
           'observation': '',
@@ -717,17 +724,33 @@ class _DashboardHomeState extends State<DashboardHome>
             observation: input['observation'].toString(),
             workedSeconds: ((input['minutes'] as num) * 60).round(),
           );
+          finished = true;
         },
       );
     } finally {
       dialogOpen = false;
+    }
+    if (finished && nextRef != null && mounted && repo.active == null) {
+      await startTimer(ref: nextRef, title: nextTitle, item: nextItem);
     }
   }
 
   Future<void> startTimer({String title = '', String? ref, Json? item}) async {
     if (ref != null) {
       await safe(() async {
-        await repo.focusWork(ref: ref, title: title, item: item);
+        try {
+          await repo.focusWork(ref: ref, title: title, item: item);
+        } on ExpiredTimerConflict catch (expired) {
+          reviewShown = '${expired.sessionId}:${repo.active?['plannedMs']}';
+          await revealMobilePlayer();
+          if (mounted) {
+            if (repo.active?['id'] != expired.sessionId) {
+              throw StateError('Сеанс изменился. Нажми Play ещё раз.');
+            }
+            await finishTimer(nextRef: ref, nextTitle: title, nextItem: item);
+          }
+          return;
+        }
         if (repo.active?['workRef'] == ref) await revealMobilePlayer();
       });
       return;
@@ -855,10 +878,7 @@ class _DashboardHomeState extends State<DashboardHome>
   }
 
   Future<void> revealMobilePlayer() async {
-    if (!mounted ||
-        (!Platform.isAndroid && MediaQuery.sizeOf(context).width >= 950)) {
-      return;
-    }
+    if (!mounted) return;
     setState(() => section = 2);
     await changeFocus(true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -911,7 +931,6 @@ class _DashboardHomeState extends State<DashboardHome>
   }
 
   Future<void> changeFocus(bool value) async {
-    if (background.desktop?.compact == true) await background.show();
     if (!mounted) return;
     setState(() => focusMode = value);
     if (widget.backgroundEnabled) await background.focusMode(value);
@@ -1038,6 +1057,8 @@ class _DashboardHomeState extends State<DashboardHome>
                           ? 'Пространство для важного'
                           : inLeisure(s)
                           ? 'Leisure · до ${leisureTime(s)}'
+                          : pomodoroExpired(s, repo.now)
+                          ? 'Помидорка завершена · ожидает учёта'
                           : s['status'] == 'paused'
                           ? 'Paused'
                           : s['mode'] == 'pomodoro'
@@ -1112,7 +1133,7 @@ class _DashboardHomeState extends State<DashboardHome>
                     ),
                   ] else ...[
                     FilledButton.tonal(
-                      onPressed: repo.timerBusy
+                      onPressed: repo.timerBusy || pomodoroExpired(s, repo.now)
                           ? null
                           : () => safe(
                               () => repo.timerAction(
@@ -1133,7 +1154,8 @@ class _DashboardHomeState extends State<DashboardHome>
                     ),
                     if (s['phase'] == 'work')
                       TextButton.icon(
-                        onPressed: repo.timerBusy
+                        onPressed:
+                            repo.timerBusy || pomodoroExpired(s, repo.now)
                             ? null
                             : () => safe(() => chooseLeisure(context, repo)),
                         icon: const Icon(
@@ -2763,7 +2785,7 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'I&W · Native 0.1.18',
+                          'I&W · Native 0.1.19',
                           style: TextStyle(fontSize: 11),
                         ),
                       ],

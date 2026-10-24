@@ -54,6 +54,8 @@ class CompactTimer extends StatelessWidget {
                   ? 'Сеанс завершён'
                   : inLeisure(s)
                   ? 'Leisure · до ${leisureTime(s)}'
+                  : pomodoroExpired(s, now)
+                  ? 'Помидорка завершена · ожидает учёта'
                   : s['status'] == 'paused'
                   ? 'Пауза'
                   : s['mode'] == 'pomodoro'
@@ -97,7 +99,7 @@ class CompactTimer extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   FilledButton.tonal(
-                    onPressed: busy ? null : pause,
+                    onPressed: busy || pomodoroExpired(s, now) ? null : pause,
                     child: Text(
                       inLeisure(s)
                           ? 'Вернуться к работе'

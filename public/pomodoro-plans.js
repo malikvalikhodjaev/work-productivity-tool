@@ -1,6 +1,6 @@
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 import './timer.js';
-import { pomodoroCapacityOn, pomodoroCapacitySummary } from './pomodoro-capacity.js';
+import { pomodoroCapacityOn, pomodoroCapacitySummary, completedPomodorosOn } from './pomodoro-capacity.js';
 
 const today = () => new Date(Date.now() + 5 * 3600000).toISOString().slice(0, 10);
 const shift = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
@@ -37,7 +37,19 @@ for(const container of [host,settings]) {
 }
 const capacityPreview=document.createElement('p'); capacityPreview.className='pom-capacity'; capacityPreview.setAttribute('role','status');
 form.querySelector('.form-error').insertAdjacentElement('beforebegin',capacityPreview);
-const capacityHtml = summary => `<p class="pom-capacity ${summary?.over?'pom-over':''}" role="status">${esc(summary?.message ?? '')}</p>`;
+function capacityHtml(summary) {
+  const actual = completedPomodorosOn(data?.pomodoroFacts, summary?.date);
+  const limit = summary?.limit;
+  const over = limit != null && actual > limit;
+  let progress = `<strong>Сделано: ${actual} · дневной лимит не задан</strong>`;
+  if (limit != null) {
+    const excess = Math.max(0, actual - limit), domain = Math.max(actual, limit);
+    const percent = Math.round(actual * 100 / limit);
+    const caption = `Сделано ${actual} / ${limit} · ${percent}%`;
+    progress = `<strong>${caption}</strong><div class="pom-progress" role="progressbar" aria-label="Помидорки за день" aria-valuemin="0" aria-valuemax="${limit}" aria-valuenow="${Math.min(actual,limit)}" aria-valuetext="${caption}${excess ? `, сверх лимита ${excess}` : ''}"><span class="pom-progress-within" style="width:${Math.min(actual,limit)*100/domain}%"></span><span class="pom-progress-excess" style="width:${excess*100/domain}%"></span></div><span class="${over ? 'pom-actual-over' : ''}">${excess ? `+${excess} сверх лимита` : actual === limit ? 'Дневной лимит достигнут' : `До лимита: ${limit-actual}`}</span>`;
+  }
+  return `<div class="pom-capacity ${summary?.over || over ? 'pom-over' : ''}" role="status">${progress}<p>${esc(summary?.message ?? '')}</p></div>`;
+}
 function updateCapacityPreview() {
   const day=field('date').value, selected=field('workRef').value, value=field('target').value;
   const summary=pomodoroCapacitySummary(targetsOn(day),data?.pomodoroCapacities,day,

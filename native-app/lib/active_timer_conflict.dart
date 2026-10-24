@@ -20,3 +20,11 @@ class ActiveTimerConflict extends StateError {
   @override
   String toString() => message;
 }
+
+class ExpiredTimerConflict extends ActiveTimerConflict {
+  ExpiredTimerConflict(super.session);
+
+  @override
+  String toString() =>
+      'Помидорка «$title» закончилась. Учти её перед следующим запуском.';
+}

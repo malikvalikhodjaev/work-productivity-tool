@@ -47,7 +47,11 @@ class PomodoroCapacityNotice extends StatelessWidget {
   const PomodoroCapacityNotice({super.key, required this.summary});
   @override
   Widget build(BuildContext context) {
-    final over = summary['over'] == true;
+    final actual = summary['actualPomodoros'] as int?;
+    final limit = summary['limit'] as int?;
+    final over =
+        summary['over'] == true ||
+        (actual != null && limit != null && actual > limit);
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -57,11 +61,98 @@ class PomodoroCapacityNotice extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: over ? Border.all(color: const Color(0xffb3261e)) : null,
       ),
-      child: Text(
-        summary['message'].toString(),
-        style: TextStyle(
-          fontSize: 12,
-          color: over ? const Color(0xffb3261e) : const Color(0xff45584c),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (actual != null) ...[
+            if (limit != null)
+              PomodoroCapacityProgress(actual: actual, limit: limit)
+            else
+              Text('Сделано: $actual · дневной лимит не задан'),
+            const SizedBox(height: 8),
+          ],
+          Text(
+            summary['message'].toString(),
+            style: TextStyle(
+              fontSize: 12,
+              color: over ? const Color(0xffb3261e) : const Color(0xff45584c),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class PomodoroCapacityProgress extends StatelessWidget {
+  final int actual, limit;
+  const PomodoroCapacityProgress({
+    super.key,
+    required this.actual,
+    required this.limit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final within = actual.clamp(0, limit).toInt();
+    final excess = actual > limit ? actual - limit : 0;
+    final remaining = actual < limit ? limit - actual : 0;
+    final percent = (actual * 100 / limit).round();
+    return Semantics(
+      label: 'Помидорки за день',
+      value:
+          '$actual из $limit, $percent процентов'
+          '${excess > 0 ? ', сверх лимита $excess' : ''}',
+      child: ExcludeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Сделано $actual / $limit · $percent%',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 7),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: SizedBox(
+                height: 9,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (within > 0)
+                      Expanded(
+                        flex: within,
+                        child: const ColoredBox(color: Color(0xff347558)),
+                      ),
+                    if (excess > 0) ...[
+                      const SizedBox(width: 2),
+                      Expanded(
+                        flex: excess,
+                        child: const ColoredBox(color: Color(0xffb3261e)),
+                      ),
+                    ],
+                    if (remaining > 0)
+                      Expanded(
+                        flex: remaining,
+                        child: const ColoredBox(color: Color(0xffdce5df)),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              excess > 0
+                  ? '+$excess сверх лимита'
+                  : remaining == 0
+                  ? 'Дневной лимит достигнут'
+                  : 'До лимита: $remaining',
+              style: TextStyle(
+                fontSize: 12,
+                color: excess > 0 ? const Color(0xffb3261e) : null,
+              ),
+            ),
+          ],
         ),
       ),
     );

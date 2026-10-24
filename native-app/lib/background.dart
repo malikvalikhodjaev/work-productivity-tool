@@ -247,12 +247,11 @@ class BackgroundRuntime {
 
   Future<void> focusMode(bool value) async {
     if (Platform.isWindows) {
-      await windowManager.setSize(
-        value ? const Size(460, 720) : const Size(1200, 850),
-      );
-      await windowManager.setAlwaysOnTop(
-        value && repo.local.get('pinFocus') == true,
-      );
+      if (value) {
+        await desktop?.showPlayer(pinned: repo.local.get('pinFocus') == true);
+      } else {
+        await desktop?.showDashboard();
+      }
     }
   }
 
