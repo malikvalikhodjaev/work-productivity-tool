@@ -3,6 +3,8 @@ const select = (id, title, options, visible = false) => ({id, title, type:'selec
 const date = (id, title, visible = false) => ({id, title, type:'date', visible});
 export const portfolioGridColumns = {
   projects: [
+    {id:'_wbs',title:'Уровень',type:'computed',visible:true},
+    select('parentId','Родительский проект',{'':'Верхний уровень'},true),
     {...text('name','Проект',120,true), required:true},
     select('status','Состояние',{active:'Активный',paused:'Приостановлен',closed:'Закрыт'},true),
     select('phase','Этап',{pre_operation:'До эксплуатации',operation:'В эксплуатации'},true),
@@ -27,7 +29,8 @@ export const portfolioGridColumns = {
 export function gridColumns(portfolio, table, {archived = false} = {}) {
   if (!portfolioGridColumns[table]) throw new Error('Неизвестная таблица.');
   return [...portfolioGridColumns[table], ...(portfolio.tableColumns?.[table] ?? [])]
-    .filter(column => archived || !column.archived);
+    .filter(column => archived || !column.archived)
+    .map(column => table === 'projects' && column.id === 'parentId' ? {...column, options:{'':'Верхний уровень',...Object.fromEntries(portfolio.projects.map(p => [p.id,p.name]))}} : column);
 }
 
 export function gridCellValue(row, column) {
@@ -40,6 +43,7 @@ export function gridCellValue(row, column) {
 
 export function gridCellText(row, column) {
   const value = gridCellValue(row,column);
+  if (column.id === 'parentId' && (value === null || value === '')) return 'Верхний уровень';
   if (value === null || value === '') return 'No Data';
   if (column.type === 'checkbox') return value ? '✓' : '—';
   return column.options?.[value] ?? String(value);

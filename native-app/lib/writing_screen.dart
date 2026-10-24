@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as q;
 
 import 'domain.dart';
+import 'section_analytics.dart';
 import 'repository.dart';
 import 'reflection_hints.dart';
 import 'inbox_widget.dart';
@@ -464,6 +465,7 @@ class _WritingScreenState extends State<WritingScreen> {
                   ],
                 ),
         ),
+        WritingAnalytics(repo: repo),
       ],
     );
   }

@@ -6,6 +6,7 @@ import 'project_review.dart';
 import 'repository.dart';
 import 'portfolio_grid.dart';
 import 'model_hierarchy.dart';
+import 'section_analytics.dart';
 
 class ModelingWorkspace extends StatefulWidget {
   final DashboardRepository repo;
@@ -17,6 +18,7 @@ class ModelingWorkspace extends StatefulWidget {
   final Future<void> Function(Json) focusAlpha;
   final Future<void> Function(Json) linkSystem;
   final Widget Function(Json) characteristics;
+  final Widget? systemsPanel;
   const ModelingWorkspace({
     super.key,
     required this.repo,
@@ -28,6 +30,7 @@ class ModelingWorkspace extends StatefulWidget {
     required this.focusAlpha,
     required this.linkSystem,
     required this.characteristics,
+    this.systemsPanel,
   });
 
   @override
@@ -404,7 +407,10 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
             alignment: WrapAlignment.spaceBetween,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Text('Проекты', style: Theme.of(context).textTheme.headlineSmall),
+              Text(
+                'Мои проекты',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
               TextButton.icon(
                 onPressed: widget.createProject,
                 icon: const Icon(Icons.add),
@@ -473,11 +479,20 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
           if (projects.isNotEmpty && shown.isEmpty)
             const Text('По этому запросу проектов нет.'),
           const SizedBox(height: 16),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Divider(),
+          ),
+          Text(
+            'Моделирование',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 12),
           if (project == null && projects.isNotEmpty)
             const Text('Выбери проект в таблице, чтобы открыть его альфы.'),
           if (project != null) ...[
             Text(
-              'Моделер проекта',
+              'Альфы проекта',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             Wrap(
@@ -610,6 +625,7 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
               ),
             ),
           ],
+          ?widget.systemsPanel,
           const SizedBox(height: 20),
           ExpansionTile(
             title: const Text('Регулярный обзор проектов'),
@@ -620,6 +636,7 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
               ),
             ],
           ),
+          ModelAnalytics(repo: repo, projectId: selected),
         ],
       );
     },

@@ -27,6 +27,7 @@ import 'timer_command_notice.dart';
 import 'daily_problem_banner.dart';
 import 'weekly_problem_card.dart';
 import 'focus_viewport.dart';
+import 'section_analytics.dart';
 import 'modeling_workspace.dart';
 import 'leisure.dart';
 import 'timer_ringtones.dart';
@@ -180,7 +181,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.21',
+        'clientVersion': '0.1.22',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -1777,6 +1778,9 @@ class _DashboardHomeState extends State<DashboardHome>
                 )
                 .toList(),
           ),
+        const SizedBox(height: 24),
+        focusCard(),
+        const SizedBox(height: 18),
         ReflectionHints(repo: repo),
         ExpansionTile(
           title: const Text('Источники и мысли'),
@@ -1791,6 +1795,7 @@ class _DashboardHomeState extends State<DashboardHome>
               )
               .toList(),
         ),
+        WorkAnalytics(repo: repo),
       ],
     );
   }
@@ -1881,7 +1886,7 @@ class _DashboardHomeState extends State<DashboardHome>
     );
   }
 
-  Future<void> editGoal([Json? previous]) async {
+  Future<void> editGoal([Json? previous, String? parentId]) async {
     final id = previous?['id'] ?? uuid.v4(), key = 'goal:$id';
     final base = rows(repo.cache('workspace')['goals'])
         .where((g) => g['id'] == id)
@@ -1894,9 +1899,20 @@ class _DashboardHomeState extends State<DashboardHome>
         'id': id,
         'status': previous?['status'] ?? 'active',
         'direction': previous?['direction'] ?? 'up',
+        'parentId': previous?['parentId'] ?? parentId ?? '',
       },
-      const [
-        FieldSpec('title', 'Цель'),
+      [
+        const FieldSpec('title', 'Цель'),
+        FieldSpec(
+          'parentId',
+          'Родительская цель',
+          options: {
+            '': 'Верхний уровень',
+            for (final g
+                in repo.entities('goals', 'goal').where((g) => g['id'] != id))
+              g['id'].toString(): g['title'].toString(),
+          },
+        ),
         FieldSpec('unit', 'Единица шкалы'),
         FieldSpec('baseline', 'Начальное значение', numeric: true),
         FieldSpec('target', 'Целевое значение', numeric: true),
@@ -1969,10 +1985,8 @@ class _DashboardHomeState extends State<DashboardHome>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        weeklyProblemCard(),
-        problemCard(),
         sectionTitle(
-          'Цели и индикаторы',
+          'Цели',
           trailing: TextButton(
             onPressed: () => editGoal(),
             child: const Text('＋ Цель'),
@@ -2037,6 +2051,12 @@ class _DashboardHomeState extends State<DashboardHome>
               )
               .toList(),
         ),
+        GoalHierarchy(
+          goals: repo.entities('goals', 'goal'),
+          edit: (g) => editGoal(g),
+          measure: measureGoal,
+          child: (g) => editGoal(null, g['id'].toString()),
+        ),
         ExpansionTile(
           title: const Text('Выбрать индикаторы на главном экране'),
           children: goals
@@ -2058,7 +2078,11 @@ class _DashboardHomeState extends State<DashboardHome>
               )
               .toList(),
         ),
-        sectionTitle('Недельные нормативы'),
+        sectionTitle('Нормативы'),
+        const Text(
+          'На неделю',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
         Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -2103,7 +2127,7 @@ class _DashboardHomeState extends State<DashboardHome>
               .toList(),
         ),
         sectionTitle(
-          'Дневные нормативы',
+          'На день',
           trailing: TextButton(
             onPressed: () => showNorms(List<Json>.from(repo.dailyNorms)),
             child: const Text('Открыть список'),
@@ -2113,8 +2137,6 @@ class _DashboardHomeState extends State<DashboardHome>
           repo: repo,
           focus: (ref, title) => startTimer(ref: ref, title: title),
         ),
-        const SizedBox(height: 12),
-        PomodoroWeek(repo: repo),
         const SizedBox(height: 12),
         ...repo.dailyNorms.map(
           (n) => ListTile(
@@ -2129,46 +2151,40 @@ class _DashboardHomeState extends State<DashboardHome>
             ),
           ),
         ),
-        sectionTitle(
-          'Системы · три приоритета и ограничитель',
-          trailing: TextButton(
-            onPressed: () => editSystem(),
-            child: const Text('＋ Система'),
-          ),
-        ),
-        ...repo
-            .entities('systems', 'system')
-            .map(
-              (s) => Card(
-                child: ListTile(
-                  title: Text(s['name'].toString()),
-                  subtitle: Text(
-                    rows(s['characteristics'])
-                        .map(
-                          (c) =>
-                              '${c['kind'] == 'limit' ? '≤ ' : ''}${c['name']} · ${c['current'] ?? 'No Data'} → ${c['target'] ?? 'No Data'}',
-                        )
-                        .join('\n'),
-                  ),
-                  onTap: () => editSystem(s),
-                ),
-              ),
-            ),
-        sectionTitle('Финансовый поток'),
-        ...rows(repo.cache('finance')['currencies']).map(
-          (c) => metricCard(
-            c['currency'].toString(),
-            c['net'],
-            null,
-            null,
-            unit: 'нетто',
-          ),
-        ),
-        if (rows(repo.cache('finance')['currencies']).isEmpty)
-          const Text('No Data'),
       ],
     );
   }
+
+  Widget systemsPanel() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      sectionTitle(
+        'Системы · три приоритета и ограничитель',
+        trailing: TextButton(
+          onPressed: () => editSystem(),
+          child: const Text('＋ Система'),
+        ),
+      ),
+      ...repo
+          .entities('systems', 'system')
+          .map(
+            (s) => Card(
+              child: ListTile(
+                title: Text(s['name'].toString()),
+                subtitle: Text(
+                  rows(s['characteristics'])
+                      .map(
+                        (c) =>
+                            '${c['kind'] == 'limit' ? '≤ ' : ''}${c['name']} · ${c['current'] ?? 'No Data'} → ${c['target'] ?? 'No Data'}',
+                      )
+                      .join('\n'),
+                ),
+                onTap: () => editSystem(s),
+              ),
+            ),
+          ),
+    ],
+  );
 
   Future<void> editSystem([Json? previous]) async {
     final id = previous?['id'] ?? uuid.v4(), key = 'system:$id';
@@ -2251,6 +2267,7 @@ class _DashboardHomeState extends State<DashboardHome>
         'id': id,
         'status': previous?['status'] ?? 'active',
         'phase': previous?['phase'] ?? 'pre_operation',
+        'parentId': previous?['parentId'] ?? '',
         'zones': rows(previous?['zones']).isEmpty
             ? rows(repo.cache('portfolio')['defaultZones'])
             : rows(previous?['zones']),
@@ -2258,8 +2275,20 @@ class _DashboardHomeState extends State<DashboardHome>
             ? ['customers', 'economics', 'operators']
             : rows(previous?['zones']).map((z) => z['id']).toList(),
       },
-      const [
-        FieldSpec('name', 'Название'),
+      [
+        const FieldSpec('name', 'Название'),
+        FieldSpec(
+          'parentId',
+          'Родительский проект',
+          options: {
+            '': 'Верхний уровень',
+            for (final p
+                in repo
+                    .entities('projects', 'project')
+                    .where((p) => p['id'] != id))
+              p['id'].toString(): p['name'].toString(),
+          },
+        ),
         FieldSpec(
           'status',
           'Состояние',
@@ -2407,6 +2436,7 @@ class _DashboardHomeState extends State<DashboardHome>
     ),
     linkSystem: (project) => linkSystem('project:${project['id']}'),
     characteristics: (project) => characteristics('project:${project['id']}'),
+    systemsPanel: systemsPanel(),
   );
   Widget dataPage() {
     final datasets = {
@@ -2820,7 +2850,7 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'I&W · Native 0.1.21',
+                          'I&W · Native 0.1.22',
                           style: TextStyle(fontSize: 11),
                         ),
                       ],
@@ -2844,16 +2874,6 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                       ),
                     page,
-                    if (!focusMode && section != 3) ...[
-                      const SizedBox(height: 26),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 480),
-                          child: focusCard(),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),

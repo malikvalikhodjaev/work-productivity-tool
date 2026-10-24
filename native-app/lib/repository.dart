@@ -44,6 +44,7 @@ class DashboardRepository extends ChangeNotifier {
     'portfolio': '/api/portfolio',
     'problems': '/api/daily-problems',
     'weeklyProblems': '/api/weekly-problems',
+    'modelActivity': '/api/model-activity',
     'timer': '/api/timer',
     'writing': '/api/writing',
     'writingExport': '/api/writing/export',

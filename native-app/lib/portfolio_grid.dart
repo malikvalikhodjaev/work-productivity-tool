@@ -28,6 +28,8 @@ dynamic gridValue(Json row, Json col) {
 
 String gridText(Json row, Json col) {
   final value = gridValue(row, col);
+  if (col['id'] == 'parentId' && (value == null || value == ''))
+    return 'Верхний уровень';
   if (value == null || value == '') return 'No Data';
   if (col['type'] == 'checkbox') return value == true ? '✓' : '—';
   return (object(col['options'])[value] ?? value).toString();
@@ -751,9 +753,7 @@ class _PortfolioGridState extends State<PortfolioGrid> {
   @override
   Widget build(BuildContext context) {
     final cols = visible();
-    final shown = widget.table == 'alphas'
-        ? hierarchyRows(widget.items, collapsed: collapsed)
-        : widget.items;
+    final shown = hierarchyRows(widget.items, collapsed: collapsed);
     if (cols.isEmpty) return const Text('Подключи обновлённый сервер таблиц.');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -868,7 +868,7 @@ class _PortfolioGridState extends State<PortfolioGrid> {
                             ),
                             child: Padding(
                               padding: EdgeInsets.only(
-                                left: c['id'] == 'uniqueName'
+                                left: ['uniqueName', 'name'].contains(c['id'])
                                     ? ((row['_depth'] as int? ?? 0) * 20)
                                           .clamp(0, 96)
                                           .toDouble()

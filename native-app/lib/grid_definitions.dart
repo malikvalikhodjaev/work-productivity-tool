@@ -1,6 +1,14 @@
 // Built-in descriptors shared with public/portfolio-grid-core.js.
 const Map<String, List<Map<String, dynamic>>> defaultGridColumns = {
   "projects": [
+    {"id": "_wbs", "title": "Уровень", "type": "computed", "visible": true},
+    {
+      "id": "parentId",
+      "title": "Родительский проект",
+      "type": "select",
+      "options": {"": "Верхний уровень"},
+      "visible": true,
+    },
     {
       "id": "name",
       "title": "Проект",

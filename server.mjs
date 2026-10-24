@@ -7,7 +7,8 @@ import path from 'node:path';
 import { createStore } from './lib/store.mjs';
 import { createIndicatorStore } from './lib/indicators.mjs';
 import { createDailyProblemStore } from './lib/daily-problems.mjs';
-import { createWeeklyProblemStore } from './lib/weekly-problems.mjs';
+import { createWeeklyProblemStore, weekStart } from './lib/weekly-problems.mjs';
+import {modelActivity} from './lib/model-activity.mjs';
 import { createDailyResultStore } from './lib/daily-results.mjs';
 import { createWorkspaceStore } from './lib/workspace.mjs';
 import { parseFinanceCsv } from './lib/finance-csv.mjs';
@@ -193,6 +194,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/daily-results') return json(res, 200, dailyResults.view());
     if (req.method === 'POST' && url.pathname === '/api/daily-results') return json(res, 200, dailyResults.save(await body(req)));
+    if (req.method === 'GET' && url.pathname === '/api/model-activity') return json(res, 200, modelActivity(store.alphaBackup(), weekStart()));
     if (req.method === 'GET' && url.pathname === '/api/weekly-problems') return json(res, 200, weeklyProblems.view());
     if (req.method === 'POST' && url.pathname === '/api/weekly-problems') return json(res, 200, { entry: weeklyProblems.save(await body(req)), weeklyProblems: weeklyProblems.view() });
     if (req.method === 'GET' && url.pathname === '/api/daily-problems') {const value=dailyProblems.view();return json(res,200,{...value,entries:value.entries.map(problem=>{const linked=workspace.problemCase(problem.date);return {...problem,caseRef:linked?'case:'+linked.id:null,caseTitle:linked?.title??null};})});}
