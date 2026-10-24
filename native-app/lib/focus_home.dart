@@ -322,7 +322,12 @@ class _FocusHomeState extends State<FocusHome>
             'Сколько минут действительно работал',
             numeric: true,
           ),
-          FieldSpec('observation', 'Наблюдения', lines: 5),
+          FieldSpec(
+            'observation',
+            'Что сделал за помидорку? Какую систему, какую её характеристику изменил?',
+            lines: 5,
+            labelAbove: true,
+          ),
         ],
         save: (input) async {
           if (repo.active?['id'] != s['id']) {

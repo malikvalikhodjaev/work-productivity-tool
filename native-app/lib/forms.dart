@@ -5,7 +5,7 @@ import 'domain.dart';
 class FieldSpec {
   final String key, label;
   final int lines;
-  final bool numeric, integer, nullable;
+  final bool numeric, integer, nullable, labelAbove;
   final Map<String, String>? options;
   const FieldSpec(
     this.key,
@@ -14,6 +14,7 @@ class FieldSpec {
     this.numeric = false,
     this.integer = false,
     this.nullable = false,
+    this.labelAbove = false,
     this.options,
   });
 }
@@ -82,61 +83,75 @@ Future<bool> editFields(
                   for (final field in fields)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 14),
-                      child: field.options == null
-                          ? TextField(
-                              controller: controllers[field.key],
-                              maxLines: field.lines,
-                              minLines: field.lines > 1 ? 2 : 1,
-                              keyboardType: field.numeric || field.integer
-                                  ? const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                      signed: true,
-                                    )
-                                  : TextInputType.multiline,
-                              decoration: InputDecoration(
-                                labelText: field.label,
-                                alignLabelWithHint: true,
-                              ),
-                              onChanged: (_) {
-                                try {
-                                  draft?.call(collect());
-                                } catch (_) {
-                                  draft?.call({
-                                    ...values,
-                                    ...controllers.map(
-                                      (k, c) => MapEntry(k, c.text),
-                                    ),
-                                  });
-                                }
-                              },
-                            )
-                          : DropdownButtonFormField<String>(
-                              initialValue:
-                                  field.options!.containsKey(
-                                    values[field.key]?.toString(),
-                                  )
-                                  ? values[field.key]?.toString()
-                                  : field.options!.keys.firstOrNull,
-                              hint: const Text('No Data'),
-                              isExpanded: true,
-                              decoration: InputDecoration(
-                                labelText: field.label,
-                              ),
-                              items: field.options!.entries
-                                  .map(
-                                    (e) => DropdownMenuItem(
-                                      value: e.key,
-                                      child: Text(e.value),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (value) {
-                                setState(() => values[field.key] = value);
-                                try {
-                                  draft?.call(collect());
-                                } catch (_) {}
-                              },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (field.labelAbove)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(field.label),
                             ),
+                          field.options == null
+                              ? TextField(
+                                  controller: controllers[field.key],
+                                  maxLines: field.lines,
+                                  minLines: field.lines > 1 ? 2 : 1,
+                                  keyboardType: field.numeric || field.integer
+                                      ? const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                          signed: true,
+                                        )
+                                      : TextInputType.multiline,
+                                  decoration: InputDecoration(
+                                    labelText: field.labelAbove
+                                        ? null
+                                        : field.label,
+                                    alignLabelWithHint: true,
+                                  ),
+                                  onChanged: (_) {
+                                    try {
+                                      draft?.call(collect());
+                                    } catch (_) {
+                                      draft?.call({
+                                        ...values,
+                                        ...controllers.map(
+                                          (k, c) => MapEntry(k, c.text),
+                                        ),
+                                      });
+                                    }
+                                  },
+                                )
+                              : DropdownButtonFormField<String>(
+                                  initialValue:
+                                      field.options!.containsKey(
+                                        values[field.key]?.toString(),
+                                      )
+                                      ? values[field.key]?.toString()
+                                      : field.options!.keys.firstOrNull,
+                                  hint: const Text('No Data'),
+                                  isExpanded: true,
+                                  decoration: InputDecoration(
+                                    labelText: field.labelAbove
+                                        ? null
+                                        : field.label,
+                                  ),
+                                  items: field.options!.entries
+                                      .map(
+                                        (e) => DropdownMenuItem(
+                                          value: e.key,
+                                          child: Text(e.value),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (value) {
+                                    setState(() => values[field.key] = value);
+                                    try {
+                                      draft?.call(collect());
+                                    } catch (_) {}
+                                  },
+                                ),
+                        ],
+                      ),
                     ),
                   if (error != null)
                     Text(error!, style: const TextStyle(color: Colors.red)),

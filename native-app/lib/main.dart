@@ -178,7 +178,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.19',
+        'clientVersion': '0.1.20',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -714,7 +714,12 @@ class _DashboardHomeState extends State<DashboardHome>
             'Сколько минут действительно работал',
             numeric: true,
           ),
-          FieldSpec('observation', 'Наблюдения', lines: 6),
+          FieldSpec(
+            'observation',
+            'Что сделал за помидорку? Какую систему, какую её характеристику изменил?',
+            lines: 6,
+            labelAbove: true,
+          ),
         ],
         save: (input) async {
           if (repo.active?['id'] != s['id']) {
@@ -2777,7 +2782,7 @@ class _DashboardHomeState extends State<DashboardHome>
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'I&W · Native 0.1.19',
+                          'I&W · Native 0.1.20',
                           style: TextStyle(fontSize: 11),
                         ),
                       ],
