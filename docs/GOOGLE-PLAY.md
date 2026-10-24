@@ -20,7 +20,7 @@
 
 ## Сборка
 
-Перед сборкой увеличить build number в `native-app/pubspec.yaml`. Для первой подготовленной сборки зарезервирован code **20**; далее использовать большее число. Для существующего локального toolchain из корня проекта:
+Перед сборкой увеличить build number в `native-app/pubspec.yaml`. Прежний подготовленный AAB имеет code **20**, новый APK 0.1.19 — **21**. Для следующего AAB использовать code **больше 21**, чтобы Play мог обновить и этот APK. Для существующего локального toolchain из корня проекта:
 
 ```powershell
 .\Build-Android.ps1 -Format AppBundle -KeyPropertiesPath $env:IW_ANDROID_KEY_PROPERTIES
