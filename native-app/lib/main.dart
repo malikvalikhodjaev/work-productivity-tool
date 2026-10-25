@@ -1932,7 +1932,6 @@ class _DashboardHomeState extends State<DashboardHome>
                 child: Text(item['nextStep'].toString()),
               ),
             const SizedBox(height: 12),
-            characteristics(ref),
             Wrap(
               spacing: 4,
               children: [
