@@ -7,6 +7,7 @@ import 'model_hierarchy.dart';
 import 'repository.dart';
 import 'time_composition.dart';
 import 'time_composition_panel.dart';
+import 'goal_progress.dart';
 
 class AnalyticsSection extends StatelessWidget {
   final String title;
@@ -34,12 +35,14 @@ class AnalyticsSection extends StatelessWidget {
 class GoalHierarchy extends StatelessWidget {
   final List<Json> goals;
   final void Function(Json) edit, measure, child;
+  final void Function(Json)? history;
   const GoalHierarchy({
     super.key,
     required this.goals,
     required this.edit,
     required this.measure,
     required this.child,
+    this.history,
   });
   @override
   Widget build(BuildContext context) => ExpansionTile(
@@ -63,19 +66,11 @@ class GoalHierarchy extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '${goal['_wbs']} · ${goal['title']}',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  GoalProgressSummary(
+                    goal: goal,
+                    heading: '${goal['_wbs']} · ${goal['title']}',
                   ),
-                  Text(
-                    '${goal['current'] ?? 'No Data'} → ${goal['target'] ?? 'No Data'} ${goal['unit'] ?? ''} · ${goal['status'] ?? ''}',
-                  ),
-                  if (goal['percent'] is num)
-                    LinearProgressIndicator(
-                      value: ((goal['percent'] as num) / 100)
-                          .clamp(0, 1)
-                          .toDouble(),
-                    ),
+                  Text('Состояние: ${goal['status'] ?? 'No Data'}'),
                   Wrap(
                     children: [
                       TextButton(
@@ -84,12 +79,17 @@ class GoalHierarchy extends StatelessWidget {
                       ),
                       TextButton(
                         onPressed: () => measure(goal),
-                        child: const Text('Замер'),
+                        child: const Text('Новый замер'),
                       ),
                       TextButton(
                         onPressed: () => child(goal),
                         child: const Text('＋ Подцель'),
                       ),
+                      if (history != null)
+                        TextButton(
+                          onPressed: () => history!(goal),
+                          child: const Text('История'),
+                        ),
                     ],
                   ),
                 ],

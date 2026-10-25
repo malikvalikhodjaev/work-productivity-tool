@@ -36,6 +36,7 @@ import 'timer_ringtones.dart';
 import 'active_timer_conflict.dart';
 import 'time_composition.dart';
 import 'connection_bootstrap.dart';
+import 'goal_progress.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -209,7 +210,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.28',
+        'clientVersion': '0.1.29',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -2210,9 +2211,9 @@ class _DashboardHomeState extends State<DashboardHome>
               g['id'].toString(): g['title'].toString(),
           },
         ),
-        FieldSpec('unit', 'Единица шкалы'),
-        FieldSpec('baseline', 'Начальное значение', numeric: true),
-        FieldSpec('target', 'Целевое значение', numeric: true),
+        FieldSpec('unit', 'Единица и период · например UZS / месяц'),
+        FieldSpec('baseline', 'Было · исходное значение', numeric: true),
+        FieldSpec('target', 'Хочу · ориентир (можно позже)', numeric: true),
         FieldSpec(
           'direction',
           'Направление',
@@ -2246,7 +2247,7 @@ class _DashboardHomeState extends State<DashboardHome>
   Future<void> measureGoal(Json goal) async {
     if ((goal['unit'] ?? '').toString().trim().isEmpty) {
       message(
-        'Сначала укажи единицу шкалы. Для денег — валюту и период, например USD / месяц.',
+        'Сначала укажи единицу шкалы. Для денег — валюту и период, например UZS / месяц.',
       );
       await editGoal(goal);
       return;
@@ -2256,11 +2257,16 @@ class _DashboardHomeState extends State<DashboardHome>
       title: 'Замер · ${goal['title']}',
       initial: {'date': today(), 'value': goal['current']},
       fields: const [
-        FieldSpec('value', 'Текущее значение', numeric: true),
+        FieldSpec('value', 'Стало · новое значение', numeric: true),
         FieldSpec('date', 'Дата · YYYY-MM-DD'),
         FieldSpec('evidence', 'Что подтверждает замер', lines: 3),
       ],
       save: (input) async {
+        if (input['value'] is! num || !(input['value'] as num).isFinite) {
+          throw ArgumentError(
+            'Укажи числовое значение замера. Ноль можно записать явно.',
+          );
+        }
         repo.nativeSave('workspace', 'measure', {
           ...input,
           'kind': goal['characteristicId'] == null ? 'goal' : 'characteristic',
@@ -2272,10 +2278,8 @@ class _DashboardHomeState extends State<DashboardHome>
   }
 
   Widget indicatorsPage() {
-    final goals = repo
-        .entities('goals', 'goal')
-        .where((g) => g['status'] != 'archived')
-        .toList();
+    final allGoals = projectedGoals(repo);
+    final goals = allGoals.where((g) => g['status'] != 'archived').toList();
     final selected =
         (repo.local.get('selectedGoals') as List?) ??
         goals.take(4).map((g) => g['id']).toList();
@@ -2287,6 +2291,12 @@ class _DashboardHomeState extends State<DashboardHome>
           trailing: TextButton(
             onPressed: () => editGoal(),
             child: const Text('＋ Цель'),
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Text(
+            'Начни с одной цели: задай «Было» и единицу, затем нажми «Новый замер». Ориентир «Хочу» можно добавить позже. Без ориентира видно изменение, а процент остаётся No Data.',
           ),
         ),
         const ExpansionTile(
@@ -2315,22 +2325,13 @@ class _DashboardHomeState extends State<DashboardHome>
                   width: 260,
                   child: Column(
                     children: [
-                      metricCard(
-                        g['title'].toString(),
-                        g['current'],
-                        g['target'],
-                        g['percent'],
-                        unit: (g['unit'] ?? '').toString(),
-                        onTap: () => measureGoal(g),
-                      ),
-                      Text(
-                        'Последний замер: ${object(g['measurement'])['date'] ?? 'No Data'}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xff727780),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: GoalProgressSummary(goal: g),
                         ),
                       ),
-                      Row(
+                      Wrap(
                         children: [
                           TextButton(
                             onPressed: () => editGoal(g),
@@ -2338,7 +2339,11 @@ class _DashboardHomeState extends State<DashboardHome>
                           ),
                           TextButton(
                             onPressed: () => measureGoal(g),
-                            child: const Text('Замер'),
+                            child: const Text('Новый замер'),
+                          ),
+                          TextButton(
+                            onPressed: () => showGoalHistory(context, g),
+                            child: const Text('История'),
                           ),
                         ],
                       ),
@@ -2349,10 +2354,11 @@ class _DashboardHomeState extends State<DashboardHome>
               .toList(),
         ),
         GoalHierarchy(
-          goals: repo.entities('goals', 'goal'),
+          goals: allGoals,
           edit: (g) => editGoal(g),
           measure: measureGoal,
           child: (g) => editGoal(null, g['id'].toString()),
+          history: (g) => showGoalHistory(context, g),
         ),
         ExpansionTile(
           title: const Text('Выбрать индикаторы на главном экране'),
@@ -3177,7 +3183,7 @@ class _DashboardHomeState extends State<DashboardHome>
                           ),
                           const SizedBox(height: 12),
                           const Text(
-                            'I&W · Native 0.1.28',
+                            'I&W · Native 0.1.29',
                             style: TextStyle(fontSize: 11),
                           ),
                         ],
