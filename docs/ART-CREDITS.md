@@ -69,3 +69,8 @@
 | Шишкин · Пейзаж Полесья | [Public domain](https://commons.wikimedia.org/wiki/File:Ivan_Ivanovich_Shishkin_-_Polesie_Landscape,_1884.jpg) |
 | Шишкин · Зима | [Public domain](https://commons.wikimedia.org/wiki/File:Ivan_Shishkin_-_Winter.JPG) |
 | Шишкин · Утро в сосновом лесу | [Public domain](https://commons.wikimedia.org/wiki/File:Shishkin,_Ivan_-_Morning_in_a_Pine_Forest.jpg) |
+
+
+## Ибрагим Валиходжаев
+
+[Официальный журнал художника — Valikhodjaev Gallery House](https://ibragim-valikhodjaev.blogspot.com/?lang=en).
