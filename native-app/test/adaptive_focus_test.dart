@@ -8,7 +8,6 @@ import 'package:indicators_work/pomodoro_widgets.dart';
 import 'package:indicators_work/repository.dart';
 import 'package:indicators_work/section_analytics.dart';
 import 'package:indicators_work/work_stage_board.dart';
-import 'package:indicators_work/weekly_problem_card.dart';
 
 void main() {
   test('writing aggregates chosen dates without trash or invented daily production', () {
@@ -75,13 +74,10 @@ void main() {
                 enabled: true,
                 child: Scaffold(
                   backgroundColor: Colors.transparent,
-                  appBar: AppBar(title: const Text('I&W · Фокус')),
+                  appBar: AppBar(title: const Text('Pomodoro Club')),
                   body: AdaptiveFocusPlayer(
-                    weeklyProblem: WeeklyProblemBanner(
-                      repo: repo,
-                      compact: true,
-                      edit: () {},
-                    ),
+                    weeklyProblem: 'Сдвинуть проект с места',
+                    dailyProblem: 'Уточнить следующий шаг',
                     changes: repo,
                     clock: '24:48',
                     mode: 'Pomodoro',
@@ -120,8 +116,10 @@ void main() {
         expect(tester.takeException(), isNull);
         expect(find.text('24:48').hitTestable(), findsOneWidget);
         expect(find.text('Учесть').hitTestable(), findsOneWidget);
+        expect(find.text('Неделя').hitTestable(), findsOneWidget);
+        expect(find.text('Сегодня').hitTestable(), findsOneWidget);
         expect(
-          find.text('Главная проблема недели').hitTestable(),
+          find.text('Уточнить следующий шаг').hitTestable(),
           findsOneWidget,
         );
         expect(find.text('Тема и звук').hitTestable(), findsOneWidget);

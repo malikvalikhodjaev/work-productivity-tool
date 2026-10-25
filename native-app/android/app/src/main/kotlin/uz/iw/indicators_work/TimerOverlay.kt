@@ -7,7 +7,6 @@ import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.provider.Settings
-import android.text.TextUtils
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -27,6 +26,7 @@ class TimerOverlay(private val context: Context) {
     private var root: LinearLayout? = null
     private var clock: TextView? = null
     private var problem: TextView? = null
+    private var problemScroll: ScrollView? = null
     private var title: TextView? = null
     private var capacity: TextView? = null
     private var plan: TextView? = null
@@ -52,6 +52,7 @@ class TimerOverlay(private val context: Context) {
         if (root == null && !attach()) return
         val now = System.currentTimeMillis() + if (snapshot.optBoolean("local")) 0 else snapshot.optLong("serverOffset")
         problem?.visibility = if(snapshot.optBoolean("timerOnly")) View.GONE else View.VISIBLE
+        problemScroll?.visibility = if(snapshot.optBoolean("timerOnly")) View.GONE else View.VISIBLE
         val problemData = snapshot.optJSONObject("dailyProblem")
         val problemText = problemData?.opt("text")?.takeIf { it != JSONObject.NULL }?.toString() ?: ""
         problem?.text = "Главная проблема на сегодня\n" + when {
@@ -64,7 +65,7 @@ class TimerOverlay(private val context: Context) {
         val leisure=active.optJSONObject("leisure")
         val seconds = (if(leisure!=null)max(0L,leisure.optLong("until")-now)else if (active.optString("mode") == "pomodoro")
             max(0L, active.optLong("plannedMs") - elapsed) else elapsed) / 1000
-        clock?.text = (if (leisure==null&&active.optString("status") == "paused") "Пауза · " else "") +
+        clock?.text = (if (leisure==null&&active.optString("status") == "paused") "На паузе · " else "") +
             if (seconds >= 3600) String.format(Locale.ROOT, "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
             else String.format(Locale.ROOT, "%02d:%02d", seconds / 60, seconds % 60)
         val leisureCaption=if(leisure!=null) {
@@ -118,7 +119,7 @@ class TimerOverlay(private val context: Context) {
             contentDescription = "Плавающий таймер и общий дневной чек-лист"
         }
         val header = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
-        val drag = text(12f).apply { text = "I&W · Фокус ⠿"; setPadding(0, dp(10), 0, dp(10)) }
+        val drag = text(12f).apply { text = "Pomodoro Club ⠿"; setPadding(0, dp(10), 0, dp(10)) }
         header.addView(drag, LinearLayout.LayoutParams(0, dp(44), 1f))
         val open = text(22f).apply {
             text = "↗"; gravity = Gravity.CENTER; contentDescription = "Открыть таймер в приложении"
@@ -135,17 +136,19 @@ class TimerOverlay(private val context: Context) {
         header.addView(close, LinearLayout.LayoutParams(dp(44), dp(44)))
         panel.addView(header)
         problem = text(12f).apply {
-            maxLines = 4; ellipsize = TextUtils.TruncateAt.END
             setPadding(0, dp(4), 0, dp(10))
         }
-        panel.addView(problem)
+        problemScroll = ScrollView(context).apply { addView(problem) }
+        panel.addView(problemScroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(72)))
         clock = text(38f).apply {
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setOnClickListener { openApp() }
         }
         panel.addView(clock)
-        title = text(13f).apply { maxLines = 3; setPadding(0, dp(4), 0, dp(12)) }
-        panel.addView(title)
+        title = text(13f).apply { setPadding(0, dp(4), 0, dp(12)) }
+        panel.addView(ScrollView(context).apply { addView(title) }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(58)))
         panel.addView(text(12f).apply { text = "Помидорки · сегодня"; setTypeface(typeface, Typeface.BOLD) })
         capacity=text(11f).apply { setPadding(0,dp(8),0,0) }
         panel.addView(capacity)
@@ -192,6 +195,6 @@ class TimerOverlay(private val context: Context) {
 
     fun remove() {
         root?.let { try { manager.removeView(it) } catch (_: IllegalArgumentException) { } }
-        root = null; clock = null; problem = null; title = null; plan = null; source = null
+        root = null; clock = null; problem = null; problemScroll = null; title = null; plan = null; source = null
     }
 }

@@ -2,18 +2,16 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import 'focus_problem_line.dart';
+
 /// The countdown/actions and the open checklist have separate bounded areas.
 /// Only problems and settings open a temporary panel.
 class AdaptiveFocusPlayer extends StatefulWidget {
-  final String clock, mode;
+  final String clock, mode, weeklyProblem, dailyProblem;
   final Listenable changes;
   final bool paused;
-  final Widget weeklyProblem,
-      contextPanel,
-      description,
-      actions,
-      norms,
-      settings;
+  final VoidCallback? editWeeklyProblem, editDailyProblem;
+  final Widget contextPanel, description, actions, norms, settings;
   const AdaptiveFocusPlayer({
     super.key,
     required this.changes,
@@ -21,6 +19,9 @@ class AdaptiveFocusPlayer extends StatefulWidget {
     required this.mode,
     this.paused = false,
     required this.weeklyProblem,
+    required this.dailyProblem,
+    this.editWeeklyProblem,
+    this.editDailyProblem,
     required this.contextPanel,
     required this.description,
     required this.actions,
@@ -88,7 +89,7 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
       final clock = SizedBox(
         height:
             (tiny
-                ? 44.0
+                ? 42.0
                 : dense
                 ? 44.0
                 : 82.0) /
@@ -157,24 +158,22 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: tiny
-                      ? 50
-                      : dense
-                      ? 50
-                      : 110,
-                ),
-                child: SingleChildScrollView(
-                  key: const ValueKey('focus-weekly-scroll'),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      widget.weeklyProblem,
-                      if (tiny) widget.description,
-                    ],
-                  ),
-                ),
+              FocusProblemLine(
+                kind: 'week',
+                label: 'Неделя',
+                title: 'Главная проблема недели',
+                text: widget.weeklyProblem,
+                visibleLines: dense ? 1 : 2,
+                edit: widget.editWeeklyProblem,
+              ),
+              SizedBox(height: dense ? 2 : 6),
+              FocusProblemLine(
+                kind: 'day',
+                label: 'Сегодня',
+                title: 'Главная проблема на сегодня',
+                text: widget.dailyProblem,
+                visibleLines: dense ? 1 : 2,
+                edit: widget.editDailyProblem,
               ),
               const SizedBox(height: 4),
               Row(
@@ -196,33 +195,32 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
                   ),
                 ],
               ),
-              if (!tiny) const SizedBox(height: 4),
-              if (!tiny)
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: tiny
-                        ? 24
-                        : dense
-                        ? 24
-                        : 78,
-                  ),
-                  child: Scrollbar(
-                    child: SingleChildScrollView(
-                      key: const ValueKey('focus-context-scroll'),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (!dense)
-                            Text(
-                              widget.mode,
-                              style: const TextStyle(color: Colors.white70),
-                            ),
-                          widget.description,
-                        ],
-                      ),
+              const SizedBox(height: 4),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: tiny
+                      ? MediaQuery.textScalerOf(context).scale(17) * 1.4 + 2
+                      : dense
+                      ? MediaQuery.textScalerOf(context).scale(17) * 1.4 + 2
+                      : 78,
+                ),
+                child: Scrollbar(
+                  child: SingleChildScrollView(
+                    key: const ValueKey('focus-context-scroll'),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (!dense)
+                          Text(
+                            widget.mode,
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                        widget.description,
+                      ],
                     ),
                   ),
                 ),
+              ),
               tools,
             ],
           ),
