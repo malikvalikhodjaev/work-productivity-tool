@@ -13,7 +13,7 @@ if (-not (Test-Path -LiteralPath $iwExecutable -PathType Leaf)) { throw 'Native 
 if (-not (Test-Path -LiteralPath $iwSourceIcon -PathType Leaf)) { throw 'Bundled application icon not found.' }
 $iwIconHash = (Get-FileHash -LiteralPath $iwSourceIcon -Algorithm SHA256).Hash.ToLowerInvariant()
 # A new path when the artwork changes avoids reusing an older cached EXE icon.
-$iwIcon = Join-Path $iwAppDirectory ('pomodoro-club-' + $iwIconHash.Substring(0,16) + '.ico')
+$iwIcon = Join-Path $iwAppDirectory ('pomodoro-club-desktop-' + $iwIconHash.Substring(0,16) + '.ico')
 if (-not (Test-Path -LiteralPath $iwIcon)) { Copy-Item -LiteralPath $iwSourceIcon -Destination $iwIcon }
 if ((Get-FileHash -LiteralPath $iwIcon -Algorithm SHA256).Hash.ToLowerInvariant() -ne $iwIconHash) { throw 'Shortcut icon checksum mismatch.' }
 if ($LauncherScript) { $iwLauncher = [IO.Path]::GetFullPath($LauncherScript) } else { $iwLauncher = $null }

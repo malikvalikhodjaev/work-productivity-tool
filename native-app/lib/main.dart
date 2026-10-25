@@ -249,7 +249,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.32',
+        'clientVersion': '0.1.33',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -1169,8 +1169,8 @@ class _DashboardHomeState extends State<DashboardHome>
                           : s['phase'] != 'work'
                           ? 'Перерыв'
                           : s['mode'] == 'pomodoro'
-                          ? 'Pomodoro'
-                          : 'Stopwatch',
+                          ? ''
+                          : 'Секундомер',
                       style: const TextStyle(color: Colors.white70),
                     ),
                   ),
@@ -1219,10 +1219,7 @@ class _DashboardHomeState extends State<DashboardHome>
               const SizedBox(height: 12),
               if (s != null && inLeisure(s))
                 LeisureInfo(session: s, now: repo.now),
-              Text(
-                s == null ? 'Выбери карточку работы' : caption(s),
-                style: const TextStyle(fontSize: 17, height: 1.5),
-              ),
+              if (s == null) const Text('Выбери карточку работы'),
               const SizedBox(height: 12),
               if (s != null)
                 Text(
@@ -1555,8 +1552,8 @@ class _DashboardHomeState extends State<DashboardHome>
           : s['phase'] != 'work'
           ? 'Перерыв'
           : s['mode'] == 'pomodoro'
-          ? 'Pomodoro'
-          : 'Stopwatch',
+          ? ''
+          : 'Секундомер',
       contextPanel: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1570,10 +1567,7 @@ class _DashboardHomeState extends State<DashboardHome>
       description: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            s == null ? 'Выбери карточку работы' : caption(s),
-            style: const TextStyle(fontSize: 17, height: 1.4),
-          ),
+          if (s == null) const Text('Выбери карточку работы'),
           if (s != null) ...[
             const SizedBox(height: 8),
             Text(
@@ -3162,7 +3156,7 @@ class _DashboardHomeState extends State<DashboardHome>
                                 const SizedBox(height: 20),
                                 const SizedBox(height: 12),
                                 const Text(
-                                  'I&W · Native 0.1.32',
+                                  'I&W · Native 0.1.33',
                                   style: TextStyle(fontSize: 11),
                                 ),
                               ],

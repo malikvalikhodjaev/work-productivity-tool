@@ -6,9 +6,12 @@ import { fileURLToPath } from 'node:url';
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const assets=path.join(root,'native-app','assets');
 fs.mkdirSync(path.join(assets,'audio'),{recursive:true});
-const png=fs.readFileSync(path.join(root,'public','icon-192.png'));
-fs.writeFileSync(path.join(assets,'iw.png'),png);
-const ico=Buffer.alloc(22+png.length);ico.writeUInt16LE(1,2);ico.writeUInt16LE(1,4);ico[6]=192;ico[7]=192;ico.writeUInt16LE(1,10);ico.writeUInt16LE(32,12);ico.writeUInt32LE(png.length,14);ico.writeUInt32LE(22,18);png.copy(ico,22);fs.writeFileSync(path.join(assets,'iw.ico'),ico);
+const nativePng=path.join(assets,'iw.png');
+const png=fs.readFileSync(fs.existsSync(nativePng)?nativePng:path.join(root,'public','icon-192.png'));
+if(!fs.existsSync(nativePng))fs.writeFileSync(nativePng,png);
+if(!fs.existsSync(path.join(assets,'iw.ico'))){
+const ico=Buffer.alloc(22+png.length);ico.writeUInt16LE(1,2);ico.writeUInt16LE(1,4);ico[6]=png.readUInt32BE(16)%256;ico[7]=png.readUInt32BE(20)%256;ico.writeUInt16LE(1,10);ico.writeUInt16LE(32,12);ico.writeUInt32LE(png.length,14);ico.writeUInt32LE(22,18);png.copy(ico,22);fs.writeFileSync(path.join(assets,'iw.ico'),ico);
+}
 const source=fs.readFileSync(path.join(root,'public','reflection-hints.js'),'utf8');
 const start=source.indexOf('const blocks = [')+'const blocks = '.length,end=source.indexOf('\n];',start)+2;
 if(start<15||end<start)throw new Error('Question library definition was not found.');

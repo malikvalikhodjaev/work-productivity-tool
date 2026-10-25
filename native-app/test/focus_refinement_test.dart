@@ -176,11 +176,11 @@ void main() {
             body: AdaptiveFocusPlayer(
               changes: repo,
               clock: '24:17',
-              mode: 'Pomodoro',
+              mode: '',
               weeklyProblem: 'Продвинуть проект',
               dailyProblem: 'Проверить изменение',
               contextPanel: const Text('Контекст'),
-              description: const Text('Текущая работа'),
+              description: const SizedBox.shrink(),
               actions: Wrap(
                 spacing: 10,
                 children: [

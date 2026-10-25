@@ -5,6 +5,7 @@ import 'forms.dart';
 import 'pomodoro_plan.dart';
 import 'repository.dart';
 import 'time_composition.dart';
+import 'focus_theme.dart';
 
 Future<void> editPomodoroCapacity(
   BuildContext context,
@@ -179,6 +180,7 @@ Future<bool> editPomodoroTarget(
   Json? previous,
   String? ref,
   String? title,
+  String? timeCategory,
 }) async {
   return await showDialog<bool>(
         context: context,
@@ -187,6 +189,7 @@ Future<bool> editPomodoroTarget(
           previous: previous,
           ref: ref,
           title: title,
+          timeCategory: timeCategory,
         ),
       ) ??
       false;
@@ -204,21 +207,38 @@ List<Json> _normWorks(DashboardRepository repo) {
   }.entries) {
     for (final e in repo.entities(collection.key, collection.value)) {
       final ref = '${collection.value}:${e['id']}';
-      entities[ref] = {...e, 'ref': ref};
+      entities[ref] = {...?entities[ref], ...e, 'ref': ref};
     }
   }
   return entities.values.toList();
 }
 
+String normTimeCategory(
+  DashboardRepository repo,
+  Json norm, {
+  Map<String, String>? workTypes,
+}) {
+  final explicit = (norm['workType'] ?? '').toString();
+  if (explicit.isNotEmpty) return timeType(explicit);
+  final inherited =
+      workTypes ??
+      {
+        for (final work in _normWorks(repo))
+          work['ref'].toString(): timeType(work['workType']),
+      };
+  return inherited[norm['workRef']] ?? 'unclassified';
+}
+
 class _PomodoroTargetEditor extends StatefulWidget {
   final DashboardRepository repo;
   final Json? previous;
-  final String? ref, title;
+  final String? ref, title, timeCategory;
   const _PomodoroTargetEditor({
     required this.repo,
     this.previous,
     this.ref,
     this.title,
+    this.timeCategory,
   });
   @override
   State<_PomodoroTargetEditor> createState() => _PomodoroTargetEditorState();
@@ -238,7 +258,16 @@ class _PomodoroTargetEditorState extends State<_PomodoroTargetEditor> {
     super.initState();
     final entities = _normWorks(repo);
     workRef = widget.previous?['workRef'] ?? widget.ref;
-    workType = widget.previous?['workType']?.toString() ?? '';
+    workType =
+        widget.previous?['workType']?.toString() ??
+        ([
+              'investment',
+              'productive',
+              'leisure',
+              'waste',
+            ].contains(widget.timeCategory)
+            ? widget.timeCategory!
+            : '');
     date = TextEditingController(text: widget.previous?['date'] ?? today());
     title = TextEditingController(
       text:
@@ -598,8 +627,47 @@ class PomodoroChecklist extends StatelessWidget {
     this.focus,
   });
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: repo,
+    builder: (context, _) => buildChecklist(context),
+  );
+
+  Widget buildChecklist(BuildContext context) {
     final norms = repo.pomodoroTargetsForDate();
+    final categories = {
+      'all': 'Все',
+      'investment': 'Investment',
+      'productive': 'Productive',
+      'leisure': 'Leisure',
+      'waste': 'Waste',
+      'unclassified': 'Без типа',
+    };
+    final saved = repo.local.get('normTimeFilter');
+    final filter = categories.containsKey(saved) ? saved.toString() : 'all';
+    final workTypes = {
+      for (final work in _normWorks(repo))
+        work['ref'].toString(): timeType(work['workType']),
+    };
+    final types = {
+      for (final n in norms)
+        n['workRef'].toString(): normTimeCategory(
+          repo,
+          n,
+          workTypes: workTypes,
+        ),
+    };
+    final visible = norms
+        .where((n) => filter == 'all' || types[n['workRef']] == filter)
+        .toList();
+    final activeRef = repo.active?['workRef'];
+    final activeHidden =
+        activeRef != null &&
+        types.containsKey(activeRef) &&
+        filter != 'all' &&
+        types[activeRef] != filter;
+    final accent =
+        focusColors[(repo.local.get('theme') ?? 'green').toString()] ??
+        Theme.of(context).colorScheme.primary;
     final denseButtons = rowsFirst && compact;
     final buttonConstraints = denseButtons
         ? const BoxConstraints(minWidth: 48, minHeight: 48)
@@ -665,9 +733,9 @@ class PomodoroChecklist extends StatelessWidget {
                     n['title'].toString(),
                     key: ValueKey('pomodoro-title:${n['workRef']}'),
                   ),
-                  if ((n['workType'] ?? '').toString().isNotEmpty)
+                  if (types[n['workRef']] != 'unclassified')
                     Text(
-                      timeTypeLabels[timeType(n['workType'])]!,
+                      timeTypeLabels[types[n['workRef']]]!,
                       style: const TextStyle(
                         fontSize: 12,
                         color: Color(0xff53645b),
@@ -684,21 +752,37 @@ class PomodoroChecklist extends StatelessWidget {
             if (!stacked) controls,
           ],
         );
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 5),
-          child: stacked
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    line,
-                    Align(alignment: Alignment.centerRight, child: controls),
-                  ],
-                )
-              : line,
+        final active = activeRef == n['workRef'];
+        return Semantics(
+          selected: active,
+          child: Container(
+            key: ValueKey('pomodoro-row:${n['workRef']}'),
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: active
+                  ? accent.withValues(alpha: .12)
+                  : Colors.transparent,
+              border: Border.all(
+                color: active ? accent : Colors.transparent,
+                width: 2,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: stacked
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      line,
+                      Align(alignment: Alignment.centerRight, child: controls),
+                    ],
+                  )
+                : line,
+          ),
         );
       },
     );
-    final checks = Column(children: [for (final n in norms) normRow(n)]);
+    final checks = Column(children: [for (final n in visible) normRow(n)]);
     return Card(
       child: Padding(
         padding: EdgeInsets.all(
@@ -731,7 +815,8 @@ class PomodoroChecklist extends StatelessWidget {
                     tooltip: 'Дневной лимит по силам',
                   ),
                   IconButton(
-                    onPressed: () => editPomodoroTarget(context, repo),
+                    onPressed: () =>
+                        editPomodoroTarget(context, repo, timeCategory: filter),
                     style: buttonStyle,
                     constraints: buttonConstraints,
                     padding: denseButtons ? const EdgeInsets.all(4) : null,
@@ -741,6 +826,42 @@ class PomodoroChecklist extends StatelessWidget {
                   ),
                 ],
               ),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  for (final category in categories.entries)
+                    ChoiceChip(
+                      key: ValueKey('norm-filter:${category.key}'),
+                      label: Text(
+                        '${category.value} · ${category.key == 'all' ? norms.length : types.values.where((t) => t == category.key).length}',
+                      ),
+                      selected: filter == category.key,
+                      showCheckmark: false,
+                      onSelected: (_) =>
+                          repo.setUiPreference('normTimeFilter', category.key),
+                    ),
+                ],
+              ),
+              if (activeHidden)
+                TextButton.icon(
+                  onPressed: () =>
+                      repo.setUiPreference('normTimeFilter', types[activeRef]),
+                  icon: const Icon(Icons.play_circle_outline),
+                  label: const Text('Показать активный норматив'),
+                ),
+              if (norms.isNotEmpty && visible.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    'В этой категории нормативов пока нет. Добавь через «+» или смени тип существующего.',
+                  ),
+                ),
+              if (filter != 'all')
+                const Text(
+                  'Дневной лимит ниже — общий для всех категорий.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
               if (!rowsFirst)
                 PomodoroCapacityNotice(
                   summary: repo.pomodoroCapacityForDate(),

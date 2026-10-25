@@ -39,3 +39,8 @@ target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)
+
+# A separate, content-addressed icon avoids the Explorer cache of the EXE.
+file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/resources/app_icon.ico" IW_ICON_SHA256)
+string(SUBSTRING "${IW_ICON_SHA256}" 0 16 IW_ICON_SHORT_HASH)
+target_compile_definitions(${BINARY_NAME} PRIVATE "IW_ICON_HASH=\"${IW_ICON_SHORT_HASH}\"")

@@ -180,10 +180,11 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      Text(
-                        widget.mode,
-                        style: const TextStyle(color: Colors.white70),
-                      ),
+                      if (widget.mode.isNotEmpty)
+                        Text(
+                          widget.mode,
+                          style: const TextStyle(color: Colors.white70),
+                        ),
                       const SizedBox(height: 4),
                       widget.description,
                       const SizedBox(height: 16),

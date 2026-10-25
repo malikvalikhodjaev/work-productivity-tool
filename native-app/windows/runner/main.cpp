@@ -22,7 +22,31 @@ void ConfigureTaskbar(HWND window, const wchar_t* title) {
   if (!length || length >= 32768) return;
   std::wstring path(executable, length);
   const auto directory = path.substr(0, path.find_last_of(L"\\/"));
-  const auto icon = directory + L"\\data\\flutter_assets\\assets\\iw.ico,0";
+#ifdef IW_ICON_HASH
+  const std::string icon_name = "pomodoro-club-desktop-" IW_ICON_HASH ".ico";
+  auto icon_file = directory + L"\\" + std::wstring(icon_name.begin(), icon_name.end());
+#else
+  auto icon_file = directory + L"\\data\\flutter_assets\\assets\\iw.ico";
+#endif
+  if (GetFileAttributesW(icon_file.c_str()) == INVALID_FILE_ATTRIBUTES) {
+    icon_file = directory + L"\\data\\flutter_assets\\assets\\iw.ico";
+  }
+  const auto icon = icon_file + L",0";
+  // Own both HICONs for the lifetime of this single application window.
+  // WM_SETICON also tells the taskbar to redraw an existing running button.
+  static HICON small_icon = nullptr;
+  static HICON large_icon = nullptr;
+  const UINT dpi = GetDpiForWindow(window);
+  if (!small_icon) small_icon = static_cast<HICON>(LoadImageW(nullptr,
+      icon_file.c_str(), IMAGE_ICON, GetSystemMetricsForDpi(SM_CXSMICON, dpi),
+      GetSystemMetricsForDpi(SM_CYSMICON, dpi), LR_LOADFROMFILE));
+  if (!large_icon) large_icon = static_cast<HICON>(LoadImageW(nullptr,
+      icon_file.c_str(), IMAGE_ICON, GetSystemMetricsForDpi(SM_CXICON, dpi),
+      GetSystemMetricsForDpi(SM_CYICON, dpi), LR_LOADFROMFILE));
+  if (small_icon) SendMessageW(window, WM_SETICON, ICON_SMALL,
+      reinterpret_cast<LPARAM>(small_icon));
+  if (large_icon) SendMessageW(window, WM_SETICON, ICON_BIG,
+      reinterpret_cast<LPARAM>(large_icon));
   const auto command = L"\"" + path + L"\"";
   IPropertyStore* properties = nullptr;
   if (FAILED(SHGetPropertyStoreForWindow(window, IID_PPV_ARGS(&properties)))) return;

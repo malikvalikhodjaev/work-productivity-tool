@@ -41,12 +41,7 @@ List<Json> rows(dynamic value) => (value is List ? value : const [])
     .toList();
 Json object(dynamic value) =>
     value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
-String caption(Json session) => session['phase'] == 'work'
-    ? (session['workRef']?.toString().startsWith('case:') == true
-              ? 'Working on a problem: '
-              : 'Working on: ') +
-          session['title'].toString()
-    : session['title'].toString();
+String caption(Json session) => session['title'].toString();
 int elapsedMs(Json s, int now) {
   final past = rows(s['intervals']).fold<int>(
     0,

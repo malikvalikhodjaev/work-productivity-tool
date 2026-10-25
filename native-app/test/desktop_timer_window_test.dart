@@ -198,10 +198,7 @@ void main() {
       );
       await tester.pumpWidget(screen(s));
       expect(find.text('24:00'), findsOneWidget);
-      expect(
-        find.text('Working on a problem: Разобрать проблему'),
-        findsOneWidget,
-      );
+      expect(find.text('Разобрать проблему'), findsOneWidget);
       expect(find.text('1.0 мин'), findsOneWidget);
       await tester.tap(find.text('Пауза'));
       expect(pauses, 1);

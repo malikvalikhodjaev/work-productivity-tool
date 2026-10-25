@@ -39,7 +39,7 @@ void main() {
     expect(s['observation'], '  Хорошо · 模型\nНовая мысль  ');
     expect(s['completedPomodoros'], 1);
     expect(rows(s['intervals']).length, 2);
-    expect(caption(s), 'Working on a problem: Кейс · 问题');
+    expect(caption(s), 'Кейс · 问题');
   });
   test('local completion and outbox commit atomically, retry waits for receipt and survives restart', () {
     final folder = Directory.systemTemp.createTempSync('iw-flutter-'),

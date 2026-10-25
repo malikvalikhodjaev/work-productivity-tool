@@ -51,8 +51,8 @@ class CompactTimer extends StatelessWidget {
                   : s['status'] == 'paused'
                   ? 'Пауза'
                   : s['mode'] == 'pomodoro'
-                  ? 'Pomodoro'
-                  : 'Stopwatch',
+                  ? ''
+                  : 'Секундомер',
               style: const TextStyle(color: Colors.white70),
             ),
             const SizedBox(height: 8),

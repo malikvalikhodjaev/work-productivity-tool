@@ -225,8 +225,7 @@ class FocusService : Service() {
                 val remaining=if(leisure!=null)max(0L,leisure.optLong("until")-now)else if(active.optString("mode")=="pomodoro")max(0L,active.optLong("plannedMs")-amount)else amount
                 val seconds=remaining/1000
                 title="%02d:%02d".format(seconds/60,seconds%60)
-                val prefix=if(active.optString("workRef").startsWith("case:"))"Working on a problem: "else"Working on: "
-                detail=prefix+active.optString("title")
+                detail=active.optString("title")
                 if(leisure!=null)title=if(remaining==0L)"Вернуться к работе?"else"Leisure · $title"
                 else if(active.optString("status")=="paused")title="Пауза · $title"
             }
