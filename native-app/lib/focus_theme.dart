@@ -15,7 +15,7 @@ const focusColors = {
   'monet': Color(0xff293e4a),
 };
 
-final focusThemes = {
+Map<String, String> get focusThemes => {
   'green': 'Зелень',
   'evening': 'Вечер',
   'desert': 'Пустыня',
@@ -55,7 +55,24 @@ class _FocusBackdropState extends State<FocusBackdrop>
       widget.rotation,
       DateTime.now().millisecondsSinceEpoch,
     );
-    timer = Timer.periodic(const Duration(seconds: 1), (_) => refresh());
+    schedule();
+  }
+
+  void schedule() {
+    timer?.cancel();
+    if (!widget.enabled || widget.rotation['enabled'] != true) return;
+    final anchor = widget.rotation['anchorMs'];
+    if (anchor is! int) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final period = rotationMinutes(widget.rotation) * 60000;
+    final elapsed = now > anchor ? now - anchor : 0;
+    final delay = now < anchor
+        ? anchor - now + period
+        : period - elapsed % period;
+    timer = Timer(Duration(milliseconds: delay), () {
+      refresh();
+      schedule();
+    });
   }
 
   void refresh() {
@@ -77,11 +94,15 @@ class _FocusBackdropState extends State<FocusBackdrop>
       widget.rotation,
       DateTime.now().millisecondsSinceEpoch,
     );
+    schedule();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) refresh();
+    if (state == AppLifecycleState.resumed) {
+      refresh();
+      schedule();
+    }
   }
 
   @override
@@ -98,7 +119,7 @@ class _FocusBackdropState extends State<FocusBackdrop>
             theme ?? widget.theme,
             customImage: widget.customImage,
           ),
-          child: widget.child,
+          child: RepaintBoundary(child: widget.child),
         )
       : widget.child;
 }
@@ -111,7 +132,11 @@ BoxDecoration focusDecoration(String theme, {String? customImage}) =>
               customImage != null &&
               File(customImage).existsSync()
           ? DecorationImage(
-              image: FileImage(File(customImage)),
+              image: ResizeImage.resizeIfNeeded(
+                1920,
+                null,
+                FileImage(File(customImage)),
+              ),
               fit: BoxFit.cover,
               colorFilter: const ColorFilter.mode(
                 Color(0x800c1720),
@@ -120,7 +145,11 @@ BoxDecoration focusDecoration(String theme, {String? customImage}) =>
             )
           : focusArt.containsKey(theme)
           ? DecorationImage(
-              image: AssetImage('assets/art/${focusArt[theme]}'),
+              image: ResizeImage.resizeIfNeeded(
+                1920,
+                null,
+                AssetImage('assets/art/${focusArt[theme]}'),
+              ),
               fit: BoxFit.cover,
               alignment: const Alignment(-.3, -.05),
               colorFilter: const ColorFilter.mode(
@@ -131,7 +160,7 @@ BoxDecoration focusDecoration(String theme, {String? customImage}) =>
           : null,
     );
 
-final focusArt = {
+Map<String, String> get focusArt => {
   for (final painting in focusArtworks) painting.id: painting.file,
 };
 

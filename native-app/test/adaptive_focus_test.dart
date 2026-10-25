@@ -122,7 +122,7 @@ void main() {
           find.text('Уточнить следующий шаг').hitTestable(),
           findsOneWidget,
         );
-        expect(find.text('Тема и звук').hitTestable(), findsOneWidget);
+        expect(find.text('Настройки').hitTestable(), findsOneWidget);
         final checklist = find.byKey(const ValueKey('focus-checklist-panel'));
         expect(tester.widget<Material>(checklist).color, Colors.white);
         expect(
@@ -158,7 +158,7 @@ void main() {
           const Offset(0, 5000),
         );
         await tester.pumpAndSettle();
-        final settings = find.text('Тема и звук');
+        final settings = find.text('Настройки');
         await tester.tap(settings);
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Закрыть панель'));

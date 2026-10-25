@@ -44,7 +44,12 @@ Future<void> editPomodoroCapacity(
 
 class PomodoroCapacityNotice extends StatelessWidget {
   final Json summary;
-  const PomodoroCapacityNotice({super.key, required this.summary});
+  final int workMinutes;
+  const PomodoroCapacityNotice({
+    super.key,
+    required this.summary,
+    this.workMinutes = 25,
+  });
   @override
   Widget build(BuildContext context) {
     final actual = summary['actualPomodoros'] as int?;
@@ -57,25 +62,29 @@ class PomodoroCapacityNotice extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: over ? const Color(0xffffeded) : const Color(0xfff2f5f3),
+        color: const Color(0xfff3f4f4),
         borderRadius: BorderRadius.circular(10),
-        border: over ? Border.all(color: const Color(0xffb3261e)) : null,
+        border: Border.all(color: const Color(0xffdde1df)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (actual != null) ...[
             if (limit != null)
-              PomodoroCapacityProgress(actual: actual, limit: limit)
+              PomodoroCapacityProgress(
+                actual: actual,
+                limit: limit,
+                workMinutes: workMinutes,
+              )
             else
               Text('Сделано: $actual · дневной лимит не задан'),
             const SizedBox(height: 8),
           ],
           Text(
-            summary['message'].toString(),
+            '${!over && limit != null ? 'Всё в пределах лимита. ' : ''}${summary['message']}',
             style: TextStyle(
               fontSize: 12,
-              color: over ? const Color(0xffb3261e) : const Color(0xff45584c),
+              color: over ? const Color(0xffb3261e) : const Color(0xff347558),
             ),
           ),
         ],
@@ -86,10 +95,12 @@ class PomodoroCapacityNotice extends StatelessWidget {
 
 class PomodoroCapacityProgress extends StatelessWidget {
   final int actual, limit;
+  final int workMinutes;
   const PomodoroCapacityProgress({
     super.key,
     required this.actual,
     required this.limit,
+    this.workMinutes = 25,
   });
 
   @override
@@ -98,11 +109,13 @@ class PomodoroCapacityProgress extends StatelessWidget {
     final excess = actual > limit ? actual - limit : 0;
     final remaining = actual < limit ? limit - actual : 0;
     final percent = (actual * 100 / limit).round();
+    String hours(int count) =>
+        '${(count * workMinutes / 60).toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '').replaceAll('.', ',')} ч';
     return Semantics(
       label: 'Помидорки за день',
       value:
           '$actual из $limit, $percent процентов'
-          '${excess > 0 ? ', сверх лимита $excess' : ''}',
+          '${excess > 0 ? ', сверх лимита $excess, ${hours(excess)}' : ', до лимита $remaining, ${hours(remaining)}'}',
       child: ExcludeSemantics(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -143,10 +156,10 @@ class PomodoroCapacityProgress extends StatelessWidget {
             const SizedBox(height: 5),
             Text(
               excess > 0
-                  ? '+$excess сверх лимита'
+                  ? '+$excess сверх лимита (${hours(excess)})'
                   : remaining == 0
                   ? 'Дневной лимит достигнут'
-                  : 'До лимита: $remaining',
+                  : 'До лимита: $remaining (${hours(remaining)})',
               style: TextStyle(
                 fontSize: 12,
                 color: excess > 0 ? const Color(0xffb3261e) : null,
@@ -453,6 +466,7 @@ class _PomodoroTargetEditorState extends State<_PomodoroTargetEditor> {
                     (target.text.isEmpty ||
                         (int.tryParse(target.text) ?? 0) > 0))
                   PomodoroCapacityNotice(
+                    workMinutes: repo.settings['workMinutes'] as int,
                     summary: pomodoroCapacitySummary(
                       repo.pomodoroTargetsForDate(date.text),
                       repo.pomodoroCapacityRows,
@@ -657,7 +671,10 @@ class PomodoroChecklist extends StatelessWidget {
                 ],
               ),
               if (!rowsFirst)
-                PomodoroCapacityNotice(summary: repo.pomodoroCapacityForDate()),
+                PomodoroCapacityNotice(
+                  summary: repo.pomodoroCapacityForDate(),
+                  workMinutes: repo.settings['workMinutes'] as int,
+                ),
               if (!compact)
                 TextButton(
                   onPressed: () => editPomodoroCapacity(context, repo),
@@ -672,7 +689,10 @@ class PomodoroChecklist extends StatelessWidget {
                   child: SingleChildScrollView(child: checks),
                 ),
               if (rowsFirst)
-                PomodoroCapacityNotice(summary: repo.pomodoroCapacityForDate()),
+                PomodoroCapacityNotice(
+                  summary: repo.pomodoroCapacityForDate(),
+                  workMinutes: repo.settings['workMinutes'] as int,
+                ),
               if (norms.any((n) => (n['pendingPomodoros'] as int) > 0))
                 const Text(
                   'Есть помидорки, ожидающие синхронизации.',

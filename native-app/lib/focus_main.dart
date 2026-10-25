@@ -8,9 +8,17 @@ import 'package:path_provider/path_provider.dart';
 import 'focus_home.dart';
 import 'focus_repository.dart';
 import 'local_database.dart';
+import 'focus_art_catalog.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await loadPersonalFocusArt();
+  } catch (_) {
+    debugPrint(
+      'Personal art catalogue unavailable; bundled collection retained.',
+    );
+  }
   final support = await getApplicationSupportDirectory();
   final folder = Directory(
     Platform.isWindows ? p.join(support.path, 'focus-norms') : support.path,

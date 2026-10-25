@@ -60,6 +60,15 @@ class DesktopTimerWindow {
 
   DesktopTimerWindow(this.window, {required this.changed});
 
+  Future<void> toggleMaximized() async {
+    if (transitioning) return;
+    if (await window.maximized()) {
+      await window.unmaximize();
+    } else {
+      await window.maximize();
+    }
+  }
+
   Future<void> minimize({required bool active, required bool enabled}) async {
     if (!active || !enabled || transitioning) return;
     _transitionDone = Completer<void>();

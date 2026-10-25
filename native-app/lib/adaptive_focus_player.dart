@@ -50,7 +50,7 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
                 children: [
                   ListTile(
                     title: Text(
-                      name == 'problems' ? 'Проблемы' : 'Тема и звук',
+                      name == 'problems' ? 'Проблемы' : 'Настройки таймера',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -139,7 +139,7 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: Text(name == 'problems' ? 'Проблемы' : 'Тема и звук'),
+              child: Text(name == 'problems' ? 'Проблемы' : 'Настройки'),
             ),
         ],
       );

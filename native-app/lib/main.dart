@@ -37,6 +37,13 @@ import 'active_timer_conflict.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await loadPersonalFocusArt();
+  } catch (_) {
+    debugPrint(
+      'Personal art catalogue unavailable; bundled collection retained.',
+    );
+  }
   final folder = await getApplicationSupportDirectory();
   await folder.create(recursive: true);
   final repo = DashboardRepository(
@@ -121,6 +128,8 @@ class _DashboardHomeState extends State<DashboardHome>
   final overlayAllowed = ValueNotifier(false);
   final pageScroll = ScrollController();
   Timer? ticker;
+  final clockPulse = ValueNotifier<int>(0);
+  int lastReminderCheck = 0;
   int section = 0;
   bool focusMode = false,
       board = true,
@@ -185,7 +194,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.26',
+        'clientVersion': '0.1.27',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -339,7 +348,9 @@ class _DashboardHomeState extends State<DashboardHome>
 
   void tick() {
     if (!mounted) return;
-    setState(() {});
+    // Only timer widgets listen to seconds. Boards, editors and analytics
+    // refresh on repository changes, not on every countdown tick.
+    clockPulse.value++;
     final s = repo.active;
     if (leisureDue(s, repo.now) &&
         !dialogOpen &&
@@ -377,6 +388,9 @@ class _DashboardHomeState extends State<DashboardHome>
         planningDate = today();
         planEntryPending = true;
       }
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (!planEntryPending && now - lastReminderCheck < 5000) return;
+      lastReminderCheck = now;
       if ((foreground || (widget.backgroundEnabled && Platform.isWindows)) &&
           planningDue(force: planEntryPending)) {
         unawaited(showPlanningQuestion(force: planEntryPending));
@@ -1047,7 +1061,12 @@ class _DashboardHomeState extends State<DashboardHome>
     }
   }
 
-  Widget focusCard() {
+  Widget focusCard() => ListenableBuilder(
+    listenable: clockPulse,
+    builder: (context, _) => buildFocusCard(),
+  );
+
+  Widget buildFocusCard() {
     final s = repo.active;
     final theme = (repo.local.get('theme') ?? 'green').toString();
     return FocusSurface(
@@ -1205,7 +1224,18 @@ class _DashboardHomeState extends State<DashboardHome>
                 focus: (ref, title) => startTimer(ref: ref, title: title),
               ),
               const SizedBox(height: 18),
-              focusOptions(),
+              TextButton.icon(
+                key: const ValueKey('timer-settings-button'),
+                onPressed: openTimerOptions,
+                icon: const Icon(
+                  Icons.settings_outlined,
+                  color: Colors.white70,
+                ),
+                label: const Text(
+                  'Настройки',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
             ],
           ),
         ),
@@ -1242,10 +1272,55 @@ class _DashboardHomeState extends State<DashboardHome>
     });
   }
 
+  Future<void> openTimerOptions() => showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: const Color(0xff243b30),
+    builder: (context) => ListenableBuilder(
+      listenable: repo,
+      builder: (context, _) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * .82,
+          child: Column(
+            children: [
+              ListTile(
+                title: const Text(
+                  'Настройки таймера',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                trailing: IconButton(
+                  tooltip: 'Закрыть настройки таймера',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, color: Colors.white),
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: focusOptions(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
   Widget focusOptions() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            'Тема и звук',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        ),
         TextButton.icon(
           onPressed: focusSettings,
           icon: const Icon(Icons.tune, color: Colors.white70, size: 18),
@@ -1353,7 +1428,12 @@ class _DashboardHomeState extends State<DashboardHome>
     );
   }
 
-  Widget focusPlayer() {
+  Widget focusPlayer() => ListenableBuilder(
+    listenable: clockPulse,
+    builder: (context, _) => buildFocusPlayer(),
+  );
+
+  Widget buildFocusPlayer() {
     final s = repo.active;
     return AdaptiveFocusPlayer(
       paused: s?['status'] == 'paused' && !inLeisure(s),
@@ -2870,40 +2950,59 @@ class _DashboardHomeState extends State<DashboardHome>
             ? Colors.transparent
             : null,
         appBar: AppBar(
+          flexibleSpace: Platform.isWindows
+              ? GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onDoubleTap: () => background.desktop?.toggleMaximized(),
+                  child: const SizedBox.expand(),
+                )
+              : null,
           backgroundColor: focusMode || background.desktop?.compact == true
               ? Colors.transparent
               : null,
           foregroundColor: focusMode || background.desktop?.compact == true
               ? Colors.white
               : null,
-          title: focusMode || background.desktop?.compact == true
-              ? Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black26,
-                    border: Border.all(color: Colors.white70),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Pomodoro Club',
+          title: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onDoubleTap: Platform.isWindows
+                ? () => background.desktop?.toggleMaximized()
+                : null,
+            child: SizedBox(
+              width: double.infinity,
+              child: focusMode || background.desktop?.compact == true
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        border: Border.all(color: Colors.white70),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Pomodoro Club',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    )
+                  : const Text(
+                      'Indicators & Work Dashboard',
                       style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ),
-                )
-              : const Text(
-                  'Indicators & Work Dashboard',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                ),
+            ),
+          ),
           actions: [
             if (focusMode || background.desktop?.compact == true) ...[
               IconButton(
@@ -2996,7 +3095,7 @@ class _DashboardHomeState extends State<DashboardHome>
                           ),
                           const SizedBox(height: 12),
                           const Text(
-                            'I&W · Native 0.1.26',
+                            'I&W · Native 0.1.27',
                             style: TextStyle(fontSize: 11),
                           ),
                         ],
@@ -3050,6 +3149,7 @@ class _DashboardHomeState extends State<DashboardHome>
   @override
   void dispose() {
     ticker?.cancel();
+    clockPulse.dispose();
     repo.removeListener(changed);
     WidgetsBinding.instance.removeObserver(this);
     overlayAllowed.dispose();

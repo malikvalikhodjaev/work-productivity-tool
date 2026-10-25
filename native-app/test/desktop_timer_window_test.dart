@@ -66,6 +66,23 @@ class FakeWindow implements DesktopWindowPort {
 
 void main() {
   test(
+    'double-click toggle preserves timer mode and restored geometry',
+    () async {
+      final window = FakeWindow();
+      final controller = DesktopTimerWindow(window, changed: () {});
+      await controller.showPlayer(pinned: true);
+      final bounds = window.rectangle;
+      await controller.toggleMaximized();
+      expect(window.isMaximized, true);
+      expect(controller.player, true);
+      await controller.toggleMaximized();
+      expect(window.isMaximized, false);
+      expect(controller.player, true);
+      expect(window.rectangle, bounds);
+      expect(window.isPinned, true);
+    },
+  );
+  test(
     'player and compact window return to original dashboard geometry',
     () async {
       final window = FakeWindow()..isMaximized = true;

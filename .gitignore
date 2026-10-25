@@ -11,3 +11,8 @@ preview*.png
 __pycache__/
 *.pyc
 .DS_Store
+
+# Personal art is supplied to a private build, never committed as public assets.
+native-app/assets/art/personal-*.jpg
+native-app/assets/art/personal-*.png
+native-app/assets/art/personal-*.webp

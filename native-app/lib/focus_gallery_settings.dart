@@ -245,9 +245,9 @@ class _FocusGallerySettingsState extends State<FocusGallerySettings> {
         TextButton.icon(
           onPressed: gallery,
           icon: const Icon(Icons.collections_outlined, color: Colors.white),
-          label: const Text(
-            'Библиотека картин · 35',
-            style: TextStyle(color: Colors.white),
+          label: Text(
+            'Библиотека картин · ${focusArtworks.length}',
+            style: const TextStyle(color: Colors.white),
           ),
         ),
         Text(

@@ -1,10 +1,53 @@
 // Generated from assets/art/catalog.json. Stable IDs preserve saved themes.
+import 'dart:convert';
+
+import 'package:flutter/services.dart';
+
 class FocusArtwork {
   final String id, artist, label, file, source;
   const FocusArtwork(this.id, this.artist, this.label, this.file, this.source);
 }
 
-const focusArtists = {
+final focusArtists = {...bundledFocusArtists};
+final focusArtworks = [...bundledFocusArtworks];
+
+/// Optional device-build collection. The public asset is empty; the owner's
+/// build may supply licensed personal reproductions without publishing them.
+Future<void> loadPersonalFocusArt({AssetBundle? bundle}) async {
+  final raw = await (bundle ?? rootBundle).loadString(
+    'assets/art/personal-catalog.json',
+  );
+  final data = jsonDecode(raw) as Map<String, dynamic>;
+  final artists = Map<String, String>.from(data['artists'] as Map);
+  final works = <FocusArtwork>[];
+  final ids = bundledFocusArtworks.map((a) => a.id).toSet();
+  final files = bundledFocusArtworks.map((a) => a.file).toSet();
+  for (final value in data['artworks'] as List) {
+    final art = Map<String, String>.from(value as Map);
+    final id = art['id']!, file = art['file']!, artist = art['artist']!;
+    if (!RegExp(r'^[a-z0-9-]+$').hasMatch(id) ||
+        !RegExp(r'^[a-z0-9-]+\.(jpg|png|webp)$').hasMatch(file) ||
+        !artists.containsKey(artist) ||
+        bundledFocusArtists.containsKey(artist) ||
+        !ids.add(id) ||
+        !files.add(file) ||
+        Uri.tryParse(art['source']!)?.scheme != 'https' ||
+        art['label']!.isEmpty) {
+      throw const FormatException('Invalid personal art catalogue');
+    }
+    works.add(FocusArtwork(id, artist, art['label']!, file, art['source']!));
+  }
+  focusArtists
+    ..clear()
+    ..addAll(bundledFocusArtists)
+    ..addAll(artists);
+  focusArtworks
+    ..clear()
+    ..addAll(bundledFocusArtworks)
+    ..addAll(works);
+}
+
+const bundledFocusArtists = {
   "monet": "Моне",
   "modigliani": "Модильяни",
   "renoir": "Ренуар",
@@ -13,7 +56,7 @@ const focusArtists = {
   "levitan": "Левитан",
   "shishkin": "Шишкин",
 };
-const focusArtworks = [
+const bundledFocusArtworks = [
   FocusArtwork(
     "monet",
     "monet",

@@ -3,6 +3,7 @@ param(
     [string]$ToolsDirectory = 'C:\IWD-Tools',
     [string]$BuildDirectory = 'C:\IWD-Tools\iw-native-build',
     [string]$KeyPropertiesPath = $env:IW_ANDROID_KEY_PROPERTIES,
+    [string]$PersonalArtDirectory = '',
     [ValidateSet('Apk','AppBundle')][string]$Format = 'Apk',
     [switch]$Online
 )
@@ -31,6 +32,15 @@ New-Item -ItemType Directory -Path $taskBuild -Force | Out-Null
 $taskSource = Join-Path $PSScriptRoot 'native-app'
 & robocopy.exe $taskSource $taskBuild /E /XJ /R:2 /W:1 /NFL /NDL /NP /NJH /NJS /XD .git .dart_tool build .gradle /XF local.properties key.properties '*.jks' '*.keystore' | Out-Null
 if ($LASTEXITCODE -gt 7) { throw 'Source copy failed.' }
+if ($PersonalArtDirectory) {
+    $taskArt = [IO.Path]::GetFullPath($PersonalArtDirectory)
+    $taskCatalog = Get-Content -LiteralPath (Join-Path $taskArt 'personal-catalog.json') -Raw | ConvertFrom-Json
+    foreach ($taskPainting in $taskCatalog.artworks) {
+        if ($taskPainting.file -notmatch '^[a-z0-9-]+\.(jpg|png|webp)$') { throw 'Invalid personal artwork filename.' }
+        Copy-Item -LiteralPath (Join-Path $taskArt $taskPainting.file) -Destination (Join-Path $taskBuild ('assets/art/' + $taskPainting.file))
+    }
+    Copy-Item -LiteralPath (Join-Path $taskArt 'personal-catalog.json') -Destination (Join-Path $taskBuild 'assets/art/personal-catalog.json')
+}
 $taskVersion = Select-String -LiteralPath (Join-Path $taskSource 'pubspec.yaml') -Pattern '^version:\s+([^+\s]+)\+(\d+)\s*$'
 if (-not $taskVersion) { throw 'pubspec.yaml must contain a version name and build number.' }
 $taskProperties = "sdk.dir=$($env:ANDROID_HOME.Replace('\','\\'))`nflutter.sdk=$($taskManifest.flutter.Replace('\','\\'))`nflutter.buildMode=release`nflutter.versionName=$($taskVersion.Matches[0].Groups[1].Value)`nflutter.versionCode=$($taskVersion.Matches[0].Groups[2].Value)`n"
