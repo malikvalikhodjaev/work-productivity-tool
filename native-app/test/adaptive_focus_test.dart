@@ -79,6 +79,7 @@ void main() {
                     weeklyProblem: 'Сдвинуть проект с места',
                     dailyProblem: 'Уточнить следующий шаг',
                     changes: repo,
+                    takeBreak: () {},
                     clock: '24:48',
                     mode: 'Pomodoro',
                     contextPanel: const Text(

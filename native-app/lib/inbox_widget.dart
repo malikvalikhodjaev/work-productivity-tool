@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
@@ -250,7 +251,14 @@ class _InboxReviewState extends State<_InboxReview> {
                               await player!.pause();
                             } else {
                               await player!.play(
-                                UrlSource(widget.repo.base + audio['url']),
+                                BytesSource(
+                                  Uint8List.fromList(
+                                    await widget.repo.inboxAudio(
+                                      audio['url'].toString(),
+                                    ),
+                                  ),
+                                  mimeType: audio['mimeType'] as String?,
+                                ),
                               );
                             }
                           } catch (e) {

@@ -51,6 +51,21 @@ class FocusService : Service() {
             val running = if(s.optString("status")=="running") max(0L, now-s.optLong("runningSince")) else 0L
             return past + if(s.optString("mode")=="pomodoro") min(running,max(0L,s.optLong("plannedMs")-past)) else running
         }
+        fun pauseClock(s: JSONObject, now: Long): String {
+            var since: Long? = null
+            val events=s.optJSONArray("events")?:JSONArray()
+            for(i in 0 until events.length()) {
+                val event=events.optJSONObject(i)?:continue
+                val at=try { Instant.parse(event.optString("at")).toEpochMilli() } catch(_: Exception) { continue }
+                when(event.optString("action")) {
+                    "pause", "leisure" -> if(since==null) since=at
+                    "resume", "finish", "cancel" -> since=null
+                }
+            }
+            val seconds=if(s.optString("status")=="paused"&&since!=null) max(0L,now-since)/1000 else 0L
+            return if(seconds>=3600) String.format(java.util.Locale.ROOT,"%d:%02d:%02d",seconds/3600,seconds/60%60,seconds%60)
+                else String.format(java.util.Locale.ROOT,"%02d:%02d",seconds/60,seconds%60)
+        }
         fun pomodoroCapacity(data: JSONObject, day: String): JSONObject {
             val rules=data.optJSONArray("pomodoroCapacities")?:JSONArray()
             var selected: JSONObject?=null
@@ -244,6 +259,11 @@ class FocusService : Service() {
         }
         val volume=snapshot.optDouble("volume",.2).toFloat().coerceIn(0f,1f);player?.setVolume(volume,volume)
     }
+    private fun authorize(connection:java.net.URLConnection){
+        if(connection is java.net.HttpURLConnection)connection.instanceFollowRedirects=false
+        val authorization=snapshot.optString("serverAuthorization")
+        if(authorization.startsWith("Basic "))connection.setRequestProperty("Authorization",authorization)
+    }
     private fun pollTimer(){
         if(fetching||!snapshot.optBoolean("automaticSync",true))return
         fetching=true
@@ -252,17 +272,17 @@ class FocusService : Service() {
         network.execute{
             try{
                 val state=if(!localAtRequest&&!snapshot.optBoolean("timerLocalChanges")){
-                    val connection=URL("$url/api/timer").openConnection();connection.connectTimeout=7000;connection.readTimeout=7000;connection.setRequestProperty("Origin",url)
+                    val connection=URL("$url/api/timer").openConnection();connection.connectTimeout=7000;connection.readTimeout=7000;connection.setRequestProperty("Origin",url);authorize(connection)
                     JSONObject(connection.getInputStream().bufferedReader().use{it.readText()})
                 }else null
                 val plans=try {
                     val request=URL("$url/api/daily-norms").openConnection()
-                    request.connectTimeout=7000;request.readTimeout=7000;request.setRequestProperty("Origin",url)
+                    request.connectTimeout=7000;request.readTimeout=7000;request.setRequestProperty("Origin",url);authorize(request)
                     JSONObject(request.getInputStream().bufferedReader().use{it.readText()})
                 }catch(_:Exception){null}
                 val problems=try {
                     val request=URL("$url/api/daily-problems").openConnection()
-                    request.connectTimeout=7000;request.readTimeout=7000;request.setRequestProperty("Origin",url)
+                    request.connectTimeout=7000;request.readTimeout=7000;request.setRequestProperty("Origin",url);authorize(request)
                     JSONObject(request.getInputStream().bufferedReader().use{it.readText()})
                 }catch(_:Exception){null}
                 handler.post{

@@ -5,7 +5,7 @@ import 'domain.dart';
 class FieldSpec {
   final String key, label;
   final int lines;
-  final bool numeric, integer, nullable, labelAbove;
+  final bool numeric, integer, nullable, labelAbove, obscure;
   final Map<String, String>? options;
   const FieldSpec(
     this.key,
@@ -15,6 +15,7 @@ class FieldSpec {
     this.integer = false,
     this.nullable = false,
     this.labelAbove = false,
+    this.obscure = false,
     this.options,
   });
 }
@@ -96,6 +97,9 @@ Future<bool> editFields(
                                   controller: controllers[field.key],
                                   maxLines: field.lines,
                                   minLines: field.lines > 1 ? 2 : 1,
+                                  obscureText: field.obscure,
+                                  enableSuggestions: !field.obscure,
+                                  autocorrect: !field.obscure,
                                   keyboardType: field.numeric || field.integer
                                       ? const TextInputType.numberWithOptions(
                                           decimal: true,

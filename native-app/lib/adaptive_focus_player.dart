@@ -10,6 +10,8 @@ class AdaptiveFocusPlayer extends StatefulWidget {
   final String clock, mode, weeklyProblem, dailyProblem;
   final Listenable changes;
   final bool paused;
+  final String pauseClock;
+  final VoidCallback? takeBreak;
   final VoidCallback? editWeeklyProblem, editDailyProblem;
   final Widget contextPanel, description, actions, norms, settings;
   const AdaptiveFocusPlayer({
@@ -18,6 +20,8 @@ class AdaptiveFocusPlayer extends StatefulWidget {
     required this.clock,
     required this.mode,
     this.paused = false,
+    this.pauseClock = '',
+    this.takeBreak,
     required this.weeklyProblem,
     required this.dailyProblem,
     this.editWeeklyProblem,
@@ -97,10 +101,12 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
         child: Column(
           children: [
             if (widget.paused)
-              const Text(
-                'На паузе',
+              Text(
+                widget.pauseClock.isEmpty
+                    ? 'На паузе'
+                    : 'Пауза · ${widget.pauseClock}',
                 key: ValueKey('focus-paused-status'),
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
                   color: Color(0xffffdc9a),
                   fontWeight: FontWeight.w800,
@@ -124,24 +130,38 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
           ],
         ),
       );
-      final tools = Wrap(
-        alignment: WrapAlignment.end,
-        spacing: 4,
-        children: [
-          for (final name in ['problems', 'settings'])
-            TextButton(
-              onPressed: () => open(name),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.white,
-                minimumSize: const Size(0, 30),
-                textStyle: Theme.of(context).textTheme.labelLarge!
-                    .copyWith(fontSize: tiny ? 12 : 14),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      final tools = SingleChildScrollView(
+        primary: false,
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final name in [
+              if (widget.takeBreak != null) 'break',
+              'problems',
+              'settings',
+            ])
+              TextButton(
+                onPressed: name == 'break'
+                    ? widget.takeBreak
+                    : () => open(name),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(0, 30),
+                  textStyle: Theme.of(context).textTheme.labelLarge!
+                      .copyWith(fontSize: tiny ? 12 : 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  name == 'break'
+                      ? 'Перерыв'
+                      : name == 'problems'
+                      ? 'Проблемы'
+                      : 'Настройки',
+                ),
               ),
-              child: Text(name == 'problems' ? 'Проблемы' : 'Настройки'),
-            ),
-        ],
+          ],
+        ),
       );
       final core = Container(
         key: const ValueKey('focus-fixed-core'),
@@ -235,6 +255,7 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
         child: Scrollbar(
           child: SingleChildScrollView(
             key: const ValueKey('focus-checklist-scroll'),
+            primary: false,
             child: widget.norms,
           ),
         ),

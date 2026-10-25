@@ -120,6 +120,7 @@ class BackgroundRuntime {
       'automaticSync': repo.automaticSync,
       'timerRevision': repo.cache('timer')['revision'] ?? 0,
       'serverUrl': repo.base,
+      'serverAuthorization': repo.serverAuthorization,
       'serverOffset': repo.local.get('serverOffset') ?? 0,
       'sound': enabled ? sound : null,
       'volume': volume,

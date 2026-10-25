@@ -269,7 +269,7 @@ class LocalDatabase {
     'version': 1,
     'exportedAt': DateTime.now().toUtc().toIso8601String(),
     'settings': db
-        .select('SELECT * FROM kv')
+        .select("SELECT * FROM kv WHERE key != 'serverAuth'")
         .map((r) => Map<String, dynamic>.from(r))
         .toList(),
     'snapshots': db

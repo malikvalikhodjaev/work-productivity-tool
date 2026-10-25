@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'domain.dart';
 import 'model_hierarchy.dart';
 import 'repository.dart';
+import 'time_composition.dart';
+import 'time_composition_panel.dart';
 
 class AnalyticsSection extends StatelessWidget {
   final String title;
@@ -108,19 +110,14 @@ List<Json> analyticsTimeRows(DashboardRepository repo) {
       .map((e) => e['timerSessionId'])
       .whereType<String>()
       .toSet();
-  final sessions = <String, Json>{};
-  for (final s in [
-    ...rows(repo.cache('timer')['sessions']),
-    ...rows(repo.local.get('sharedLocalHistory')),
-    ...rows(repo.local.get('localHistory')),
-  ]) {
-    sessions[s['id'].toString()] = s;
-  }
+  final sessions = analyticsSessions(repo);
+  final blocked = analyticsBlockedSessions(repo);
   for (final s in sessions.values.where(
     (s) =>
         s['status'] == 'finished' &&
         s['phase'] == 'work' &&
         s['allocation'] != 'excluded' &&
+        !blocked.contains(s['id']) &&
         !captured.contains(s['id']),
   )) {
     for (final interval in rows(s['intervals'])) {
@@ -168,9 +165,10 @@ class _WorkAnalyticsState extends State<WorkAnalytics> {
               .toIso8601String()
               .substring(0, 10),
     );
-    final entries = analyticsTimeRows(repo)
-        .where((e) => days.contains(e['date']))
-        .toList();
+    final entries = [
+      ...analyticsTimeRows(repo),
+      ...analyticsRestRows(repo),
+    ].where((e) => days.contains(e['date'])).toList();
     double hours(Iterable<Json> records) => records.fold<double>(
       0,
       (sum, e) =>
@@ -179,15 +177,6 @@ class _WorkAnalyticsState extends State<WorkAnalytics> {
                   (e['amount'] as num? ?? 0) * 3600) /
               3600,
     );
-    final types = <String, List<Json>>{};
-    for (final entry in entries) {
-      types
-          .putIfAbsent(
-            (entry['workType'] ?? 'Не разобрано').toString(),
-            () => [],
-          )
-          .add(entry);
-    }
     final known = repo.cache('entries').isNotEmpty || entries.isNotEmpty;
     final normsKnown =
         repo.cache('dailyNorms').isNotEmpty || repo.pomodoroRows.isNotEmpty;
@@ -233,7 +222,16 @@ class _WorkAnalyticsState extends State<WorkAnalytics> {
           style: const TextStyle(fontSize: 20),
         ),
         const Text(
-          'Завершённые сеансы и записи времени. Активный таймер сюда ещё не входит; повторы сеансов не суммируются.',
+          'Завершённые сеансы, записи времени и сохранённые паузы/перерывы. Текущий сеанс ещё не входит; повторы сеансов не суммируются.',
+        ),
+        TimeCompositionPanel(
+          entries: entries,
+          facts: repo.pomodoroFacts
+              .where((f) => days.contains(f['date']))
+              .toList(),
+          sessions: analyticsSessions(repo),
+          days: days,
+          known: known,
         ),
         const SizedBox(height: 12),
         const Text(
@@ -317,13 +315,6 @@ class _WorkAnalyticsState extends State<WorkAnalytics> {
             ],
           ),
         ),
-        const SizedBox(height: 12),
-        Text(
-          'Характер работ · ${types.isEmpty ? 'No Data' : ''}',
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        for (final type in types.entries)
-          Text('${type.key}: ${hours(type.value).toStringAsFixed(1)} ч'),
         const Text(
           'Красный фон: план помидорок выше выбранного дневного лимита. Показаны данные, сохранённые на этом устройстве.',
         ),

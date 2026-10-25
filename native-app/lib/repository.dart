@@ -59,6 +59,25 @@ class DashboardRepository extends ChangeNotifier {
   };
   String get base =>
       (local.get('baseUrl') ?? 'http://localhost:8787').toString();
+  String? get serverAuthorization {
+    final saved = object(local.get('serverAuth'));
+    return saved['origin'] == Uri.parse(base).origin &&
+            saved['authorization'] is String
+        ? saved['authorization'] as String
+        : null;
+  }
+
+  void setServerAccessKey(String key) {
+    if (key.isEmpty) return;
+    if (Uri.parse(base).scheme != 'https') {
+      throw ArgumentError('Ключ доступа требует HTTPS.');
+    }
+    local.set('serverAuth', {
+      'origin': Uri.parse(base).origin,
+      'authorization': 'Basic ${base64Encode(utf8.encode('owner:$key'))}',
+    });
+  }
+
   void setUiPreference(String key, Object? value) {
     local.set(key, value);
     notifyListeners();
@@ -289,15 +308,33 @@ class DashboardRepository extends ChangeNotifier {
 
   Future<Json> request(String route, {Json? body}) async {
     final uri = Uri.parse(base).resolve(route);
+    if (uri.origin != Uri.parse(base).origin) {
+      throw ArgumentError('Запрос ведёт на другой сервер.');
+    }
     final headers = {
       'Origin': Uri.parse(base).origin,
       'Content-Type': 'application/json',
+      'Authorization': ?serverAuthorization,
     };
-    final response =
-        await (body == null
-                ? _http.get(uri, headers: headers)
-                : _http.post(uri, headers: headers, body: jsonEncode(body)))
-            .timeout(const Duration(seconds: 10));
+    final outgoing = http.Request(body == null ? 'GET' : 'POST', uri)
+      ..headers.addAll(headers)
+      ..followRedirects = false;
+    if (body != null) outgoing.body = jsonEncode(body);
+    final response = await http.Response.fromStream(
+      await _http.send(outgoing).timeout(const Duration(seconds: 10)),
+    ).timeout(const Duration(seconds: 10));
+    if (response.statusCode == 401) {
+      throw ApiFailure(
+        'Нужен ключ доступа к серверу. Открой настройки подключения.',
+        401,
+      );
+    }
+    if (response.statusCode >= 300 && response.statusCode < 400) {
+      throw ApiFailure(
+        'Сервер перенаправляет запрос. Укажи его конечный HTTPS-адрес в настройках.',
+        response.statusCode,
+      );
+    }
     Json result;
     try {
       result = object(jsonDecode(utf8.decode(response.bodyBytes)));
@@ -314,6 +351,27 @@ class DashboardRepository extends ChangeNotifier {
       );
     }
     return result;
+  }
+
+  Future<List<int>> inboxAudio(String route) async {
+    final uri = Uri.parse(base).resolve(route);
+    if (uri.origin != Uri.parse(base).origin ||
+        !uri.path.startsWith('/api/inbox/audio/')) {
+      throw ArgumentError('Неизвестный адрес аудио.');
+    }
+    final outgoing = http.Request('GET', uri)..followRedirects = false;
+    outgoing.headers['Origin'] = Uri.parse(base).origin;
+    if (serverAuthorization != null) {
+      outgoing.headers['Authorization'] = serverAuthorization!;
+    }
+    final response = await http.Response.fromStream(
+      await _http.send(outgoing).timeout(const Duration(seconds: 30)),
+    ).timeout(const Duration(seconds: 30));
+    if (response.statusCode != 200 ||
+        response.bodyBytes.length > 25 * 1024 * 1024) {
+      throw StateError('Не удалось загрузить голосовую запись.');
+    }
+    return response.bodyBytes;
   }
 
   Future<void> synchronize() async {
@@ -492,7 +550,9 @@ class DashboardRepository extends ChangeNotifier {
     } catch (e) {
       online = false;
       local.set('lastSyncError', e.toString());
-      status = 'Нет связи с сервером · изменения сохранены на устройстве';
+      status = e is ApiFailure && e.status == 401
+          ? e.message
+          : 'Нет связи с сервером${Uri.parse(base).host.endsWith('.ts.net') ? ' · проверь Tailscale' : ''} · изменения сохранены на устройстве';
     } finally {
       syncing = false;
       notifyListeners();

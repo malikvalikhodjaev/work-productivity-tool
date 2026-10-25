@@ -34,6 +34,8 @@ import 'modeling_workspace.dart';
 import 'leisure.dart';
 import 'timer_ringtones.dart';
 import 'active_timer_conflict.dart';
+import 'time_composition.dart';
+import 'connection_bootstrap.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,6 +51,19 @@ Future<void> main() async {
   final repo = DashboardRepository(
     LocalDatabase(p.join(folder.path, 'indicators-work.sqlite')),
   );
+  final provisionFolder = Platform.isAndroid
+      ? await getExternalStorageDirectory()
+      : folder;
+  if (provisionFolder != null) {
+    try {
+      await applyConnectionBootstrap(
+        repo.local,
+        File(p.join(provisionFolder.path, 'iw-connection.json')),
+      );
+    } catch (_) {
+      debugPrint('Connection provisioning rejected; existing data retained.');
+    }
+  }
   runApp(DashboardApp(repo: repo, folder: folder.path));
 }
 
@@ -194,7 +209,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.27',
+        'clientVersion': '0.1.28',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -527,6 +542,11 @@ class _DashboardHomeState extends State<DashboardHome>
       builder: (c) => StatefulBuilder(
         builder: (c, refresh) => AlertDialog(
           title: const Text('Сделал это?'),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 24,
+          ),
+          contentPadding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
           content: SizedBox(
             width: 560,
             child: SingleChildScrollView(
@@ -539,6 +559,7 @@ class _DashboardHomeState extends State<DashboardHome>
                     listenable: repo,
                     builder: (c, _) => PomodoroChecklist(
                       repo: repo,
+                      scrollChecks: false,
                       focus: (ref, title) async {
                         choseFocus = true;
                         Navigator.pop(c);
@@ -834,7 +855,11 @@ class _DashboardHomeState extends State<DashboardHome>
             'assigned': 'По нормативу',
           },
         ),
-        const FieldSpec('workType', 'Характер работы'),
+        FieldSpec(
+          'workType',
+          'Тип времени',
+          options: timeTypeOptions(initial['workType']),
+        ),
         const FieldSpec('workMinutes', 'Помидорка · минут', integer: true),
         const FieldSpec('shortBreakMinutes', 'Перерыв · минут', integer: true),
         const FieldSpec(
@@ -1033,6 +1058,7 @@ class _DashboardHomeState extends State<DashboardHome>
     } else {
       repo.startLocal({...input, 'mode': 'pomodoro'});
     }
+    await revealMobilePlayer();
   }
 
   Future<void> cancelTimer() async {
@@ -1060,6 +1086,9 @@ class _DashboardHomeState extends State<DashboardHome>
       await safe(() => repo.timerAction('cancel'));
     }
   }
+
+  bool get scrollableFocus =>
+      Theme.of(context).platform == TargetPlatform.android;
 
   Widget focusCard() => ListenableBuilder(
     listenable: clockPulse,
@@ -1096,37 +1125,57 @@ class _DashboardHomeState extends State<DashboardHome>
                           : pomodoroExpired(s, repo.now)
                           ? 'Помидорка завершена · ожидает учёта'
                           : s['status'] == 'paused'
-                          ? 'Paused'
+                          ? 'Пауза · ${pauseClock(s, repo.now)}'
+                          : s['phase'] != 'work'
+                          ? 'Перерыв'
                           : s['mode'] == 'pomodoro'
                           ? 'Pomodoro'
                           : 'Stopwatch',
                       style: const TextStyle(color: Colors.white70),
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => changeFocus(!focusMode),
-                    icon: Icon(
-                      focusMode ? Icons.dashboard_outlined : Icons.open_in_full,
-                      color: Colors.white,
+                  if (!focusMode)
+                    IconButton(
+                      onPressed: () => changeFocus(!focusMode),
+                      icon: Icon(
+                        focusMode
+                            ? Icons.dashboard_outlined
+                            : Icons.open_in_full,
+                        color: Colors.white,
+                      ),
+                      tooltip: focusMode ? 'Все разделы' : 'Крупный таймер',
                     ),
-                    tooltip: focusMode ? 'Все разделы' : 'Крупный таймер',
-                  ),
                 ],
               ),
               const SizedBox(height: 12),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  s == null ? '25:00' : clockOf(s, repo.now),
-                  style: TextStyle(
-                    fontSize: focusMode ? 88 : 68,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: -3,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+              if (scrollableFocus)
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  primary: false,
+                  child: Text(
+                    s == null ? '25:00' : clockOf(s, repo.now),
+                    style: TextStyle(
+                      fontSize: focusMode ? 88 : 68,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: -3,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                )
+              else
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    s == null ? '25:00' : clockOf(s, repo.now),
+                    style: TextStyle(
+                      fontSize: focusMode ? 88 : 68,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: -3,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                   ),
                 ),
-              ),
               const SizedBox(height: 12),
               if (s != null && inLeisure(s))
                 LeisureInfo(session: s, now: repo.now),
@@ -1193,7 +1242,7 @@ class _DashboardHomeState extends State<DashboardHome>
                           color: Colors.white70,
                         ),
                         label: Text(
-                          inLeisure(s) ? 'Изменить Leisure' : 'Leisure',
+                          inLeisure(s) ? 'Изменить перерыв' : 'Перерыв',
                           style: const TextStyle(color: Colors.white),
                         ),
                       ),
@@ -1221,6 +1270,7 @@ class _DashboardHomeState extends State<DashboardHome>
               PomodoroChecklist(
                 repo: repo,
                 compact: true,
+                scrollChecks: !scrollableFocus,
                 focus: (ref, title) => startTimer(ref: ref, title: title),
               ),
               const SizedBox(height: 18),
@@ -1434,9 +1484,23 @@ class _DashboardHomeState extends State<DashboardHome>
   );
 
   Widget buildFocusPlayer() {
+    if (scrollableFocus) {
+      return SingleChildScrollView(
+        key: const PageStorageKey('mobile-focus-scroll'),
+        primary: false,
+        padding: const EdgeInsets.all(12),
+        child: buildFocusCard(),
+      );
+    }
     final s = repo.active;
     return AdaptiveFocusPlayer(
       paused: s?['status'] == 'paused' && !inLeisure(s),
+      pauseClock: s == null ? '' : pauseClock(s, repo.now),
+      takeBreak: s == null
+          ? () => safe(startBreak)
+          : s['phase'] == 'work' && !pomodoroExpired(s, repo.now)
+          ? () => safe(() => chooseLeisure(context, repo))
+          : null,
       changes: repo,
       weeklyProblem: repo.weeklyProblemText,
       dailyProblem: repo.todayProblemText,
@@ -1451,6 +1515,8 @@ class _DashboardHomeState extends State<DashboardHome>
           ? 'Помидорка завершена · ожидает учёта'
           : s['status'] == 'paused'
           ? 'Пауза'
+          : s['phase'] != 'work'
+          ? 'Перерыв'
           : s['mode'] == 'pomodoro'
           ? 'Pomodoro'
           : 'Stopwatch',
@@ -1735,7 +1801,15 @@ class _DashboardHomeState extends State<DashboardHome>
             'assigned': 'По нормативу',
           },
         ),
-        const FieldSpec('workType', 'Характер работы'),
+        FieldSpec(
+          'workType',
+          'Тип времени',
+          options: timeTypeOptions(
+            repo.local.draft(key)?['workType'] ??
+                previous?['workType'] ??
+                base?['workType'],
+          ),
+        ),
       ],
       (input) {
         repo.nativeSave('workspace', 'saveWorkItem', {
@@ -2920,10 +2994,18 @@ class _DashboardHomeState extends State<DashboardHome>
     await editFields(
       context,
       title: 'Подключение и фон',
-      initial: {'url': repo.base},
-      fields: const [FieldSpec('url', 'Адрес сервера · HTTPS / localhost')],
+      initial: {'url': repo.base, 'accessKey': ''},
+      fields: const [
+        FieldSpec('url', 'Адрес сервера · HTTPS / localhost'),
+        FieldSpec(
+          'accessKey',
+          'Ключ доступа · пусто, чтобы сохранить прежний',
+          obscure: true,
+        ),
+      ],
       save: (input) async {
         repo.setBase(input['url'].toString());
+        repo.setServerAccessKey(input['accessKey'].toString());
         await repo.synchronize();
       },
     );
@@ -3095,7 +3177,7 @@ class _DashboardHomeState extends State<DashboardHome>
                           ),
                           const SizedBox(height: 12),
                           const Text(
-                            'I&W · Native 0.1.27',
+                            'I&W · Native 0.1.28',
                             style: TextStyle(fontSize: 11),
                           ),
                         ],
