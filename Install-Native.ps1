@@ -40,4 +40,5 @@ foreach ($nativeFolder in $nativeDestinations) {
     $nativeShortcut.Save()
     Write-Output $nativeLink
 }
+& (Join-Path $PSScriptRoot 'Repair-NativeShortcuts.ps1') -ApplicationDirectory $nativeTarget -LauncherScript $nativeVbs -ShortcutDirectory $nativeDestinations[0] -BackupDirectory (Join-Path $nativeSupport ('icons-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff')))
 if (-not $SkipAutostart) { & (Join-Path $PSScriptRoot 'Install-Autostart.ps1') }
