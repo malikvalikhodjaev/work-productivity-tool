@@ -76,84 +76,11 @@ List<Json> projectedGoals(DashboardRepository repo) => [
 ];
 
 String goalNumber(dynamic value) {
-  if (value is! num || !value.isFinite) return 'No Data';
+  if (value is! num || !value.isFinite) return 'Заполнить';
   return (value == value.roundToDouble()
           ? value.toInt().toString()
           : value.toString())
       .replaceAll('.', ',');
-}
-
-class GoalProgressSummary extends StatelessWidget {
-  final Json goal;
-  final String? heading;
-  const GoalProgressSummary({super.key, required this.goal, this.heading});
-  @override
-  Widget build(BuildContext context) {
-    final delta = goal['delta'];
-    String signed(num n) => '${n > 0 ? '+' : ''}${goalNumber(n)}';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          heading ?? goal['title'].toString(),
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 20,
-          runSpacing: 10,
-          children: [
-            for (final e in {
-              'Было': goal['baseline'],
-              'Сейчас': goal['current'],
-              'Хочу': goal['target'],
-            }.entries)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(e.key, style: const TextStyle(color: Color(0xff727780))),
-                  Text(
-                    goalNumber(e.value),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 18,
-                    ),
-                  ),
-                ],
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          (goal['unit'] ?? '').toString().isEmpty
-              ? 'Единица и период пока не заданы'
-              : goal['unit'].toString(),
-        ),
-        Text(
-          delta is num
-              ? 'Изменение от начала: ${signed(delta)}'
-              : 'Изменение от начала: No Data',
-        ),
-        if (goal['lastChange'] is num)
-          Text('К прошлому замеру: ${signed(goal['lastChange'])}'),
-        const SizedBox(height: 10),
-        if (goal['percent'] is num) ...[
-          LinearProgressIndicator(value: (goal['percent'] as num) / 100),
-          Text(
-            'Продвижение к ориентиру: ${goal['percent']}%${goal['reached'] == true ? ' · достигнут' : ''}',
-          ),
-        ] else
-          const Text(
-            'Прогресс: No Data · нужны исходное значение, новый замер и отличающийся ориентир',
-          ),
-        const SizedBox(height: 8),
-        Text(
-          'Последний замер: ${object(goal['measurement'])['date'] ?? 'No Data'}${object(goal['measurement'])['pending'] == true ? ' · сохранён на устройстве' : ''}',
-          style: const TextStyle(fontSize: 12, color: Color(0xff727780)),
-        ),
-      ],
-    );
-  }
 }
 
 Future<void> showGoalHistory(
@@ -171,7 +98,7 @@ Future<void> showGoalHistory(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (rows(goal['history']).isEmpty)
-              const Text('No Data · замеров пока нет'),
+              const Text('Заполнить · добавь первый замер'),
             for (final m in rows(goal['history'])) ...[
               Text(
                 '${m['date']} · ${goalNumber(m['value'])} ${goal['unit'] ?? ''}${m['pending'] == true ? ' · на устройстве' : ''}',

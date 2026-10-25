@@ -37,6 +37,7 @@ import 'active_timer_conflict.dart';
 import 'time_composition.dart';
 import 'connection_bootstrap.dart';
 import 'goal_progress.dart';
+import 'goal_table.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -210,7 +211,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.29',
+        'clientVersion': '0.1.30',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -2278,10 +2279,6 @@ class _DashboardHomeState extends State<DashboardHome>
 
   Widget indicatorsPage() {
     final allGoals = projectedGoals(repo);
-    final goals = allGoals.where((g) => g['status'] != 'archived').toList();
-    final selected =
-        (repo.local.get('selectedGoals') as List?) ??
-        goals.take(4).map((g) => g['id']).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2295,7 +2292,7 @@ class _DashboardHomeState extends State<DashboardHome>
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
           child: Text(
-            'Начни с одной цели: задай «Было» и единицу, затем нажми «Новый замер». Ориентир «Хочу» можно добавить позже. Без ориентира видно изменение, а процент остаётся No Data.',
+            'Начни с одной цели: задай «Было» и единицу, затем нажми «Новый замер». Ориентир «Хочу» можно добавить позже. Без ориентира видно изменение; для расчёта прогресса нажми «Заполнить».',
           ),
         ),
         const ExpansionTile(
@@ -2307,78 +2304,18 @@ class _DashboardHomeState extends State<DashboardHome>
                 'Руководства: часы чтения и применения — отдельные нормы. В замере можно записывать, какую идею применяешь, что меняется в проекте, карьере или результате и чем это подтверждается.\n\n'
                 'Выручка — платежи клиентов. Прибыль бизнеса — выручка минус расходы. Личный доход — полученное себе. Для каждого денежного показателя укажи валюту и период; в месячном замере записывай итог выбранного месяца.\n\n'
                 'Сон: записывай часы за ночь на дату пробуждения. Минимум указан в карточке нормы.\n\n'
-                'Для прогресса цели нужны база, цель и текущий замер. Пока шкала не определена — No Data. Дата под карточкой показывает, к какому моменту относится последний факт.',
+                'Для прогресса цели нужны база, цель и текущий замер. Незаполненные ячейки предлагают «Заполнить». Дата замера показывает, к какому моменту относится последний факт.',
               ),
             ),
           ],
         ),
-        if (goals.isEmpty)
-          const Text('No Data · задай цель, шкалу и текущий замер.'),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: goals
-              .where((g) => selected.contains(g['id']))
-              .map(
-                (g) => SizedBox(
-                  width: 260,
-                  child: Column(
-                    children: [
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: GoalProgressSummary(goal: g),
-                        ),
-                      ),
-                      Wrap(
-                        children: [
-                          TextButton(
-                            onPressed: () => editGoal(g),
-                            child: const Text('Настроить'),
-                          ),
-                          TextButton(
-                            onPressed: () => measureGoal(g),
-                            child: const Text('Новый замер'),
-                          ),
-                          TextButton(
-                            onPressed: () => showGoalHistory(context, g),
-                            child: const Text('История'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              )
-              .toList(),
-        ),
-        GoalHierarchy(
+        GoalsTable(
+          repo: repo,
           goals: allGoals,
           edit: (g) => editGoal(g),
           measure: measureGoal,
           child: (g) => editGoal(null, g['id'].toString()),
           history: (g) => showGoalHistory(context, g),
-        ),
-        ExpansionTile(
-          title: const Text('Выбрать индикаторы на главном экране'),
-          children: goals
-              .map(
-                (g) => CheckboxListTile(
-                  title: Text(g['title'].toString()),
-                  value: selected.contains(g['id']),
-                  onChanged: (value) {
-                    final next = List<dynamic>.from(selected);
-                    if (value == true) {
-                      next.add(g['id']);
-                    } else {
-                      next.remove(g['id']);
-                    }
-                    repo.local.set('selectedGoals', next);
-                    setState(() {});
-                  },
-                ),
-              )
-              .toList(),
         ),
         sectionTitle('Нормативы'),
         const Text(
@@ -3182,7 +3119,7 @@ class _DashboardHomeState extends State<DashboardHome>
                           ),
                           const SizedBox(height: 12),
                           const Text(
-                            'I&W · Native 0.1.29',
+                            'I&W · Native 0.1.30',
                             style: TextStyle(fontSize: 11),
                           ),
                         ],

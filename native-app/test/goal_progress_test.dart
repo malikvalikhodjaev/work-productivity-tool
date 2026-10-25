@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:indicators_work/domain.dart';
 import 'package:indicators_work/goal_progress.dart';
@@ -133,59 +132,4 @@ void main() {
     expect(goals.last['current'], 8);
     expect(goals.last['percent'], 80);
   });
-  testWidgets(
-    'readable before/after and raw history fit a narrow window with enlarged text',
-    (tester) async {
-      tester.view.physicalSize = const Size(320, 780);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final goal = evaluateGoal(
-        {
-          'title': 'Длинное название цели для ручного измерения',
-          'baseline': 10,
-          'unit': 'UZS / месяц',
-        },
-        [
-          {
-            'date': '2026-10-25',
-            'value': 15,
-            'evidence': '  exact\nparagraph  ',
-          },
-        ],
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Builder(
-            builder: (context) => MediaQuery(
-              data: MediaQuery.of(context)
-                  .copyWith(textScaler: const TextScaler.linear(1.5)),
-              child: Scaffold(
-                body: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      GoalProgressSummary(goal: goal),
-                      TextButton(
-                        onPressed: () => showGoalHistory(context, goal),
-                        child: const Text('История'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      expect(find.text('Было'), findsOneWidget);
-      expect(find.text('Сейчас'), findsOneWidget);
-      expect(find.text('Изменение от начала: +5'), findsOneWidget);
-      expect(find.byType(LinearProgressIndicator), findsNothing);
-      expect(tester.takeException(), isNull);
-      await tester.tap(find.text('История'));
-      await tester.pumpAndSettle();
-      expect(find.text('  exact\nparagraph  '), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
 }

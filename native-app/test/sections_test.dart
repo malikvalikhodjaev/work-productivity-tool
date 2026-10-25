@@ -7,6 +7,7 @@ import 'package:indicators_work/local_database.dart';
 import 'package:indicators_work/main.dart';
 import 'package:indicators_work/repository.dart';
 import 'package:indicators_work/section_analytics.dart';
+import 'package:indicators_work/goal_table.dart';
 
 void main() {
   test('analytics deduplicates synced sessions and splits local time at Tashkent midnight', () {
@@ -92,7 +93,15 @@ void main() {
       );
       await tester.pump();
       expect(find.text('Цели'), findsOneWidget);
-      expect(find.text('Все цели · декомпозиция'), findsOneWidget);
+      expect(find.byType(GoalsTable), findsOneWidget);
+      expect(find.text('1 · Цель А'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(GoalsTable),
+          matching: find.byType(Card),
+        ),
+        findsNothing,
+      );
       expect(find.text('Главная проблема недели'), findsNothing);
       expect(find.text('Pomodoro'), findsNothing);
       expect(find.text('Финансовый поток'), findsNothing);
@@ -112,11 +121,15 @@ void main() {
     'goal tree shows own measurements and supports adding a subgoal',
     (tester) async {
       Json? parent;
+      final repo = DashboardRepository(LocalDatabase(':memory:'));
+      addTearDown(repo.dispose);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: SingleChildScrollView(
-              child: GoalHierarchy(
+              child: GoalsTable(
+                repo: repo,
+                history: (_) {},
                 goals: [
                   {
                     'id': 'parent',
@@ -143,7 +156,9 @@ void main() {
         ),
       );
       expect(find.text('1.1 · Шаг'), findsOneWidget);
-      await tester.tap(find.text('＋ Подцель').first);
+      final add = find.byKey(const ValueKey('goal-child:parent'));
+      await tester.ensureVisible(add);
+      await tester.tap(add);
       expect(parent?['id'], 'parent');
       expect(tester.takeException(), null);
     },

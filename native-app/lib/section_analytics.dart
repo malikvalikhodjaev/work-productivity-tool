@@ -3,11 +3,9 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import 'domain.dart';
-import 'model_hierarchy.dart';
 import 'repository.dart';
 import 'time_composition.dart';
 import 'time_composition_panel.dart';
-import 'goal_progress.dart';
 
 class AnalyticsSection extends StatelessWidget {
   final String title;
@@ -28,75 +26,6 @@ class AnalyticsSection extends StatelessWidget {
       Text(title, style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: 14),
       ...children,
-    ],
-  );
-}
-
-class GoalHierarchy extends StatelessWidget {
-  final List<Json> goals;
-  final void Function(Json) edit, measure, child;
-  final void Function(Json)? history;
-  const GoalHierarchy({
-    super.key,
-    required this.goals,
-    required this.edit,
-    required this.measure,
-    required this.child,
-    this.history,
-  });
-  @override
-  Widget build(BuildContext context) => ExpansionTile(
-    initiallyExpanded: true,
-    title: const Text('Все цели · декомпозиция'),
-    children: [
-      const Padding(
-        padding: EdgeInsets.all(12),
-        child: Text(
-          'У каждой цели своя шкала. Проценты подцелей не складываются: прогресс родительской цели задаётся её собственным замером.',
-        ),
-      ),
-      for (final goal in hierarchyRows(goals))
-        Padding(
-          padding: EdgeInsets.only(
-            left: min((goal['_depth'] as int) * 18.0, 90),
-          ),
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  GoalProgressSummary(
-                    goal: goal,
-                    heading: '${goal['_wbs']} · ${goal['title']}',
-                  ),
-                  Text('Состояние: ${goal['status'] ?? 'No Data'}'),
-                  Wrap(
-                    children: [
-                      TextButton(
-                        onPressed: () => edit(goal),
-                        child: const Text('Настроить'),
-                      ),
-                      TextButton(
-                        onPressed: () => measure(goal),
-                        child: const Text('Новый замер'),
-                      ),
-                      TextButton(
-                        onPressed: () => child(goal),
-                        child: const Text('＋ Подцель'),
-                      ),
-                      if (history != null)
-                        TextButton(
-                          onPressed: () => history!(goal),
-                          child: const Text('История'),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
     ],
   );
 }
