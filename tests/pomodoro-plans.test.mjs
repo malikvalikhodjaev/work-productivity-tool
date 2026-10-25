@@ -11,7 +11,7 @@ const date = '2026-10-15', ref = 'task:reading';
 function fixture() {
   const file = path.join(mkdtempSync(path.join(tmpdir(), 'iw-pom-plan-')), 'dashboard.json');
   let clock = Date.parse(`${date}T10:00:00+05:00`);
-  const options = { now: () => clock, validateWorkRef: r => { if (![ref,'task:guides'].includes(r)) throw Error('Unknown work'); return r; }, getEntities: () => [{ref, title:'Другое имя работы'},{ref:'task:guides',title:'Руководства'}] };
+  const options = { now: () => clock, validateWorkRef: r => { if (r == null) return null; if (![ref,'task:guides'].includes(r)) throw Error('Unknown work'); return r; }, getEntities: () => [{ref, title:'Другое имя работы'},{ref:'task:guides',title:'Руководства'}] };
   let store = createStore(file, options);
   return { file, get store() { return store; }, advance(s) { clock += s * 1000; }, reopen() { store = createStore(file, options); },
     command(target, expectedUpdatedAt = null, extra = {}) { return { module:'pomodoroTarget', action:'save', requestId:randomUUID(), expectedUpdatedAt, input:{workRef:ref, date, title:'  Чтение · 我的规范  ', target, repeat:'once', ...extra} }; },
@@ -45,6 +45,18 @@ test('Two different works keep independent daily norms and timer counts after re
 test('Daily counts are backed by complete work sessions, deduplicated and assigned to Tashkent completion day', () => {
   const s = {id:'same',workRef:ref,status:'finished',phase:'work',mode:'pomodoro',completedPomodoros:1,finishedAt:'2026-10-14T19:01:00Z'};
   assert.deepEqual(pomodoroFacts([s,s,{...s,id:'break',phase:'short_break'},{...s,id:'partial',completedPomodoros:0},{...s,id:'cancel',status:'cancelled'},{...s,id:'stopwatch',mode:'stopwatch'},{...s,id:'excluded',syncResolution:'excluded'}]), [{sessionId:'same',workRef:ref,date,count:1}]);
+});
+
+test('Free completed pomodoros count once globally without fulfilling an unrelated norm',()=>{
+ const f=fixture();f.store.nativeMutate(f.command(2));
+ const session=f.timer('start',{title:'Активность без норматива',mode:'pomodoro',metricId:null,allocation:'outside',workRef:null}).active;
+ f.advance(1500);f.timer('finish',{sessionId:session.id});f.reopen();
+ const data=f.store.getDailyNorms(date);
+ assert.deepEqual(data.pomodoroFacts,[{sessionId:session.id,workRef:null,date,count:1}]);
+ assert.equal(data.pomodoroPlan.targets[0].actualPomodoros,0);
+ const original=f.store.getTimer(date).sessions.find(s=>s.id===session.id);
+ assert.equal(pomodoroFacts([original,original]).length,1);
+ assert.equal(f.store.getStoredEntries().entries.length,1);
 });
 
 test('Exact names, daily reset, removal/restoration and safe retries survive restart', () => {

@@ -1,7 +1,7 @@
 name: indicators_work
 description: Indicators & Work Dashboard for Windows and Android.
 publish_to: none
-version: 0.1.34+36
+version: 0.1.35+37
 environment:
   sdk: '>=3.13.0 <4.0.0'
 dependencies:

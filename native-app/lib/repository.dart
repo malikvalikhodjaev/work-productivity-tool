@@ -224,6 +224,17 @@ class DashboardRepository extends ChangeNotifier {
     required String ref,
     required String title,
     Json? item,
+  }) => _startFocusedActivity(ref: ref, title: title, item: item);
+
+  Future<void> startUnplannedActivity() => _startFocusedActivity(
+    title: 'Активность без норматива',
+    item: {'allocation': 'outside', 'workType': ''},
+  );
+
+  Future<void> _startFocusedActivity({
+    String? ref,
+    required String title,
+    Json? item,
   }) async {
     if (focusStarting) return;
     focusStarting = true;
@@ -235,20 +246,23 @@ class DashboardRepository extends ChangeNotifier {
       final s = active;
       if (s != null) {
         if (pomodoroExpired(s, now)) throw ExpiredTimerConflict(s);
-        if (s['workRef'] != ref) {
+        if (s['workRef'] != ref || s['phase'] != 'work') {
           throw ActiveTimerConflict(s);
         }
         if (s['status'] == 'paused') await timerAction('resume');
         return;
       }
-      final known = rows(cache('workspace')['entities'])
-          .where((e) => e['ref'] == ref)
-          .firstOrNull;
-      final source = item ?? local.draft(ref) ?? known ?? <String, dynamic>{};
+      final known = ref == null
+          ? null
+          : rows(cache('workspace')['entities'])
+                .where((e) => e['ref'] == ref)
+                .firstOrNull;
+      final draft = ref == null ? null : local.draft(ref);
+      final source = item ?? draft ?? known ?? <String, dynamic>{};
       if (title.trim().isEmpty) throw ArgumentError('Сначала назови работу.');
       if (!durableTimer &&
           timerStrategy == 'shared' &&
-          local.draft(ref) != null &&
+          draft != null &&
           known == null) {
         throw StateError(
           'Новая карточка ещё не отправлена на сервер. Синхронизируй её или выбери таймер устройства в настройках.',

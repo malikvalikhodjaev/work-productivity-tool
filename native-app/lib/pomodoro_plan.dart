@@ -2,7 +2,10 @@ import 'domain.dart';
 import 'time_types.dart';
 
 void validateNormTimeType(Json input) {
- if(input.containsKey('workType') && !validTimeTypeSelection(input['workType'])) {throw ArgumentError('Выбери типы времени норматива.');}
+  if (input.containsKey('workType') &&
+      !validTimeTypeSelection(input['workType'])) {
+    throw ArgumentError('Выбери типы времени норматива.');
+  }
 }
 
 void validatePomodoroCapacity(Json input) {
@@ -80,12 +83,13 @@ String pomodoroMonday(String date) =>
     pomodoroShift(date, 1 - DateTime.parse('${date}T12:00:00Z').weekday);
 
 Json? pomodoroFact(Json session) {
-  if (session['status'] != 'finished' ||
+  if (session['id'] is! String ||
+      (session['id'] as String).isEmpty ||
+      session['status'] != 'finished' ||
       session['phase'] != 'work' ||
       session['mode'] != 'pomodoro' ||
       session['completedPomodoros'] != 1 ||
-      session['syncResolution'] == 'excluded' ||
-      session['workRef'] == null) {
+      session['syncResolution'] == 'excluded') {
     return null;
   }
   final stamp = DateTime.tryParse(session['finishedAt']?.toString() ?? '');

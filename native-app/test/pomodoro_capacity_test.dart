@@ -74,7 +74,7 @@ void main() {
     await tester.enterText(target, '5');
     await tester.pump();
     expect(
-      find.text('План: 15 помидорок · твой лимит: 15 в день.'),
+      find.textContaining('План: 15 помидорок · твой лимит: 15 в день.'),
       findsOneWidget,
     );
     await tester.tap(find.text('Сохранить'));

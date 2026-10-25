@@ -249,7 +249,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.34',
+        'clientVersion': '0.1.35',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -970,6 +970,33 @@ class _DashboardHomeState extends State<DashboardHome>
     }
   }
 
+  Future<void> startUnplannedTimer() => safe(() async {
+    await repo.startUnplannedActivity();
+    if (repo.active?['workRef'] == null && repo.active != null) {
+      await revealMobilePlayer();
+    }
+  });
+
+  List<Widget> idleTimerButtons() => [
+    FilledButton.icon(
+      key: const ValueKey('start-unplanned-timer'),
+      onPressed: repo.focusStarting || repo.timerBusy
+          ? null
+          : startUnplannedTimer,
+      icon: const Icon(Icons.play_arrow),
+      label: const Text('Начать без норматива'),
+    ),
+    TextButton(
+      onPressed: repo.focusStarting || repo.timerBusy
+          ? null
+          : () => startTimer(),
+      child: const Text(
+        'Новая активность',
+        style: TextStyle(color: Colors.white),
+      ),
+    ),
+  ];
+
   Future<void> revealMobilePlayer() async {
     if (!mounted) return;
     setState(() => section = 2);
@@ -1220,7 +1247,10 @@ class _DashboardHomeState extends State<DashboardHome>
               const SizedBox(height: 12),
               if (s != null && inLeisure(s))
                 LeisureInfo(session: s, now: repo.now),
-              if (s == null) const Text('Выбери карточку работы'),
+              if (s == null)
+                const Text(
+                  'Запусти без норматива или выбери работу в карточке.',
+                ),
               const SizedBox(height: 12),
               if (s != null)
                 Text(
@@ -1237,10 +1267,7 @@ class _DashboardHomeState extends State<DashboardHome>
                 runSpacing: 8,
                 children: [
                   if (s == null) ...[
-                    FilledButton(
-                      onPressed: () => startTimer(),
-                      child: const Text('Новая активность'),
-                    ),
+                    ...idleTimerButtons(),
                     TextButton(
                       onPressed: () => safe(startBreak),
                       child: const Text(
@@ -1568,7 +1595,8 @@ class _DashboardHomeState extends State<DashboardHome>
       description: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (s == null) const Text('Выбери карточку работы'),
+          if (s == null)
+            const Text('Запусти без норматива или выбери работу в карточке.'),
           if (s != null) ...[
             const SizedBox(height: 8),
             Text(
@@ -1588,10 +1616,7 @@ class _DashboardHomeState extends State<DashboardHome>
         runSpacing: 6,
         children: [
           if (s == null)
-            FilledButton(
-              onPressed: () => startTimer(),
-              child: const Text('Новая активность'),
-            )
+            ...idleTimerButtons()
           else ...[
             FilledButton.tonal(
               onPressed: repo.timerBusy || pomodoroExpired(s, repo.now)
@@ -3158,7 +3183,7 @@ class _DashboardHomeState extends State<DashboardHome>
                                 const SizedBox(height: 20),
                                 const SizedBox(height: 12),
                                 const Text(
-                                  'I&W · Native 0.1.34',
+                                  'I&W · Native 0.1.35',
                                   style: TextStyle(fontSize: 11),
                                 ),
                               ],

@@ -163,14 +163,6 @@ class _WorkAnalyticsState extends State<WorkAnalytics> {
           known: known,
         ),
         const SizedBox(height: 12),
-        const Text(
-          'Главная проблема выбранной недели',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        SelectableText(
-          (repo.weeklyProblem(week)['text'] ?? 'No Data · не записана')
-              .toString(),
-        ),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: DataTable(
@@ -183,6 +175,7 @@ class _WorkAnalyticsState extends State<WorkAnalytics> {
               DataColumn(label: Text('План')),
               DataColumn(label: Text('Лимит')),
               DataColumn(label: Text('Проблема дня')),
+              DataColumn(label: Text('Проблема недели')),
             ],
             rows: [
               for (final day in days)
@@ -236,6 +229,17 @@ class _WorkAnalyticsState extends State<WorkAnalytics> {
                                     'No Data · не записана')
                                 .toString(),
                           ),
+                        ),
+                      ),
+                    ),
+                    DataCell(
+                      SizedBox(
+                        width: 260,
+                        child: SelectableText(
+                          key: ValueKey('work-weekly-problem:$day'),
+                          (repo.weeklyProblem(week)['text'] ??
+                                  'No Data · не записана')
+                              .toString(),
                         ),
                       ),
                     ),
