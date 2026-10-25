@@ -72,7 +72,7 @@ class _GoalsTableState extends State<GoalsTable> {
       style: TextButton.styleFrom(
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
-        textStyle: TextStyle(
+            textStyle: Theme.of(context).textTheme.labelLarge!.copyWith(
           fontWeight: missing ? FontWeight.w600 : FontWeight.normal,
         ),
       ),
