@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 
 import 'domain.dart';
 import 'adaptive_detail.dart';
+import 'time_type_picker.dart';
 
 class FieldSpec {
   final String key, label;
   final int lines;
-  final bool numeric, integer, nullable, labelAbove, obscure;
+  final bool numeric, integer, nullable, labelAbove, obscure, timeTypes;
   final Map<String, String>? options;
   const FieldSpec(
     this.key,
@@ -17,6 +18,7 @@ class FieldSpec {
     this.nullable = false,
     this.labelAbove = false,
     this.obscure = false,
+    this.timeTypes = false,
     this.options,
   });
 }
@@ -39,7 +41,8 @@ Future<bool> editFields(
   };
   final values = Map<String, dynamic>.from(initial);
   for (final field in fields) {
-    if (field.options?.isNotEmpty == true &&
+    if (!field.timeTypes &&
+        field.options?.isNotEmpty == true &&
         !field.options!.containsKey(values[field.key])) {
       values[field.key] = field.options!.keys.first;
     }
@@ -48,7 +51,7 @@ Future<bool> editFields(
   bool saving = false;
   Json collect() {
     for (final field in fields) {
-      if (field.options != null) continue;
+      if (field.options != null || field.timeTypes) continue;
       final text = controllers[field.key]!.text;
       if (field.numeric || field.integer) {
         if (text.isEmpty) {
@@ -93,7 +96,19 @@ Future<bool> editFields(
                               padding: const EdgeInsets.only(bottom: 8),
                               child: Text(field.label),
                             ),
-                          field.options == null
+                          field.timeTypes
+                              ? TimeTypePicker(
+                                  value: (values[field.key] ?? '').toString(),
+                                  label: field.label,
+                                  enabled: !saving,
+                                  onChanged: (value) {
+                                    setState(() => values[field.key] = value);
+                                    try {
+                                      draft?.call(collect());
+                                    } catch (_) {}
+                                  },
+                                )
+                              : field.options == null
                               ? TextField(
                                   controller: controllers[field.key],
                                   maxLines: field.lines,

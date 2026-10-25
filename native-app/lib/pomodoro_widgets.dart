@@ -6,6 +6,7 @@ import 'pomodoro_plan.dart';
 import 'repository.dart';
 import 'time_composition.dart';
 import 'focus_theme.dart';
+import 'time_type_picker.dart';
 
 Future<void> editPomodoroCapacity(
   BuildContext context,
@@ -212,6 +213,12 @@ List<Json> _normWorks(DashboardRepository repo) {
   }
   return entities.values.toList();
 }
+
+bool normMatchesCategory(String type, String filter) =>
+    filter == 'all' ||
+    (filter == 'unclassified'
+        ? timeTypes(type).isEmpty
+        : timeTypes(type).contains(filter));
 
 String normTimeCategory(
   DashboardRepository repo,
@@ -487,28 +494,13 @@ class _PomodoroTargetEditorState extends State<_PomodoroTargetEditor> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                DropdownButtonFormField<String>(
+                TimeTypePicker(
                   key: const ValueKey('norm-time-type'),
-                  initialValue: workType,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Тип времени норматива',
-                  ),
-                  items:
-                      {
-                            '': 'Как у карточки работы',
-                            ...(timeTypeOptions(workType)..remove('')),
-                          }.entries
-                          .map(
-                            (e) => DropdownMenuItem(
-                              value: e.key,
-                              child: Text(e.value),
-                            ),
-                          )
-                          .toList(),
-                  onChanged: saving
-                      ? null
-                      : (value) => setState(() => workType = value ?? ''),
+                  value: workType,
+                  label: 'Типы времени норматива',
+                  emptyLabel: 'Как у карточки работы',
+                  enabled: !saving,
+                  onChanged: (value) => setState(() => workType = value),
                 ),
                 const SizedBox(height: 8),
                 const Text(
@@ -657,14 +649,14 @@ class PomodoroChecklist extends StatelessWidget {
         ),
     };
     final visible = norms
-        .where((n) => filter == 'all' || types[n['workRef']] == filter)
+        .where((n) => normMatchesCategory(types[n['workRef']]!, filter))
         .toList();
     final activeRef = repo.active?['workRef'];
     final activeHidden =
         activeRef != null &&
         types.containsKey(activeRef) &&
         filter != 'all' &&
-        types[activeRef] != filter;
+        !normMatchesCategory(types[activeRef]!, filter);
     final accent =
         focusColors[(repo.local.get('theme') ?? 'green').toString()] ??
         Theme.of(context).colorScheme.primary;
@@ -735,7 +727,7 @@ class PomodoroChecklist extends StatelessWidget {
                   ),
                   if (types[n['workRef']] != 'unclassified')
                     Text(
-                      timeTypeLabels[types[n['workRef']]]!,
+                      timeTypeLabel(types[n['workRef']]),
                       style: const TextStyle(
                         fontSize: 12,
                         color: Color(0xff53645b),
@@ -834,7 +826,7 @@ class PomodoroChecklist extends StatelessWidget {
                     ChoiceChip(
                       key: ValueKey('norm-filter:${category.key}'),
                       label: Text(
-                        '${category.value} · ${category.key == 'all' ? norms.length : types.values.where((t) => t == category.key).length}',
+                        '${category.value} · ${category.key == 'all' ? norms.length : types.values.where((t) => normMatchesCategory(t, category.key)).length}',
                       ),
                       selected: filter == category.key,
                       showCheckmark: false,
@@ -845,8 +837,10 @@ class PomodoroChecklist extends StatelessWidget {
               ),
               if (activeHidden)
                 TextButton.icon(
-                  onPressed: () =>
-                      repo.setUiPreference('normTimeFilter', types[activeRef]),
+                  onPressed: () => repo.setUiPreference(
+                    'normTimeFilter',
+                    timeTypes(types[activeRef]).firstOrNull ?? 'unclassified',
+                  ),
                   icon: const Icon(Icons.play_circle_outline),
                   label: const Text('Показать активный норматив'),
                 ),

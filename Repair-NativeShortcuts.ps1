@@ -91,7 +91,7 @@ foreach ($iwFolder in ($iwFolders | Select-Object -Unique)) {
         $iwViaLauncher = $iwLauncher -and ([IO.Path]::GetFileName($iwLink.TargetPath) -ieq 'wscript.exe') -and $iwLink.Arguments -ceq ('"' + $iwLauncher + '"')
         if (-not ($iwDirect -or $iwViaLauncher)) { continue }
         $iwLocation = $iwIcon + ',0'
-        $iwAppId = 'UzIW.IndicatorsWork'
+        $iwAppId = 'UzIW.IndicatorsWork.Desktop'
         if ($iwLink.IconLocation -ne $iwLocation -or [IndicatorsWork.ShortcutShell]::AppId($iwFile.FullName) -ne $iwAppId) {
             New-Item -ItemType Directory -Force -Path $iwBackup | Out-Null
             $iwSavedLink = Join-Path $iwBackup ([guid]::NewGuid().ToString() + '.lnk')

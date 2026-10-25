@@ -11,6 +11,9 @@ const timeTypeColors = {
   'unclassified': Color(0xff8b9290),
 };
 
+Color compositionColor(dynamic type) =>
+    timeTypeColors[type] ?? const Color(0xff596e85);
+
 class TimeCompositionPanel extends StatefulWidget {
   final List<Json> entries, facts;
   final Map<String, Json> sessions;
@@ -47,6 +50,9 @@ class _TimeCompositionPanelState extends State<TimeCompositionPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const Text(
+          'Сочетания типов показаны отдельными строками. В общем итоге время и помидорки считаются один раз.',
+        ),
         const SizedBox(height: 16),
         const Text(
           'Состав времени и помидорок',
@@ -89,7 +95,7 @@ class _TimeCompositionPanelState extends State<TimeCompositionPanel> {
                         1,
                         1 << 53,
                       ),
-                      child: ColoredBox(color: timeTypeColors[e['type']]!),
+                      child: ColoredBox(color: compositionColor(e['type'])),
                     ),
                 ],
               ),
@@ -117,10 +123,10 @@ class _TimeCompositionPanelState extends State<TimeCompositionPanel> {
                           Icon(
                             Icons.circle,
                             size: 10,
-                            color: timeTypeColors[e['type']],
+                            color: compositionColor(e['type']),
                           ),
                           const SizedBox(width: 8),
-                          Text(timeTypeLabels[e['type']]!),
+                          Text(timeTypeLabel(e['type'])),
                         ],
                       ),
                     ),

@@ -5,6 +5,7 @@ import 'package:indicators_work/local_database.dart';
 import 'package:indicators_work/repository.dart';
 import 'package:indicators_work/pomodoro_widgets.dart';
 import 'package:indicators_work/timer_command_notice.dart';
+import 'package:indicators_work/time_type_picker.dart';
 
 LocalDatabase fixture() {
   final db = LocalDatabase(':memory:')
@@ -146,10 +147,8 @@ void main() {
       await tester.pumpWidget(screen(repo));
       await tester.tap(find.byTooltip('Норматив на день'));
       await tester.pumpAndSettle();
-      final dropdown = tester.widget<DropdownButtonFormField<String>>(
-        find.byKey(const ValueKey('norm-time-type')),
-      );
-      expect(dropdown.initialValue, 'leisure');
+      final picker = tester.widget<TimeTypePicker>(find.byType(TimeTypePicker));
+      expect(picker.value, 'leisure');
       expect(repo.pending, isEmpty);
       await tester.tap(find.text('Закрыть'));
       await tester.pumpAndSettle();

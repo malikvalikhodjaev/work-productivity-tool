@@ -12,7 +12,8 @@ namespace {
 #ifdef IW_FOCUS_EDITION
 constexpr wchar_t kAppId[] = L"UzIW.FocusNorms";
 #else
-constexpr wchar_t kAppId[] = L"UzIW.IndicatorsWork";
+// A stable native-shell identity, separate from the former web/legacy pin.
+constexpr wchar_t kAppId[] = L"UzIW.IndicatorsWork.Desktop";
 #endif
 
 // Windows uses these properties when a running window is pinned afresh.

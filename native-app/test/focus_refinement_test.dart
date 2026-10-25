@@ -80,11 +80,11 @@ void main() {
       );
       await tester.tap(find.text('Править'));
       await tester.pumpAndSettle();
-      final type = find.byKey(const ValueKey('norm-time-type'));
+      final type = find.byKey(const ValueKey('time-type:investment'));
       await tester.ensureVisible(type);
       await tester.tap(type);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Leisure · отдых').last);
+      await tester.tap(find.byKey(const ValueKey('time-type:leisure')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Сохранить'));
       await tester.pumpAndSettle();

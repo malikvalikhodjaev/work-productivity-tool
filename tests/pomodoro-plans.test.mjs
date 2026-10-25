@@ -137,7 +137,7 @@ test('Norm time type survives restart, legacy edits and validation without rewri
   assert.equal(row.revisions[0].workType,'investment');
   assert.deepEqual(f.store.getTimer(date).sessions.find(s=>s.id===session.id),original);
   const before=readFileSync(f.file,'utf8');
-  assert.throws(()=>f.store.nativeMutate(f.command(4,row.updatedAt,{workType:'guessed-waste'})),/тип времени/);
+  assert.throws(()=>f.store.nativeMutate(f.command(4,row.updatedAt,{workType:'guessed-waste'})),/типы? времени/);
   assert.equal(readFileSync(f.file,'utf8'),before);
   f.store.nativeMutate(f.command(4,row.updatedAt,{workType:''}));
   assert.equal(f.store.getDailyNorms(date).pomodoroTargets[0].workType,'');
@@ -149,4 +149,25 @@ test('Legacy client changing a future daily norm keeps its inherited time type',
   f.store.nativeMutate(f.command(4,null,{repeat:'daily',date:'2026-10-16'}));
   assert.equal(f.store.getDailyNorms('2026-10-16').pomodoroPlan.targets[0].workType,'investment');
   assert.equal(f.store.getDailyNorms(date).pomodoroPlan.targets[0].workType,'investment');
+});
+
+test('Combined norm types roundtrip without rewriting facts; invalid combinations leave data and receipts intact',()=>{
+  const f=fixture();
+  const command=f.command(3,null,{repeat:'daily',workType:'investment+productive'});
+  f.store.nativeMutate(command);f.store.nativeMutate(command);f.reopen();
+  let row=f.store.getDailyNorms(date).pomodoroTargets[0];
+  assert.equal(row.workType,'investment+productive');
+  const session=f.timer('start',{title:'Работа',mode:'pomodoro',metricId:null,allocation:'outside',workRef:ref,workType:row.workType}).active;
+  assert.equal(session.workType,'investment+productive');
+  f.advance(1500);f.timer('finish',{sessionId:session.id});
+  const original=f.store.getTimer(date).sessions;
+  const before=readFileSync(f.file,'utf8');
+  for(const workType of ['investment+investment','investment+unknown','investment+','unclassified',null,42,[]]){
+    assert.throws(()=>f.store.nativeMutate(f.command(3,row.updatedAt,{workType})),/типы времени/);
+    assert.equal(readFileSync(f.file,'utf8'),before);
+  }
+  f.store.nativeMutate(f.command(4,null,{date:'2026-10-16',repeat:'daily'}));f.reopen();
+  assert.equal(f.store.getDailyNorms('2026-10-16').pomodoroPlan.targets[0].workType,'investment+productive');
+  assert.deepEqual(f.store.getTimer(date).sessions,original);
+  assert.equal(f.store.getDailyNorms(date).pomodoroPlan.targets[0].actualPomodoros,1);
 });

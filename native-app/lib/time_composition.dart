@@ -3,35 +3,8 @@ import 'dart:math';
 import 'domain.dart';
 import 'repository.dart';
 
-const timeTypeLabels = {
-  'investment': 'Investment · развитие',
-  'productive': 'Productive · результат',
-  'leisure': 'Leisure · отдых',
-  'waste': 'Waste · потерянное',
-  'unclassified': 'Без типа',
-};
-
-String timeType(dynamic value) =>
-    switch (value?.toString().trim().toLowerCase()) {
-      'investment' ||
-      'investment time' ||
-      'инвестиционное' ||
-      'инвестиции' => 'investment',
-      'productive' || 'productive time' || 'продуктивное' => 'productive',
-      'leisure' || 'leasure' || 'leisure time' || 'отдых' => 'leisure',
-      'waste' || 'wasted' || 'wasted time' || 'потерянное' => 'waste',
-      _ => 'unclassified',
-    };
-
-Map<String, String> timeTypeOptions(dynamic previous) => {
-  '': 'Не выбран',
-  for (final e in timeTypeLabels.entries.where((e) => e.key != 'unclassified'))
-    e.key: e.value,
-  if (previous is String &&
-      previous.isNotEmpty &&
-      !timeTypeLabels.containsKey(previous))
-    previous: 'Прежний тип · $previous',
-};
+import 'time_types.dart';
+export 'time_types.dart';
 
 List<Json> pauseSpans(Json session, {int? now}) {
   final result = <Json>[];
@@ -169,6 +142,10 @@ List<Json> timeComposition(
         (entry['amount'] as num? ?? 0) * 3600.0;
     if (!seconds.isFinite || seconds <= 0) continue;
     final kind = timeType(entry['workType']);
+    values.putIfAbsent(
+      kind,
+      () => <String, dynamic>{'type': kind, 'seconds': 0.0, 'pomodoros': 0},
+    );
     values[kind]!['seconds'] += seconds;
     if (entry['timerSessionId'] is String) {
       entryTypes.putIfAbsent(entry['timerSessionId'], () => {}).add(kind);
@@ -185,6 +162,10 @@ List<Json> timeComposition(
         : known?.length == 1
         ? known!.first
         : 'unclassified';
+    values.putIfAbsent(
+      kind,
+      () => <String, dynamic>{'type': kind, 'seconds': 0.0, 'pomodoros': 0},
+    );
     values[kind]!['pomodoros']++;
   }
   final total = values.values.fold<double>(0, (n, r) => n + r['seconds']);
