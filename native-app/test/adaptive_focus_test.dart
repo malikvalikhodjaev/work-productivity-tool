@@ -8,6 +8,7 @@ import 'package:indicators_work/pomodoro_widgets.dart';
 import 'package:indicators_work/repository.dart';
 import 'package:indicators_work/section_analytics.dart';
 import 'package:indicators_work/work_stage_board.dart';
+import 'package:indicators_work/weekly_problem_card.dart';
 
 void main() {
   test('writing aggregates chosen dates without trash or invented daily production', () {
@@ -76,6 +77,11 @@ void main() {
                   backgroundColor: Colors.transparent,
                   appBar: AppBar(title: const Text('I&W · Фокус')),
                   body: AdaptiveFocusPlayer(
+                    weeklyProblem: WeeklyProblemBanner(
+                      repo: repo,
+                      compact: true,
+                      edit: () {},
+                    ),
                     changes: repo,
                     clock: '24:48',
                     mode: 'Pomodoro',
@@ -114,6 +120,22 @@ void main() {
         expect(tester.takeException(), isNull);
         expect(find.text('24:48').hitTestable(), findsOneWidget);
         expect(find.text('Учесть').hitTestable(), findsOneWidget);
+        expect(
+          find.text('Главная проблема недели').hitTestable(),
+          findsOneWidget,
+        );
+        expect(find.text('Тема и звук').hitTestable(), findsOneWidget);
+        final checklist = find.byKey(const ValueKey('focus-checklist-panel'));
+        expect(tester.widget<Material>(checklist).color, Colors.white);
+        expect(
+          tester.getTopLeft(checklist).dy,
+          greaterThan(
+            tester
+                .getBottomLeft(find.byKey(const ValueKey('focus-fixed-core')))
+                .dy,
+          ),
+        );
+        expect(tester.getSize(checklist).width, lessThanOrEqualTo(560));
         await tester.tap(find.text('Пауза'));
         expect(paused, isTrue);
         expect(
@@ -138,9 +160,7 @@ void main() {
           const Offset(0, 5000),
         );
         await tester.pumpAndSettle();
-        final settings = size.height < 596
-            ? find.byTooltip('Тема и звук')
-            : find.text('Тема и звук');
+        final settings = find.text('Тема и звук');
         await tester.tap(settings);
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Закрыть панель'));

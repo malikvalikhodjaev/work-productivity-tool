@@ -64,6 +64,15 @@ class DashboardRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setUiPreferences(Map<String, Object?> values) {
+    local.atomic(() {
+      for (final entry in values.entries) {
+        local.set(entry.key, entry.value);
+      }
+    });
+    notifyListeners();
+  }
+
   void setTimerOnMinimize(bool enabled) {
     local.set('timerOnMinimize', enabled);
     notifyListeners();

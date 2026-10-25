@@ -1,6 +1,11 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'focus_art_catalog.dart';
+import 'focus_rotation.dart';
+export 'focus_art_catalog.dart';
 
 const focusColors = {
   'green': Color(0xff243b30),
@@ -10,40 +15,92 @@ const focusColors = {
   'monet': Color(0xff293e4a),
 };
 
-const focusThemes = {
+final focusThemes = {
   'green': 'Зелень',
   'evening': 'Вечер',
   'desert': 'Пустыня',
   'lofi': 'Лофи',
-  'monet': 'Моне · Кувшинки',
-  'modigliani': 'Модильяни · Мадам Помпадур',
-  'renoir': 'Ренуар · Букет хризантем',
-  'pissarro': 'Писсарро · Хрустальный дворец',
-  'soutine': 'Сутин · Пейзаж Сере',
-  'levitan': 'Левитан · Золотая осень',
-  'shishkin': 'Шишкин · Рожь',
+  for (final painting in focusArtworks) painting.id: painting.label,
   'custom': 'Своя картина',
 };
 
-class FocusBackdrop extends StatelessWidget {
+class FocusBackdrop extends StatefulWidget {
   final String theme;
   final String? customImage;
   final bool enabled;
+  final Map<String, dynamic> rotation;
   final Widget child;
   const FocusBackdrop({
     super.key,
     required this.theme,
     required this.enabled,
     this.customImage,
+    this.rotation = const {},
     required this.child,
   });
   @override
-  Widget build(BuildContext context) => enabled
+  State<FocusBackdrop> createState() => _FocusBackdropState();
+}
+
+class _FocusBackdropState extends State<FocusBackdrop>
+    with WidgetsBindingObserver {
+  Timer? timer;
+  String? theme;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    theme = focusThemeAt(
+      widget.theme,
+      widget.rotation,
+      DateTime.now().millisecondsSinceEpoch,
+    );
+    timer = Timer.periodic(const Duration(seconds: 1), (_) => refresh());
+  }
+
+  void refresh() {
+    final next = focusThemeAt(
+      widget.theme,
+      widget.rotation,
+      DateTime.now().millisecondsSinceEpoch,
+    );
+    if (!mounted) return;
+    // No repository notifications, database writes or editor reconstruction.
+    if (theme != next) setState(() => theme = next);
+  }
+
+  @override
+  void didUpdateWidget(covariant FocusBackdrop oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    theme = focusThemeAt(
+      widget.theme,
+      widget.rotation,
+      DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) refresh();
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.enabled
       ? DecoratedBox(
-          decoration: focusDecoration(theme, customImage: customImage),
-          child: child,
+          decoration: focusDecoration(
+            theme ?? widget.theme,
+            customImage: widget.customImage,
+          ),
+          child: widget.child,
         )
-      : child;
+      : widget.child;
 }
 
 BoxDecoration focusDecoration(String theme, {String? customImage}) =>
@@ -74,14 +131,8 @@ BoxDecoration focusDecoration(String theme, {String? customImage}) =>
           : null,
     );
 
-const focusArt = {
-  'monet': 'monet-water-lilies-1906.jpg',
-  'modigliani': 'modigliani-painting.jpg',
-  'renoir': 'renoir-painting.jpg',
-  'pissarro': 'pissarro-painting.jpg',
-  'soutine': 'soutine-painting.jpg',
-  'levitan': 'levitan-painting.jpg',
-  'shishkin': 'shishkin-painting.jpg',
+final focusArt = {
+  for (final painting in focusArtworks) painting.id: painting.file,
 };
 
 /// The painting is bundled locally; selecting it never needs a network call.
@@ -91,12 +142,14 @@ class FocusSurface extends StatelessWidget {
   final double radius;
   final EdgeInsetsGeometry padding;
   final Widget child;
+  final Map<String, dynamic> rotation;
 
   const FocusSurface({
     super.key,
     required this.theme,
     required this.child,
     this.customImage,
+    this.rotation = const {},
     this.radius = 24,
     this.padding = EdgeInsets.zero,
   });
@@ -106,8 +159,11 @@ class FocusSurface extends StatelessWidget {
     color: focusColors[theme] ?? focusColors['green']!,
     borderRadius: BorderRadius.circular(radius),
     clipBehavior: Clip.antiAlias,
-    child: Ink(
-      decoration: focusDecoration(theme, customImage: customImage),
+    child: FocusBackdrop(
+      theme: theme,
+      customImage: customImage,
+      rotation: rotation,
+      enabled: true,
       child: Padding(padding: padding, child: child),
     ),
   );

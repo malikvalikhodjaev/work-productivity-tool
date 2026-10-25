@@ -488,6 +488,7 @@ class _WritingScreenState extends State<WritingScreen> {
           if (!didPop) closeClean();
         },
         child: FocusBackdrop(
+          rotation: object(repo.local.get('focusRotation')),
           theme: (repo.local.get('theme') ?? 'green').toString(),
           enabled: true,
           customImage: repo.local.get('customFocusImage') as String?,

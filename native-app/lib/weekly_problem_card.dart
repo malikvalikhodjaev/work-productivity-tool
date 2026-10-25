@@ -144,20 +144,45 @@ class WeeklyProblemBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     key: const ValueKey('weekly-problem-above-timer'),
-    padding: const EdgeInsets.only(bottom: 12),
+    padding: EdgeInsets.only(bottom: compact ? 0 : 12),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Главная проблема недели',
-          style: TextStyle(fontSize: 12, color: Color(0xffd0dad5)),
+        Row(
+          children: [
+            Expanded(
+              child: const Text(
+                'Главная проблема недели',
+                style: TextStyle(fontSize: 12, color: Color(0xffd0dad5)),
+              ),
+            ),
+            if (compact && edit != null)
+              IconButton(
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(24, 24),
+                  fixedSize: const Size(24, 24),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: const EdgeInsets.all(2),
+                ),
+                tooltip: 'Записать / уточнить проблему недели',
+                onPressed: edit,
+                constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  size: 16,
+                  color: Colors.white,
+                ),
+              ),
+          ],
         ),
         const SizedBox(height: 4),
         Text(
           repo.weeklyProblemText,
           style: const TextStyle(fontSize: 14, color: Colors.white),
         ),
-        if (edit != null)
+        if (edit != null && !compact)
           TextButton(
             onPressed: edit,
             child: const Text(

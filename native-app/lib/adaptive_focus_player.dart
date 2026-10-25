@@ -7,12 +7,20 @@ import 'package:flutter/material.dart';
 class AdaptiveFocusPlayer extends StatefulWidget {
   final String clock, mode;
   final Listenable changes;
-  final Widget contextPanel, description, actions, norms, settings;
+  final bool paused;
+  final Widget weeklyProblem,
+      contextPanel,
+      description,
+      actions,
+      norms,
+      settings;
   const AdaptiveFocusPlayer({
     super.key,
     required this.changes,
     required this.clock,
     required this.mode,
+    this.paused = false,
+    required this.weeklyProblem,
     required this.contextPanel,
     required this.description,
     required this.actions,
@@ -35,7 +43,8 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
           child: SizedBox(
             height: MediaQuery.sizeOf(context).height * .82,
             child: DefaultTextStyle(
-              style: const TextStyle(color: Colors.white, fontSize: 14),
+              style: Theme.of(context).textTheme.bodyMedium!
+                  .copyWith(color: Colors.white, fontSize: 14),
               child: Column(
                 children: [
                   ListTile(
@@ -72,105 +81,149 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
-      final dense = box.maxHeight < 540;
-      final side = box.maxWidth >= 980 && box.maxHeight >= 480;
+      final height = min(900.0, max(0.0, box.maxHeight - 16));
+      final dense = height < 540;
+      final tiny = height < 310;
       final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
       final clock = SizedBox(
-        height: (dense ? 56.0 : 88.0) / min(scale, 1.5),
-        child: FittedBox(
-          fit: BoxFit.contain,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            widget.clock,
-            key: const ValueKey('focus-clock'),
-            style: const TextStyle(
-              fontSize: 88,
-              fontWeight: FontWeight.w600,
-              fontFeatures: [FontFeature.tabularFigures()],
+        height:
+            (tiny
+                ? 44.0
+                : dense
+                ? 44.0
+                : 82.0) /
+            min(scale, 1.5),
+        child: Column(
+          children: [
+            if (widget.paused)
+              const Text(
+                'На паузе',
+                key: ValueKey('focus-paused-status'),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Color(0xffffdc9a),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            Expanded(
+              child: FittedBox(
+                fit: BoxFit.contain,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  widget.clock,
+                  key: const ValueKey('focus-clock'),
+                  style: const TextStyle(
+                    fontSize: 88,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       );
-      final tools = Row(
-        mainAxisSize: MainAxisSize.min,
+      final tools = Wrap(
+        alignment: WrapAlignment.end,
+        spacing: 4,
         children: [
-          if (!dense)
-            Expanded(
-              child: Text(
-                widget.mode,
-                style: const TextStyle(color: Colors.white70),
-              ),
-            ),
           for (final name in ['problems', 'settings'])
-            if (dense)
-              IconButton(
-                tooltip: name == 'problems' ? 'Проблемы' : 'Тема и звук',
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 32),
-                padding: const EdgeInsets.all(4),
-                visualDensity: VisualDensity.compact,
-                onPressed: () => open(name),
-                icon: Icon(
-                  name == 'problems' ? Icons.flag_outlined : Icons.tune,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              )
-            else
-              TextButton(
-                onPressed: () => open(name),
-                style: TextButton.styleFrom(foregroundColor: Colors.white),
-                child: Text(name == 'problems' ? 'Проблемы' : 'Тема и звук'),
+            TextButton(
+              onPressed: () => open(name),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                minimumSize: const Size(0, 30),
+                textStyle: Theme.of(context).textTheme.labelLarge!
+                    .copyWith(fontSize: tiny ? 12 : 14),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
+              child: Text(name == 'problems' ? 'Проблемы' : 'Тема и звук'),
+            ),
         ],
       );
       final core = Container(
         key: const ValueKey('focus-fixed-core'),
-        padding: EdgeInsets.all(dense ? 8 : 18),
-        decoration: BoxDecoration(
-          color: const Color(0x9a12261f),
-          borderRadius: BorderRadius.circular(22),
+        padding: EdgeInsets.fromLTRB(
+          dense ? 8 : 18,
+          dense ? 4 : 8,
+          dense ? 8 : 18,
+          4,
         ),
         child: DefaultTextStyle(
-          style: const TextStyle(color: Colors.white, fontSize: 14),
+          style: Theme.of(context).textTheme.bodyMedium!
+              .copyWith(color: Colors.white, fontSize: 14),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (box.maxHeight >= 780)
-                SizedBox(
-                  height: min(130, box.maxHeight * .16),
-                  child: SingleChildScrollView(child: widget.contextPanel),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: tiny
+                      ? 50
+                      : dense
+                      ? 50
+                      : 110,
                 ),
-              if (dense)
-                Row(
-                  children: [
-                    Expanded(child: clock),
-                    tools,
-                  ],
-                )
-              else
-                clock,
-              const SizedBox(height: 4),
-              Expanded(
-                child: Scrollbar(
-                  child: SingleChildScrollView(
-                    key: const ValueKey('focus-context-scroll'),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (dense)
-                          Text(
-                            widget.mode,
-                            style: const TextStyle(color: Colors.white70),
-                          ),
-                        widget.description,
-                      ],
-                    ),
+                child: SingleChildScrollView(
+                  key: const ValueKey('focus-weekly-scroll'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      widget.weeklyProblem,
+                      if (tiny) widget.description,
+                    ],
                   ),
                 ),
               ),
               const SizedBox(height: 4),
-              widget.actions,
-              if (!dense) tools,
+              Row(
+                children: [
+                  Expanded(flex: 1, child: clock),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: SizedBox(
+                        height: dense ? 38 : 48,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: widget.actions,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (!tiny) const SizedBox(height: 4),
+              if (!tiny)
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: tiny
+                        ? 24
+                        : dense
+                        ? 24
+                        : 78,
+                  ),
+                  child: Scrollbar(
+                    child: SingleChildScrollView(
+                      key: const ValueKey('focus-context-scroll'),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (!dense)
+                            Text(
+                              widget.mode,
+                              style: const TextStyle(color: Colors.white70),
+                            ),
+                          widget.description,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              tools,
             ],
           ),
         ),
@@ -178,7 +231,9 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
       // This panel is permanent at every size, including the compact window.
       final checklist = Material(
         key: const ValueKey('focus-checklist-panel'),
-        color: Colors.transparent,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
         child: Scrollbar(
           child: SingleChildScrollView(
             key: const ValueKey('focus-checklist-scroll'),
@@ -190,23 +245,22 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
         padding: const EdgeInsets.all(8),
         child: Center(
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: side ? 1040 : 560),
-            child: side
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(child: core),
-                      const SizedBox(width: 16),
-                      Expanded(child: checklist),
-                    ],
-                  )
-                : Column(
-                    children: [
-                      Expanded(flex: 53, child: core),
-                      const SizedBox(height: 8),
-                      Expanded(flex: 47, child: checklist),
-                    ],
-                  ),
+            constraints: BoxConstraints(maxWidth: 560, maxHeight: height),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xb312261f),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  core,
+                  const SizedBox(height: 8),
+                  Flexible(fit: FlexFit.loose, child: checklist),
+                ],
+              ),
+            ),
           ),
         ),
       );

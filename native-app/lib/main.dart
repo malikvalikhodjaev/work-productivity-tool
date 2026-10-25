@@ -25,6 +25,7 @@ import 'data_table.dart';
 import 'adaptive_focus_player.dart';
 import 'work_stage_board.dart';
 import 'focus_theme.dart';
+import 'focus_gallery_settings.dart';
 import 'timer_command_notice.dart';
 import 'daily_problem_banner.dart';
 import 'weekly_problem_card.dart';
@@ -150,6 +151,14 @@ class _DashboardHomeState extends State<DashboardHome>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     board = repo.local.get('workView') != 'list';
+    if (repo.local.get('focusRotation') == null) {
+      repo.local.set('focusRotation', {
+        'enabled': focusArt.containsKey(repo.local.get('theme')),
+        'minutes': 10,
+        'anchorMs': DateTime.now().millisecondsSinceEpoch,
+        'pool': focusArt.keys.toList(),
+      });
+    }
     background = BackgroundRuntime(repo);
     repo.addListener(changed);
     if (widget.backgroundEnabled && Platform.isWindows) {
@@ -176,7 +185,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.24',
+        'clientVersion': '0.1.25',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -1042,6 +1051,7 @@ class _DashboardHomeState extends State<DashboardHome>
     final s = repo.active;
     final theme = (repo.local.get('theme') ?? 'green').toString();
     return FocusSurface(
+      rotation: object(repo.local.get('focusRotation')),
       theme: theme,
       customImage: repo.local.get('customFocusImage') as String?,
       child: Padding(
@@ -1222,12 +1232,17 @@ class _DashboardHomeState extends State<DashboardHome>
       'focus-custom-${uuid.v4()}${p.extension(picked.path)}',
     );
     await picked.saveTo(destination);
-    repo.setUiPreference('customFocusImage', destination);
-    repo.setUiPreference('theme', 'custom');
+    repo.setUiPreferences({
+      'customFocusImage': destination,
+      'theme': 'custom',
+      'focusRotation': {
+        ...object(repo.local.get('focusRotation')),
+        'enabled': false,
+      },
+    });
   }
 
   Widget focusOptions() {
-    final theme = (repo.local.get('theme') ?? 'green').toString();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1251,24 +1266,7 @@ class _DashboardHomeState extends State<DashboardHome>
             style: const TextStyle(color: Colors.white70),
           ),
         ),
-        Wrap(
-          spacing: 8,
-          children: [
-            for (final entry in focusThemes.entries.where(
-              (e) =>
-                  e.key != 'custom' ||
-                  repo.local.get('customFocusImage') != null,
-            ))
-              ChoiceChip(
-                label: Text(entry.value),
-                selected: theme == entry.key,
-                onSelected: (_) {
-                  repo.setUiPreference('theme', entry.key);
-                  setState(() {});
-                },
-              ),
-          ],
-        ),
+        FocusGallerySettings(repo: repo),
         if (Platform.isWindows)
           TextButton.icon(
             onPressed: () => safe(chooseFocusPainting),
@@ -1358,7 +1356,13 @@ class _DashboardHomeState extends State<DashboardHome>
   Widget focusPlayer() {
     final s = repo.active;
     return AdaptiveFocusPlayer(
+      paused: s?['status'] == 'paused' && !inLeisure(s),
       changes: repo,
+      weeklyProblem: WeeklyProblemBanner(
+        repo: repo,
+        compact: true,
+        edit: () => editWeeklyProblem(weekStart()),
+      ),
       clock: s == null ? '25:00' : clockOf(s, repo.now),
       mode: s == null
           ? 'Пространство для важного'
@@ -2858,6 +2862,7 @@ class _DashboardHomeState extends State<DashboardHome>
       }
     },
     child: FocusBackdrop(
+      rotation: object(repo.local.get('focusRotation')),
       theme: (repo.local.get('theme') ?? 'green').toString(),
       enabled: focusMode || background.desktop?.compact == true,
       customImage: repo.local.get('customFocusImage') as String?,
@@ -2883,12 +2888,16 @@ class _DashboardHomeState extends State<DashboardHome>
                     border: Border.all(color: Colors.white70),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Text(
-                    'I&W · Фокус',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
+                  child: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Pomodoro Club',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 )
@@ -2988,7 +2997,7 @@ class _DashboardHomeState extends State<DashboardHome>
                           ),
                           const SizedBox(height: 12),
                           const Text(
-                            'I&W · Native 0.1.24',
+                            'I&W · Native 0.1.25',
                             style: TextStyle(fontSize: 11),
                           ),
                         ],

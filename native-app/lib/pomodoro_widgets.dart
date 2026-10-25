@@ -551,6 +551,21 @@ class PomodoroChecklist extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final norms = repo.pomodoroTargetsForDate();
+    final denseButtons = rowsFirst && compact;
+    final buttonConstraints = denseButtons
+        ? const BoxConstraints(minWidth: 32, minHeight: 32)
+        : null;
+    final buttonDensity = denseButtons
+        ? VisualDensity.compact
+        : VisualDensity.standard;
+    final buttonStyle = denseButtons
+        ? IconButton.styleFrom(
+            minimumSize: const Size(32, 32),
+            fixedSize: const Size(32, 32),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            padding: const EdgeInsets.all(4),
+          )
+        : null;
     final checks = Column(
       children: [
         for (final n in norms)
@@ -576,12 +591,20 @@ class PomodoroChecklist extends StatelessWidget {
                 if (focus != null)
                   IconButton(
                     tooltip: 'Фокус',
+                    style: buttonStyle,
+                    constraints: buttonConstraints,
+                    padding: denseButtons ? const EdgeInsets.all(4) : null,
+                    visualDensity: buttonDensity,
                     onPressed: () =>
                         focus!(n['workRef'].toString(), n['title'].toString()),
                     icon: const Icon(Icons.play_arrow_outlined),
                   ),
                 IconButton(
                   tooltip: 'Изменить норматив',
+                  style: buttonStyle,
+                  constraints: buttonConstraints,
+                  padding: denseButtons ? const EdgeInsets.all(4) : null,
+                  visualDensity: buttonDensity,
                   onPressed: () =>
                       editPomodoroTarget(context, repo, previous: n),
                   icon: const Icon(Icons.edit_outlined, size: 18),
@@ -615,11 +638,19 @@ class PomodoroChecklist extends StatelessWidget {
                   ),
                   IconButton(
                     onPressed: () => editPomodoroCapacity(context, repo),
+                    style: buttonStyle,
+                    constraints: buttonConstraints,
+                    padding: denseButtons ? const EdgeInsets.all(4) : null,
+                    visualDensity: buttonDensity,
                     icon: const Icon(Icons.speed_outlined),
                     tooltip: 'Дневной лимит по силам',
                   ),
                   IconButton(
                     onPressed: () => editPomodoroTarget(context, repo),
+                    style: buttonStyle,
+                    constraints: buttonConstraints,
+                    padding: denseButtons ? const EdgeInsets.all(4) : null,
+                    visualDensity: buttonDensity,
                     icon: const Icon(Icons.add),
                     tooltip: 'Норматив на день',
                   ),
