@@ -19,3 +19,5 @@
 Сравнить SHA-256 назначенного ICO с упакованным assets/iw.ico, повторно прочитать IconLocation, цель и аргументы всех найденных ярлыков. Повторный запуск не должен менять уже исправленные файлы. Применение не открывает базу и не меняет пользовательские данные.
 
 API: https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shchangenotify
+
+Дополнение 2026-10-25: для повторного закрепления окна применяется явный AppUserModelID и RelaunchIconResource — [ADR-046](ADR-046-visible-timer-and-norm-time.md). Это дополняет ремонт существующих ярлыков.

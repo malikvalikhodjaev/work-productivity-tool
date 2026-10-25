@@ -51,6 +51,7 @@ class BackgroundRuntime {
       );
       await windowManager.setMinimumSize(const Size(380, 540));
       await windowManager.setTitle(appTitle);
+      if (!timerOnly) await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
       trayIcon = tray.TrayIcon.create();
       if (trayIcon == null) {
         throw StateError(

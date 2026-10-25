@@ -4,6 +4,7 @@ import 'domain.dart';
 import 'forms.dart';
 import 'pomodoro_plan.dart';
 import 'repository.dart';
+import 'time_composition.dart';
 
 Future<void> editPomodoroCapacity(
   BuildContext context,
@@ -227,6 +228,7 @@ class _PomodoroTargetEditorState extends State<_PomodoroTargetEditor> {
   late final TextEditingController date, title, target;
   late final List<Json> baseRecords;
   String? workRef, error;
+  String workType = '';
   bool saving = false, creating = false;
 
   DashboardRepository get repo => widget.repo;
@@ -236,6 +238,7 @@ class _PomodoroTargetEditorState extends State<_PomodoroTargetEditor> {
     super.initState();
     final entities = _normWorks(repo);
     workRef = widget.previous?['workRef'] ?? widget.ref;
+    workType = widget.previous?['workType']?.toString() ?? '';
     date = TextEditingController(text: widget.previous?['date'] ?? today());
     title = TextEditingController(
       text:
@@ -349,6 +352,7 @@ class _PomodoroTargetEditorState extends State<_PomodoroTargetEditor> {
         'workRef': workRef,
         'title': title.text,
         'target': target.text.isEmpty ? null : int.tryParse(target.text),
+        'workType': workType,
         if (widget.previous == null) 'create': true,
       };
       if (workRef == null ||
@@ -452,6 +456,35 @@ class _PomodoroTargetEditorState extends State<_PomodoroTargetEditor> {
                   decoration: const InputDecoration(
                     labelText: 'Название норматива',
                   ),
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  key: const ValueKey('norm-time-type'),
+                  initialValue: workType,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Тип времени норматива',
+                  ),
+                  items:
+                      {
+                            '': 'Как у карточки работы',
+                            ...(timeTypeOptions(workType)..remove('')),
+                          }.entries
+                          .map(
+                            (e) => DropdownMenuItem(
+                              value: e.key,
+                              child: Text(e.value),
+                            ),
+                          )
+                          .toList(),
+                  onChanged: saving
+                      ? null
+                      : (value) => setState(() => workType = value ?? ''),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Тип применяется к новым сеансам этой работы. Уже учтённое время не меняется.',
+                  style: TextStyle(fontSize: 12),
                 ),
                 const SizedBox(height: 14),
                 TextField(
@@ -625,9 +658,22 @@ class PomodoroChecklist extends StatelessWidget {
             ),
             const SizedBox(width: 9),
             Expanded(
-              child: Text(
-                n['title'].toString(),
-                key: ValueKey('pomodoro-title:${n['workRef']}'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    n['title'].toString(),
+                    key: ValueKey('pomodoro-title:${n['workRef']}'),
+                  ),
+                  if ((n['workType'] ?? '').toString().isNotEmpty)
+                    Text(
+                      timeTypeLabels[timeType(n['workType'])]!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xff53645b),
+                      ),
+                    ),
+                ],
               ),
             ),
             const SizedBox(width: 8),

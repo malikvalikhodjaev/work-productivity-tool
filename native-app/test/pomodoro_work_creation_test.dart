@@ -55,6 +55,7 @@ void main() {
         field('Помидорок за день · пусто для снятия'),
         '10',
       );
+      await tester.ensureVisible(find.text('Создать работу / кейс'));
       await tester.tap(find.text('Создать работу / кейс'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Сохранить').last);
@@ -146,7 +147,7 @@ void main() {
       final repo = DashboardRepository(db);
       await openEditor(tester, repo);
       expect(find.text('Выбери работу'), findsOneWidget);
-      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.tap(find.byType(DropdownButtonFormField<String>).first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('ИТ решение').last);
       await tester.pumpAndSettle();
@@ -155,7 +156,7 @@ void main() {
       expect(find.textContaining('уже есть норматив'), findsOneWidget);
       expect(repo.pending, isEmpty);
       expect(repo.pomodoroTargetsForDate().single['title'], 'Первая норма');
-      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.tap(find.byType(DropdownButtonFormField<String>).first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Руководства').last);
       await tester.pumpAndSettle();
@@ -198,6 +199,7 @@ void main() {
     await openEditor(tester, repo);
     await tester.enterText(field('Название норматива'), 'Свой текст');
     await tester.enterText(field('Помидорок за день · пусто для снятия'), '3');
+    await tester.ensureVisible(find.text('Создать работу / кейс'));
     await tester.tap(find.text('Создать работу / кейс'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Закрыть').last);

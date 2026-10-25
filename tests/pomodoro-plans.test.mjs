@@ -122,3 +122,31 @@ test('New commands default to daily and invalid repeat values preserve the sourc
   assert.throws(()=>f.store.nativeMutate(f.command(1,null,{repeat:'sometimes',date:'2026-10-16'})),/Повтор/);
   assert.equal(readFileSync(f.file,'utf8'),before);
 });
+
+
+test('Norm time type survives restart, legacy edits and validation without rewriting completed sessions', () => {
+  const f=fixture();
+  f.store.nativeMutate(f.command(3,null,{workType:'investment'}));
+  const session=f.timer('start',{title:'Чтение',mode:'pomodoro',metricId:null,allocation:'outside',workRef:ref,workType:'productive'}).active;
+  f.advance(1500);f.timer('finish',{sessionId:session.id});
+  const original=f.store.getTimer(date).sessions.find(s=>s.id===session.id);
+  let row=f.store.getDailyNorms(date).pomodoroTargets[0];
+  f.store.nativeMutate(f.command(4,row.updatedAt));f.reopen();
+  row=f.store.getDailyNorms(date).pomodoroTargets[0];
+  assert.equal(row.workType,'investment');
+  assert.equal(row.revisions[0].workType,'investment');
+  assert.deepEqual(f.store.getTimer(date).sessions.find(s=>s.id===session.id),original);
+  const before=readFileSync(f.file,'utf8');
+  assert.throws(()=>f.store.nativeMutate(f.command(4,row.updatedAt,{workType:'guessed-waste'})),/тип времени/);
+  assert.equal(readFileSync(f.file,'utf8'),before);
+  f.store.nativeMutate(f.command(4,row.updatedAt,{workType:''}));
+  assert.equal(f.store.getDailyNorms(date).pomodoroTargets[0].workType,'');
+});
+
+
+test('Legacy client changing a future daily norm keeps its inherited time type',()=>{
+  const f=fixture();f.store.nativeMutate(f.command(3,null,{repeat:'daily',workType:'investment'}));
+  f.store.nativeMutate(f.command(4,null,{repeat:'daily',date:'2026-10-16'}));
+  assert.equal(f.store.getDailyNorms('2026-10-16').pomodoroPlan.targets[0].workType,'investment');
+  assert.equal(f.store.getDailyNorms(date).pomodoroPlan.targets[0].workType,'investment');
+});

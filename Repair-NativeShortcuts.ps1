@@ -29,7 +29,48 @@ if (-not ('IndicatorsWork.ShortcutShell' -as [type])) {
 using System;
 using System.Runtime.InteropServices;
 namespace IndicatorsWork {
+    [StructLayout(LayoutKind.Sequential)] public struct PropertyKey {
+        public Guid format; public uint id;
+        public PropertyKey(Guid value, uint number) { format=value; id=number; }
+    }
+    [StructLayout(LayoutKind.Explicit, Size=24)] public struct PropertyValue {
+        [FieldOffset(0)] public ushort type;
+        [FieldOffset(8)] public IntPtr pointer;
+    }
+    [ComImport, Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface PropertyStore {
+        void GetCount(out uint count);
+        void GetAt(uint index, out PropertyKey key);
+        void GetValue(ref PropertyKey key, out PropertyValue value);
+        void SetValue(ref PropertyKey key, ref PropertyValue value);
+        void Commit();
+    }
     public static class ShortcutShell {
+        [DllImport("shell32.dll", CharSet=CharSet.Unicode, PreserveSig=false)]
+        private static extern void SHGetPropertyStoreFromParsingName(string path, IntPtr context, uint flags, ref Guid id, [MarshalAs(UnmanagedType.Interface)] out PropertyStore store);
+        private static void InitPropVariantFromString(string text, out PropertyValue value) {
+            value = new PropertyValue { type=31, pointer=Marshal.StringToCoTaskMemUni(text) };
+        }
+        [DllImport("ole32.dll")] private static extern int PropVariantClear(ref PropertyValue value);
+        private static PropertyKey AppIdKey = new PropertyKey(new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 5);
+        public static string AppId(string path) {
+            Guid id=typeof(PropertyStore).GUID; PropertyStore store;
+            SHGetPropertyStoreFromParsingName(path, IntPtr.Zero, 0, ref id, out store);
+            PropertyValue value;
+            try { store.GetValue(ref AppIdKey, out value);
+                try { return value.type==31 ? Marshal.PtrToStringUni(value.pointer) : null; }
+                finally { PropVariantClear(ref value); }
+            } finally { Marshal.ReleaseComObject(store); }
+        }
+        public static void SetAppId(string path, string appId) {
+            Guid id=typeof(PropertyStore).GUID; PropertyStore store;
+            SHGetPropertyStoreFromParsingName(path, IntPtr.Zero, 2, ref id, out store);
+            PropertyValue value;
+            try { InitPropVariantFromString(appId, out value);
+                try { store.SetValue(ref AppIdKey, ref value); store.Commit(); }
+                finally { PropVariantClear(ref value); }
+            } finally { Marshal.ReleaseComObject(store); }
+        }
         [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
         private static extern void SHChangeNotify(int eventId, uint flags, string item1, IntPtr item2);
         public static void Updated(string path) {
@@ -50,7 +91,8 @@ foreach ($iwFolder in ($iwFolders | Select-Object -Unique)) {
         $iwViaLauncher = $iwLauncher -and ([IO.Path]::GetFileName($iwLink.TargetPath) -ieq 'wscript.exe') -and $iwLink.Arguments -ceq ('"' + $iwLauncher + '"')
         if (-not ($iwDirect -or $iwViaLauncher)) { continue }
         $iwLocation = $iwIcon + ',0'
-        if ($iwLink.IconLocation -ne $iwLocation) {
+        $iwAppId = 'UzIW.IndicatorsWork'
+        if ($iwLink.IconLocation -ne $iwLocation -or [IndicatorsWork.ShortcutShell]::AppId($iwFile.FullName) -ne $iwAppId) {
             New-Item -ItemType Directory -Force -Path $iwBackup | Out-Null
             $iwSavedLink = Join-Path $iwBackup ([guid]::NewGuid().ToString() + '.lnk')
             Copy-Item -LiteralPath $iwFile.FullName -Destination $iwSavedLink
@@ -60,8 +102,10 @@ foreach ($iwFolder in ($iwFolders | Select-Object -Unique)) {
             try {
                 $iwLink.IconLocation = $iwLocation
                 $iwLink.Save()
+                [IndicatorsWork.ShortcutShell]::SetAppId($iwFile.FullName, $iwAppId)
                 $iwReadBack = $iwShell.CreateShortcut($iwFile.FullName)
                 if ($iwReadBack.TargetPath -cne $iwOldTarget -or $iwReadBack.Arguments -cne $iwOldArguments -or $iwReadBack.IconLocation -ne $iwLocation) { throw 'Shortcut verification failed.' }
+                if ([IndicatorsWork.ShortcutShell]::AppId($iwFile.FullName) -ne $iwAppId) { throw 'Shortcut application identity verification failed.' }
             } catch {
                 Copy-Item -LiteralPath $iwSavedLink -Destination $iwFile.FullName -Force
                 throw

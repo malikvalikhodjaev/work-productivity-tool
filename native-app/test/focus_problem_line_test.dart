@@ -55,8 +55,14 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        expect(find.text('Неделя').hitTestable(), findsOneWidget);
-        expect(find.text('Сегодня').hitTestable(), findsOneWidget);
+        expect(
+          find.text('Главная проблема недели').hitTestable(),
+          findsOneWidget,
+        );
+        expect(
+          find.text('Главная проблема на сегодня').hitTestable(),
+          findsOneWidget,
+        );
         for (final kind in ['week', 'day']) {
           final body = find.byKey(ValueKey('focus-problem-$kind-text'));
           final paragraph = tester.renderObject<RenderParagraph>(body);
@@ -88,7 +94,9 @@ void main() {
           ),
           dayBounds,
         );
+        await tester.ensureVisible(find.text('24:52'));
         expect(find.text('24:52').hitTestable(), findsOneWidget);
+        await tester.ensureVisible(find.text('Учесть'));
         expect(find.text('Учесть').hitTestable(), findsOneWidget);
         expect(
           tester
@@ -98,7 +106,8 @@ void main() {
               .data,
           day,
         );
-        await tester.tap(find.text('Сегодня'));
+        await tester.ensureVisible(find.text('Главная проблема на сегодня'));
+        await tester.tap(find.text('Главная проблема на сегодня'));
         expect(dayEdited, isTrue);
         await tester.pumpWidget(const SizedBox());
       });

@@ -115,55 +115,37 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
+        await tester.ensureVisible(find.text('24:48'));
+        await tester.pumpAndSettle();
         expect(find.text('24:48').hitTestable(), findsOneWidget);
-        expect(find.text('Учесть').hitTestable(), findsOneWidget);
-        expect(find.text('Неделя').hitTestable(), findsOneWidget);
-        expect(find.text('Сегодня').hitTestable(), findsOneWidget);
-        expect(
-          find.text('Уточнить следующий шаг').hitTestable(),
-          findsOneWidget,
-        );
-        expect(find.text('Настройки').hitTestable(), findsOneWidget);
         final checklist = find.byKey(const ValueKey('focus-checklist-panel'));
         expect(tester.widget<Material>(checklist).color, Colors.white);
-        expect(
-          tester.getTopLeft(checklist).dy,
-          greaterThan(
-            tester
-                .getBottomLeft(find.byKey(const ValueKey('focus-core-scroll')))
-                .dy,
-          ),
-        );
         expect(tester.getSize(checklist).width, lessThanOrEqualTo(560));
+        await tester.ensureVisible(find.text('Пауза'));
         await tester.tap(find.text('Пауза'));
         expect(paused, isTrue);
-        expect(
-          find.byIcon(Icons.check_box_outline_blank).hitTestable(),
-          findsWidgets,
-        );
-        expect(find.text('Норматив 0').hitTestable(), findsOneWidget);
-        expect(find.byTooltip('Нормативы'), findsNothing);
         await tester.scrollUntilVisible(
           find.text('Норматив 29'),
           400,
-          scrollable: find.descendant(
-            of: find.byKey(const ValueKey('focus-checklist-scroll')),
-            matching: find.byType(Scrollable),
-          ),
+          scrollable: find
+              .descendant(
+                of: find.byKey(const ValueKey('focus-page-scroll')),
+                matching: find.byType(Scrollable),
+              )
+              .first,
         );
         expect(find.text('Норматив 29').hitTestable(), findsOneWidget);
-        expect(find.text('24:48').hitTestable(), findsOneWidget);
-        expect(find.text('Учесть').hitTestable(), findsOneWidget);
-        await tester.drag(
+        expect(
           find.byKey(const ValueKey('focus-checklist-scroll')),
-          const Offset(0, 5000),
+          findsNothing,
         );
-        await tester.pumpAndSettle();
-        final settings = find.text('Настройки');
+        final settings = find.text('Настройки таймера');
+        await tester.ensureVisible(settings);
         await tester.tap(settings);
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Закрыть панель'));
         await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Норматив 0'));
         expect(find.text('Норматив 0').hitTestable(), findsOneWidget);
         await tester.pumpWidget(const SizedBox());
       },

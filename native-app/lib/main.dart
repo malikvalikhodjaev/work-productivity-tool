@@ -40,6 +40,8 @@ import 'connection_bootstrap.dart';
 import 'goal_progress.dart';
 import 'goal_table.dart';
 import 'activity_status.dart';
+import 'dashboard_timer_bar.dart';
+import 'dashboard_window_header.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -247,7 +249,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.31',
+        'clientVersion': '0.1.32',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -3006,88 +3008,97 @@ class _DashboardHomeState extends State<DashboardHome>
         backgroundColor: focusMode || background.desktop?.compact == true
             ? Colors.transparent
             : null,
-        appBar: AppBar(
-          toolbarHeight: MediaQuery.sizeOf(context).width < 600
-              ? (MediaQuery.textScalerOf(context).scale(18) > 24 ? 88 : 64)
-              : 72,
-          flexibleSpace: Platform.isWindows
-              ? GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onDoubleTap: () => background.desktop?.toggleMaximized(),
-                  child: const SizedBox.expand(),
-                )
-              : null,
-          backgroundColor: focusMode || background.desktop?.compact == true
-              ? Colors.transparent
-              : null,
-          foregroundColor: focusMode || background.desktop?.compact == true
-              ? Colors.white
-              : null,
-          title: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onDoubleTap: Platform.isWindows
-                ? () => background.desktop?.toggleMaximized()
+        appBar: DashboardWindowHeader(
+          enabled: Platform.isWindows && widget.backgroundEnabled,
+          themed: focusMode || background.desktop?.compact == true,
+          toolbar: AppBar(
+            toolbarHeight: MediaQuery.sizeOf(context).width < 600
+                ? (MediaQuery.textScalerOf(context).scale(18) > 24 ? 88 : 64)
+                : 72,
+            flexibleSpace: Platform.isWindows
+                ? GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onDoubleTap: () => background.desktop?.toggleMaximized(),
+                    child: const SizedBox.expand(),
+                  )
                 : null,
-            child: SizedBox(
-              width: double.infinity,
-              child: focusMode || background.desktop?.compact == true
-                  ? Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black26,
-                        border: Border.all(color: Colors.white70),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Text(
-                        'Pomodoro Club',
-                        softWrap: true,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            backgroundColor: focusMode || background.desktop?.compact == true
+                ? Colors.transparent
+                : null,
+            foregroundColor: focusMode || background.desktop?.compact == true
+                ? Colors.white
+                : null,
+            title: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onDoubleTap: Platform.isWindows
+                  ? () => background.desktop?.toggleMaximized()
+                  : null,
+              child: SizedBox(
+                width: double.infinity,
+                child: focusMode || background.desktop?.compact == true
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black26,
+                          border: Border.all(color: Colors.white70),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text(
+                          'Pomodoro Club',
+                          softWrap: true,
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      )
+                    : const Text(
+                        'Indicators & Work Dashboard',
                         style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    )
-                  : const Text(
-                      'Indicators & Work Dashboard',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+              ),
             ),
-          ),
-          actions: [
-            if (focusMode || background.desktop?.compact == true) ...[
-              IconButton(
-                onPressed: show,
-                icon: const Icon(Icons.dashboard_outlined),
-                tooltip: 'Все разделы',
-              ),
-              IconButton(
-                onPressed: () async {
-                  foreground = false;
-                  await background.desktop?.hide();
-                },
-                icon: const Icon(Icons.visibility_off_outlined),
-                tooltip: 'Скрыть таймер в трей',
-              ),
-            ] else ...[
-              IconButton(
-                onPressed: repo.syncing ? null : repo.synchronize,
-                icon: Icon(repo.online ? Icons.sync : Icons.cloud_off_outlined),
-                tooltip: repo.status,
-              ),
-              IconButton(
-                onPressed: settings,
-                icon: const Icon(Icons.settings_outlined),
-                tooltip: 'Настройки и нормативы',
-              ),
+            actions: [
+              if (focusMode || background.desktop?.compact == true) ...[
+                IconButton(
+                  onPressed: show,
+                  icon: const Icon(Icons.dashboard_outlined),
+                  tooltip: 'Все разделы',
+                ),
+                IconButton(
+                  onPressed: () async {
+                    foreground = false;
+                    await background.desktop?.hide();
+                  },
+                  icon: const Icon(Icons.visibility_off_outlined),
+                  tooltip: 'Скрыть таймер в трей',
+                ),
+              ] else ...[
+                IconButton(
+                  onPressed: repo.syncing ? null : repo.synchronize,
+                  icon: Icon(
+                    repo.online ? Icons.sync : Icons.cloud_off_outlined,
+                  ),
+                  tooltip: repo.status,
+                ),
+                IconButton(
+                  onPressed: settings,
+                  icon: const Icon(Icons.settings_outlined),
+                  tooltip: 'Настройки и нормативы',
+                ),
+              ],
             ],
-          ],
+          ),
         ),
         body: LayoutBuilder(
           builder: (context, constraints) {
@@ -3151,7 +3162,7 @@ class _DashboardHomeState extends State<DashboardHome>
                                 const SizedBox(height: 20),
                                 const SizedBox(height: 12),
                                 const Text(
-                                  'I&W · Native 0.1.31',
+                                  'I&W · Native 0.1.32',
                                   style: TextStyle(fontSize: 11),
                                 ),
                               ],
@@ -3166,6 +3177,7 @@ class _DashboardHomeState extends State<DashboardHome>
                               padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
                               child: ActivityStatus(
                                 repo: repo,
+                                showTimer: false,
                                 inspect: () => selectSection(4),
                               ),
                             ),
@@ -3186,6 +3198,19 @@ class _DashboardHomeState extends State<DashboardHome>
                                         : const SizedBox.shrink(),
                                 ],
                               ),
+                            ),
+                            DashboardTimerBar(
+                              repo: repo,
+                              pulse: clockPulse,
+                              open: () => changeFocus(true),
+                              pause: () => safe(
+                                () => repo.timerAction(
+                                  repo.active?['status'] == 'paused'
+                                      ? 'resume'
+                                      : 'pause',
+                                ),
+                              ),
+                              finish: finishTimer,
                             ),
                           ],
                         ),

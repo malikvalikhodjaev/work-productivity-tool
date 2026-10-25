@@ -254,6 +254,9 @@ class DashboardRepository extends ChangeNotifier {
           'Новая карточка ещё не отправлена на сервер. Синхронизируй её или выбери таймер устройства в настройках.',
         );
       }
+      final norm = pomodoroTargetsForDate()
+          .where((n) => n['workRef'] == ref)
+          .firstOrNull;
       final input = {
         'title': title,
         'workRef': ref,
@@ -261,7 +264,9 @@ class DashboardRepository extends ChangeNotifier {
         'allocation': source['metricId'] != null
             ? 'assigned'
             : source['allocation'] ?? 'unclassified',
-        'workType': source['workType'] ?? '',
+        'workType': (norm?['workType'] ?? '').toString().isNotEmpty
+            ? norm!['workType']
+            : source['workType'] ?? '',
         'mode': timerMode,
         'settings': settings,
       };
@@ -572,6 +577,7 @@ class DashboardRepository extends ChangeNotifier {
       throw StateError('Сначала подключи приложение к своему серверу.');
     }
     if (module == 'pomodoroTarget') {
+      validateNormTimeType(input);
       input = {...input, 'repeat': input['repeat'] ?? 'daily'};
     }
     if (module == 'pomodoroCapacity') validatePomodoroCapacity(input);

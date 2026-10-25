@@ -1,5 +1,18 @@
 import 'domain.dart';
 
+void validateNormTimeType(Json input) {
+  if (input.containsKey('workType') &&
+      ![
+        '',
+        'investment',
+        'productive',
+        'leisure',
+        'waste',
+      ].contains(input['workType'])) {
+    throw ArgumentError('Выбери тип времени норматива.');
+  }
+}
+
 void validatePomodoroCapacity(Json input) {
   final date = input['date'];
   if (date is! String ||

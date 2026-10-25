@@ -169,6 +169,7 @@ class FocusRepository extends DashboardRepository {
         }),
       );
     } else if (module == 'pomodoroTarget' && action == 'save') {
+      validateNormTimeType(input);
       final date = input['date']?.toString() ?? '';
       if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(date) ||
           DateTime.tryParse('${date}T12:00:00Z')

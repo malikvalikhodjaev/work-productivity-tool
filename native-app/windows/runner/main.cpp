@@ -1,9 +1,46 @@
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
+#include <shobjidl.h>
+#include <propkey.h>
+#include <propvarutil.h>
 
 #include "flutter_window.h"
 #include "utils.h"
+
+namespace {
+#ifdef IW_FOCUS_EDITION
+constexpr wchar_t kAppId[] = L"UzIW.FocusNorms";
+#else
+constexpr wchar_t kAppId[] = L"UzIW.IndicatorsWork";
+#endif
+
+// Windows uses these properties when a running window is pinned afresh.
+void ConfigureTaskbar(HWND window, const wchar_t* title) {
+  wchar_t executable[32768];
+  const DWORD length = GetModuleFileNameW(nullptr, executable, 32768);
+  if (!length || length >= 32768) return;
+  std::wstring path(executable, length);
+  const auto directory = path.substr(0, path.find_last_of(L"\\/"));
+  const auto icon = directory + L"\\data\\flutter_assets\\assets\\iw.ico,0";
+  const auto command = L"\"" + path + L"\"";
+  IPropertyStore* properties = nullptr;
+  if (FAILED(SHGetPropertyStoreForWindow(window, IID_PPV_ARGS(&properties)))) return;
+  const auto set = [&](const PROPERTYKEY& key, const wchar_t* value) {
+    PROPVARIANT property;
+    if (SUCCEEDED(InitPropVariantFromString(value, &property))) {
+      properties->SetValue(key, property);
+      PropVariantClear(&property);
+    }
+  };
+  set(PKEY_AppUserModel_RelaunchCommand, command.c_str());
+  set(PKEY_AppUserModel_RelaunchDisplayNameResource, title);
+  set(PKEY_AppUserModel_RelaunchIconResource, icon.c_str());
+  set(PKEY_AppUserModel_ID, kAppId);
+  properties->Commit();
+  properties->Release();
+}
+}  // namespace
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
@@ -30,6 +67,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  ::SetCurrentProcessExplicitAppUserModelID(kAppId);
 
   flutter::DartProject project(L"data");
 
@@ -45,6 +83,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
+  ConfigureTaskbar(window.GetHandle(), client_title);
 
   ::MSG msg;
   while (::GetMessage(&msg, nullptr, 0, 0)) {
