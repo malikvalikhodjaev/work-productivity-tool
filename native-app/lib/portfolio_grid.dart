@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'domain.dart';
 import 'repository.dart';
 import 'model_hierarchy.dart';
+import 'adaptive_detail.dart';
+import 'workspace_table.dart';
+import 'inline_cell.dart';
 
 const gridTypes = {
   'text': 'Текст',
@@ -31,7 +34,9 @@ String gridText(Json row, Json col) {
   if (col['id'] == 'parentId' && (value == null || value == '')) {
     return 'Верхний уровень';
   }
-  if (value == null || value == '') return 'No Data';
+  if (value == null || value == '') {
+    return col['type'] == 'computed' ? 'Нет замера' : 'Заполнить';
+  }
   if (col['type'] == 'checkbox') return value == true ? '✓' : '—';
   return (object(col['options'])[value] ?? value).toString();
 }
@@ -244,17 +249,13 @@ class _PortfolioGridState extends State<PortfolioGrid> {
                       (result == null || result.toString().trim().isEmpty)) {
                     throw const FormatException('Заполни значение.');
                   }
-                  repo.gridCommand('editCells', {
-                    'table': widget.table,
-                    'id': row['id'],
-                    'changes': [
-                      {
-                        'columnId': col['id'],
-                        'before': before,
-                        'value': result,
-                      },
-                    ],
-                  });
+                  repo.editGridCell(
+                    widget.table,
+                    row['id'].toString(),
+                    col['id'].toString(),
+                    before,
+                    result,
+                  );
                   repo.local.remove(key);
                   Navigator.pop(dialogContext);
                 } catch (e) {
@@ -273,14 +274,12 @@ class _PortfolioGridState extends State<PortfolioGrid> {
   }
 
   void rowCard(Json row) {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(
-          (row['name'] ?? row['uniqueName'] ?? row['typeName'] ?? 'Строка')
-              .toString(),
-        ),
-        content: SizedBox(
+    showAdaptiveDetail<void>(
+      context,
+      builder: (dialogContext) => DetailFrame(
+        title: (row['name'] ?? row['uniqueName'] ?? row['typeName'] ?? 'Строка')
+            .toString(),
+        body: SizedBox(
           width: 620,
           child: SingleChildScrollView(
             child: Column(
@@ -388,7 +387,7 @@ class _PortfolioGridState extends State<PortfolioGrid> {
                           value: r['id'].toString(),
                           child: Text(
                             '${r['_wbs']} · ${(r['uniqueName'] ?? '').toString().isNotEmpty ? r['uniqueName'] : r['typeName']}',
-                            overflow: TextOverflow.ellipsis,
+                            softWrap: true,
                           ),
                         ),
                     ],
@@ -751,172 +750,272 @@ class _PortfolioGridState extends State<PortfolioGrid> {
     );
   }
 
+  Widget valueCell(Json row, Json col) {
+    final value = gridValue(row, col);
+    final draftKey =
+        'gridInline:${repo.serverId}:${widget.table}:${row['id']}:${col['id']}';
+    void commit(dynamic input, [dynamic before]) {
+      if (col['required'] == true &&
+          (input == null || input.toString().trim().isEmpty)) {
+        throw const FormatException('Заполни значение.');
+      }
+      repo.editGridCell(
+        widget.table,
+        row['id'].toString(),
+        col['id'].toString(),
+        before ?? value,
+        input,
+      );
+      repo.local.remove(draftKey);
+    }
+
+    if (col['type'] == 'computed') {
+      return Text(gridText(row, col), softWrap: true);
+    }
+    if (col['type'] == 'checkbox') {
+      return Checkbox(
+        tristate: col['required'] != true,
+        value: value as bool?,
+        semanticLabel:
+            '${col['title']} · ${row['name'] ?? row['uniqueName'] ?? ''}',
+        onChanged: (v) {
+          try {
+            commit(v);
+          } catch (e) {
+            error(e);
+          }
+        },
+      );
+    }
+    if (col['type'] == 'select') {
+      final options = object(col['options']);
+      return DropdownButtonFormField<String>(
+        key: ValueKey('select:${row['id']}:${col['id']}:$value'),
+        initialValue: options.containsKey(value) ? value?.toString() : null,
+        isExpanded: true,
+        decoration: InputDecoration(labelText: col['title'].toString()),
+        hint: const Text('Заполнить'),
+        items: [
+          if (col['required'] != true)
+            const DropdownMenuItem(value: '', child: Text('Не заполнено')),
+          for (final e in options.entries)
+            DropdownMenuItem(
+              value: e.key,
+              child: Text(e.value.toString(), softWrap: true),
+            ),
+        ],
+        onChanged: (v) {
+          try {
+            commit(v == '' ? null : v);
+          } catch (e) {
+            error(e);
+          }
+        },
+      );
+    }
+    return InlineCell(
+      key: ValueKey('inline:${widget.table}:${row['id']}:${col['id']}'),
+      label: col['title'].toString(),
+      text: value?.toString() ?? '',
+      draft: object(repo.local.get(draftKey))['value']?.toString(),
+      maxLines: col['type'] == 'text' ? 8 : 1,
+      begin: () {
+        if (repo.local.get(draftKey) == null) {
+          repo.local.set(draftKey, {
+            'before': value,
+            'value': value?.toString() ?? '',
+          });
+        }
+      },
+      cancel: () => repo.local.remove(draftKey),
+      retain: (text) => repo.local.set(draftKey, {
+        ...object(repo.local.get(draftKey)),
+        'value': text,
+      }),
+      commit: (text) async {
+        dynamic result = text;
+        if (col['type'] == 'number') {
+          result = text.isEmpty
+              ? null
+              : num.tryParse(text.replaceAll(',', '.'));
+          if (text.isNotEmpty && (result is! num || !result.isFinite)) {
+            throw const FormatException('Укажи число.');
+          }
+        }
+        if (col['type'] == 'date') {
+          result = text.isEmpty ? null : text;
+          if (result != null &&
+              DateTime.tryParse(text)?.toIso8601String().substring(0, 10) !=
+                  text) {
+            throw const FormatException('Дата в формате ГГГГ-ММ-ДД.');
+          }
+        }
+        if (text.length > (col['maxLength'] as int? ?? 10000)) {
+          throw const FormatException('Текст слишком длинный.');
+        }
+        final draft = object(repo.local.get(draftKey));
+        // Null is a real before value, not a request to use a newer value.
+        if (col['required'] == true &&
+            (result == null || result.toString().trim().isEmpty)) {
+          throw const FormatException('Заполни значение.');
+        }
+        repo.editGridCell(
+          widget.table,
+          row['id'].toString(),
+          col['id'].toString(),
+          draft.containsKey('before') ? draft['before'] : value,
+          result,
+        );
+        repo.local.remove(draftKey);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cols = visible();
-    final shown = hierarchyRows(widget.items, collapsed: collapsed);
     if (cols.isEmpty) return const Text('Подключи обновлённый сервер таблиц.');
+    final primary =
+        cols
+            .where((c) => ['name', 'uniqueName'].contains(c['id']))
+            .firstOrNull ??
+        cols.first;
+    final ordered = [primary, ...cols.where((c) => c['id'] != primary['id'])];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
           children: [
-            const Text('Ячейка — изменить · ↗ — открыть строку'),
-            Wrap(
-              children: [
-                if (widget.table == 'alphas') ...[
-                  TextButton(
-                    onPressed: () => setCollapsed({}),
-                    child: const Text('Развернуть всё'),
-                  ),
-                  TextButton(
-                    onPressed: () => setCollapsed(
-                      widget.items.map((r) => r['id'].toString()).toSet(),
-                    ),
-                    child: const Text('Свернуть всё'),
-                  ),
-                ],
-                TextButton(
-                  onPressed: chooseColumns,
-                  child: const Text('Столбцы'),
+            if (widget.table == 'alphas') ...[
+              TextButton(
+                onPressed: () => setCollapsed({}),
+                child: const Text('Развернуть всё'),
+              ),
+              TextButton(
+                onPressed: () => setCollapsed(
+                  widget.items.map((r) => r['id'].toString()).toSet(),
                 ),
-                TextButton.icon(
-                  onPressed: configure,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Столбец'),
-                ),
-                TextButton.icon(
-                  onPressed: widget.addRow,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Строка'),
-                ),
-              ],
+                child: const Text('Свернуть всё'),
+              ),
+            ],
+            TextButton(
+              onPressed: chooseColumns,
+              child: const Text('Настроить поля'),
+            ),
+            TextButton.icon(
+              onPressed: configure,
+              icon: const Icon(Icons.add),
+              label: const Text('Столбец'),
+            ),
+            TextButton.icon(
+              onPressed: widget.addRow,
+              icon: const Icon(Icons.add),
+              label: const Text('Строка'),
+            ),
+            TextButton.icon(
+              onPressed: repo.canUndoGrid
+                  ? () {
+                      try {
+                        repo.undoGridCell();
+                      } catch (e) {
+                        error(e);
+                      }
+                    }
+                  : null,
+              icon: const Icon(Icons.undo),
+              label: const Text('Отменить правку'),
             ),
           ],
         ),
-        Card(
-          clipBehavior: Clip.antiAlias,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              showCheckboxColumn: false,
-              columnSpacing: 20,
-              horizontalMargin: 12,
-              dataRowMinHeight: 54,
-              dataRowMaxHeight: 100,
-              columns: [
-                const DataColumn(label: Text('')),
-                for (final c in cols)
-                  DataColumn(
-                    label: TextButton(
-                      onPressed: () => configure(c),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(c['title'].toString()),
-                          Text(
-                            gridTypes[c['type']] ?? '',
-                            style: Theme.of(context).textTheme.labelSmall,
-                          ),
-                        ],
-                      ),
+        WorkspaceTable(
+          repo: repo,
+          viewKey: 'workbench:${repo.serverId}:${widget.table}',
+          items: widget.items,
+          collapsed: collapsed,
+          rowKey: (r) => 'grid:${widget.table}:${r['id']}',
+          columns: [
+            for (final c in ordered)
+              WorkColumn(
+                c['id'].toString(),
+                c['title'].toString(),
+                width: c == primary ? 300 : 180,
+              ),
+            const WorkColumn('_actions', 'Действия', width: 250),
+          ],
+          value: (row, column) => column == '*'
+              ? cols.map((c) => gridText(row, c)).join(' ')
+              : column == '_wbs'
+              ? row['_wbs']
+              : gridValue(
+                  row,
+                  cols.where((c) => c['id'] == column).firstOrNull ??
+                      {'id': column},
+                ),
+          cell: (context, row, column) {
+            if (column.id == '_actions') {
+              return Wrap(
+                children: [
+                  IconButton(
+                    tooltip: 'Открыть строку',
+                    onPressed: () => rowCard(row),
+                    icon: const Icon(Icons.open_in_full),
+                  ),
+                  if (widget.table == 'alphas')
+                    IconButton(
+                      tooltip: 'Иерархия строки',
+                      onPressed: () => hierarchy(row),
+                      icon: const Icon(Icons.account_tree_outlined),
+                    ),
+                  TextButton(
+                    onPressed: () => widget.openRow(row),
+                    child: Text(
+                      widget.table == 'projects'
+                          ? 'Открыть моделер'
+                          : 'Карточка альфы',
                     ),
                   ),
-                const DataColumn(label: Text('')),
-              ],
-              rows: [
-                for (final row in shown)
-                  DataRow(
-                    key: ValueKey('grid:${widget.table}:${row['id']}'),
-                    cells: [
-                      DataCell(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (row['_hasChildren'] == true)
-                              IconButton(
-                                tooltip: 'Свернуть или развернуть ветку',
-                                onPressed: () {
-                                  final closed = collapsed;
-                                  closed.contains(row['id'])
-                                      ? closed.remove(row['id'])
-                                      : closed.add(row['id'].toString());
-                                  setCollapsed(closed);
-                                },
-                                icon: Icon(
-                                  collapsed.contains(row['id'])
-                                      ? Icons.chevron_right
-                                      : Icons.expand_more,
-                                ),
-                              ),
-                            IconButton(
-                              tooltip: 'Открыть строку',
-                              onPressed: () => rowCard(row),
-                              icon: const Icon(Icons.open_in_full, size: 18),
-                            ),
-                          ],
-                        ),
+                ],
+              );
+            }
+            final col = cols.firstWhere((c) => c['id'] == column.id);
+            final content = valueCell(row, col);
+            if (column.id != primary['id']) return content;
+            return Padding(
+              padding: EdgeInsets.only(
+                left: ((row['_depth'] as int? ?? 0) * 14)
+                    .clamp(0, 56)
+                    .toDouble(),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (row['_hasChildren'] == true)
+                    IconButton(
+                      tooltip: 'Свернуть или развернуть ветку',
+                      onPressed: () {
+                        final ids = collapsed;
+                        ids.contains(row['id'])
+                            ? ids.remove(row['id'])
+                            : ids.add(row['id'].toString());
+                        setCollapsed(ids);
+                      },
+                      icon: Icon(
+                        collapsed.contains(row['id'])
+                            ? Icons.chevron_right
+                            : Icons.expand_more,
                       ),
-                      for (final c in cols)
-                        DataCell(
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(
-                              minWidth: 110,
-                              maxWidth: 250,
-                            ),
-                            child: Padding(
-                              padding: EdgeInsets.only(
-                                left: ['uniqueName', 'name'].contains(c['id'])
-                                    ? ((row['_depth'] as int? ?? 0) * 20)
-                                          .clamp(0, 96)
-                                          .toDouble()
-                                    : 0,
-                              ),
-                              child: Text(
-                                gridText(row, c),
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                          onTap: c['type'] == 'computed'
-                              ? null
-                              : () => cell(row, c),
-                        ),
-                      DataCell(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (widget.table == 'alphas')
-                              IconButton(
-                                tooltip: 'Иерархия строки',
-                                onPressed: () => hierarchy(row),
-                                icon: const Icon(Icons.more_horiz),
-                              ),
-                            TextButton(
-                              onPressed: () => widget.openRow(row),
-                              child: Text(
-                                widget.table == 'projects'
-                                    ? 'Открыть моделер'
-                                    : 'Карточка альфы',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
+                    ),
+                  Expanded(child: content),
+                ],
+              ),
+            );
+          },
         ),
         if (widget.items.isEmpty)
           const Padding(
             padding: EdgeInsets.all(16),
-            child: Text('No Data · добавь первую строку.'),
+            child: Text('Добавь первую строку.'),
           ),
       ],
     );

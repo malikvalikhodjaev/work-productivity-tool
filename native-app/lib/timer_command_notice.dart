@@ -14,7 +14,21 @@ class TimerCommandNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!repo.timerPending && !repo.timerBusy) return const SizedBox.shrink();
+    if (!repo.timerPending && !repo.timerBusy) {
+      final active = repo.active;
+      if (active == null) return const SizedBox.shrink();
+      return Semantics(
+        liveRegion: true,
+        child: Text(
+          '${active['status'] == 'paused'
+              ? 'На паузе'
+              : active['phase'] == 'work'
+              ? 'Таймер запущен'
+              : 'Перерыв'} · ${active['title'] ?? 'Без названия'}',
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(

@@ -83,6 +83,24 @@ void main() {
         'Моя мысль · 思考 — продолжаю без клика\n',
       );
       expect(tester.takeException(), isNull);
+      final beforeSwitch = editor.controller.selection;
+      await tester.tap(find.widgetWithText(FilledButton, 'Работа').first);
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Письмо').first);
+      await tester.pump();
+      final afterSwitch = tester.widget<q.QuillEditor>(
+        find.byType(q.QuillEditor),
+      );
+      expect(afterSwitch.controller, same(editor.controller));
+      expect(afterSwitch.controller.selection, beforeSwitch);
+      tester.view.physicalSize = const Size(700, 1200);
+      await tester.pump();
+      expect(
+        tester.widget<q.QuillEditor>(find.byType(q.QuillEditor)).controller,
+        same(editor.controller),
+      );
+      tester.view.physicalSize = const Size(1400, 1200);
+      await tester.pump();
       await tester.ensureVisible(
         find.byKey(const ValueKey('writing-clean-sheet')),
       );

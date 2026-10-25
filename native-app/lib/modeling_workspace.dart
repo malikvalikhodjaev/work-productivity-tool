@@ -39,6 +39,7 @@ class ModelingWorkspace extends StatefulWidget {
 
 class _ModelingWorkspaceState extends State<ModelingWorkspace> {
   String query = '';
+  late final TextEditingController queryController;
   String? selected;
   String? inspected;
   bool board = false;
@@ -46,6 +47,9 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
   void initState() {
     super.initState();
     selected = widget.repo.local.get('modelerProjectId') as String?;
+    query = (widget.repo.local.get('modelerQuery') ?? '').toString();
+    queryController = TextEditingController(text: query);
+    inspected = widget.repo.local.get('modelerInspected') as String?;
     board = widget.repo.local.get('projectView') == 'board';
   }
 
@@ -366,7 +370,7 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
     width: width,
     child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(text, maxLines: 3, overflow: TextOverflow.ellipsis),
+      child: Text(text, softWrap: true),
     ),
   );
 
@@ -424,7 +428,11 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
               labelText: 'Найти проект',
               prefixIcon: Icon(Icons.search),
             ),
-            onChanged: (value) => setState(() => query = value),
+            onChanged: (value) {
+              widget.repo.local.set('modelerQuery', value);
+              setState(() => query = value);
+            },
+            controller: queryController,
           ),
           Wrap(
             alignment: WrapAlignment.spaceBetween,
@@ -536,6 +544,7 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
               items: alphas,
               addRow: () => widget.editAlpha(project, null),
               openRow: (row) {
+                widget.repo.local.set('modelerInspected', row['id']);
                 setState(() => inspected = row['id'].toString());
               },
               addChild: (row) => widget.createChild(project, row),
@@ -641,6 +650,11 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
       );
     },
   );
+  @override
+  void dispose() {
+    queryController.dispose();
+    super.dispose();
+  }
 }
 
 class AlphaHistoryPanel extends StatefulWidget {
@@ -728,4 +742,5 @@ class _AlphaHistoryPanelState extends State<AlphaHistoryPanel> {
       ],
     );
   }
+
 }

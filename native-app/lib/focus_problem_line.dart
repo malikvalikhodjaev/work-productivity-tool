@@ -21,13 +21,24 @@ class FocusProblemLine extends StatelessWidget {
     final style = Theme.of(context).textTheme.bodyMedium!
         .copyWith(color: Colors.white, fontSize: 14, height: 1.4);
     final lineHeight = MediaQuery.textScalerOf(context).scale(14) * 1.4;
+    final labelStyle = Theme.of(context).textTheme.labelMedium!
+        .copyWith(fontSize: 13);
+    final labelPainter = TextPainter(
+      text: TextSpan(text: label, style: labelStyle),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final labelWidth = labelPainter.width + 4 > 66
+        ? labelPainter.width + 4
+        : 66.0;
+    labelPainter.dispose();
     return Semantics(
       label: title,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 66,
+            width: labelWidth,
             child: Tooltip(
               message: '$title · записать / уточнить',
               child: TextButton(
@@ -37,16 +48,14 @@ class FocusProblemLine extends StatelessWidget {
                   disabledForegroundColor: const Color(0xffd0dad5),
                   padding: EdgeInsets.zero,
                   alignment: Alignment.centerLeft,
-                  minimumSize: Size(0, lineHeight + 2),
+                  minimumSize: Size(
+                    48,
+                    lineHeight + 2 < 24 ? 24 : lineHeight + 2,
+                  ),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  textStyle: Theme.of(context).textTheme.labelMedium!
-                      .copyWith(fontSize: 11),
+                  textStyle: labelStyle,
                 ),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(label),
-                ),
+                child: Text(label, softWrap: true),
               ),
             ),
           ),

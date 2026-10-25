@@ -44,10 +44,12 @@ void main() {
       final before = jsonEncode(repo.local.snapshot('workspace'));
       await tester.pumpWidget(page(repo, goals));
       expect(find.text('1.1.1 · Внук'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const ValueKey('goal-toggle:b')));
       await tester.tap(find.byKey(const ValueKey('goal-toggle:b')));
       await tester.pump();
       expect(find.text('1.1 · Ребёнок'), findsOneWidget);
       expect(find.text('1.1.1 · Внук'), findsNothing);
+      await tester.ensureVisible(find.byKey(const ValueKey('goal-toggle:a')));
       await tester.tap(find.byKey(const ValueKey('goal-toggle:a')));
       await tester.pump();
       expect(find.text('1.1 · Ребёнок'), findsNothing);
@@ -55,6 +57,7 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(page(repo, goals));
       expect(find.text('1.1 · Ребёнок'), findsNothing);
+      await tester.ensureVisible(find.byKey(const ValueKey('goal-toggle:a')));
       await tester.tap(find.byKey(const ValueKey('goal-toggle:a')));
       await tester.pump();
       expect(find.text('1.1 · Ребёнок'), findsOneWidget);
@@ -94,7 +97,15 @@ void main() {
     );
     await tester.ensureVisible(baseline);
     await tester.tap(baseline);
-    expect(action, 'edit');
+    await tester.pump();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('goal-cell:baseline:g')),
+        matching: find.byType(TextField),
+      ),
+      findsOneWidget,
+    );
+    expect(action, isNull);
     final current = find.descendant(
       of: find.byKey(const ValueKey('goal-cell:current:g')),
       matching: find.byType(TextButton),

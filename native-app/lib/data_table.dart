@@ -54,8 +54,7 @@ class InspectableTable extends StatelessWidget {
                               width: 140,
                               child: Text(
                                 (row[key] ?? 'No Data').toString(),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                                softWrap: true,
                               ),
                             ),
                           ),

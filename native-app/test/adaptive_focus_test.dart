@@ -130,7 +130,7 @@ void main() {
           tester.getTopLeft(checklist).dy,
           greaterThan(
             tester
-                .getBottomLeft(find.byKey(const ValueKey('focus-fixed-core')))
+                .getBottomLeft(find.byKey(const ValueKey('focus-core-scroll')))
                 .dy,
           ),
         );

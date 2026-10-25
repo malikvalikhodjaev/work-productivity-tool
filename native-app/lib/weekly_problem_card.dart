@@ -159,9 +159,9 @@ class WeeklyProblemBanner extends StatelessWidget {
             if (compact && edit != null)
               IconButton(
                 style: IconButton.styleFrom(
-                  minimumSize: const Size(24, 24),
-                  fixedSize: const Size(24, 24),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  minimumSize: const Size(48, 48),
+                  fixedSize: const Size(48, 48),
+                  tapTargetSize: MaterialTapTargetSize.padded,
                   padding: const EdgeInsets.all(2),
                 ),
                 tooltip: 'Записать / уточнить проблему недели',

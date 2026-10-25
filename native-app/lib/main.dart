@@ -16,6 +16,7 @@ import 'background.dart';
 import 'domain.dart';
 import 'forms.dart';
 import 'local_database.dart';
+import 'interaction_theme.dart';
 import 'reminders.dart';
 import 'repository.dart';
 import 'sync_panel.dart';
@@ -38,6 +39,7 @@ import 'time_composition.dart';
 import 'connection_bootstrap.dart';
 import 'goal_progress.dart';
 import 'goal_table.dart';
+import 'activity_status.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -91,30 +93,32 @@ class DashboardApp extends StatelessWidget {
       GlobalCupertinoLocalizations.delegate,
       q.FlutterQuillLocalizations.delegate,
     ],
-    theme: ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xff37594b),
-        surface: const Color(0xfff6f7f8),
-      ),
-      scaffoldBackgroundColor: const Color(0xfff6f7f8),
-      cardTheme: const CardThemeData(
-        color: Colors.white,
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(18)),
-          side: BorderSide(color: Color(0xffe7e9ed)),
+    theme: interactionTheme(
+      ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xff37594b),
+          surface: const Color(0xfff6f7f8),
         ),
-      ),
-      inputDecorationTheme: const InputDecorationTheme(
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(10)),
+        scaffoldBackgroundColor: const Color(0xfff6f7f8),
+        cardTheme: const CardThemeData(
+          color: Colors.white,
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(18)),
+            side: BorderSide(color: Color(0xffe7e9ed)),
+          ),
         ),
-        filled: true,
-        fillColor: Colors.white,
+        inputDecorationTheme: const InputDecorationTheme(
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+          ),
+          filled: true,
+          fillColor: Colors.white,
+        ),
+        fontFamily: 'Segoe UI',
       ),
-      fontFamily: 'Segoe UI',
     ),
     home: DashboardHome(
       repo: repo,
@@ -143,7 +147,24 @@ class _DashboardHomeState extends State<DashboardHome>
   DashboardRepository get repo => widget.repo;
   late BackgroundRuntime background;
   final overlayAllowed = ValueNotifier(false);
-  final pageScroll = ScrollController();
+  late final List<ScrollController> pageScrolls;
+  ScrollController get pageScroll => pageScrolls[section];
+  final visitedSections = <int>{0};
+  Timer? scrollSave;
+  void savePagePositions() {
+    for (var i = 0; i < pageScrolls.length; i++) {
+      if (pageScrolls[i].hasClients) {
+        repo.local.set('pageScroll:$i', pageScrolls[i].offset);
+      }
+    }
+  }
+
+  void selectSection(int value) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    repo.local.set('selectedSection', value);
+    setState(() => section = value);
+  }
+
   Timer? ticker;
   final clockPulse = ValueNotifier<int>(0);
   int lastReminderCheck = 0;
@@ -176,6 +197,21 @@ class _DashboardHomeState extends State<DashboardHome>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    section = (repo.local.get('selectedSection') as int? ?? 0).clamp(0, 4);
+    pageScrolls = List.generate(
+      5,
+      (i) =>
+          ScrollController(
+            initialScrollOffset: (repo.local.get('pageScroll:$i') as num? ?? 0)
+                .toDouble(),
+          )..addListener(() {
+            scrollSave?.cancel();
+            scrollSave = Timer(
+              const Duration(milliseconds: 300),
+              savePagePositions,
+            );
+          }),
+    );
     board = repo.local.get('workView') != 'list';
     if (repo.local.get('focusRotation') == null) {
       repo.local.set('focusRotation', {
@@ -211,7 +247,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.30',
+        'clientVersion': '0.1.31',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -1093,7 +1129,7 @@ class _DashboardHomeState extends State<DashboardHome>
       Theme.of(context).platform == TargetPlatform.android;
 
   Widget focusCard() => ListenableBuilder(
-    listenable: clockPulse,
+    listenable: focusMode || section != 2 ? repo : clockPulse,
     builder: (context, _) => buildFocusCard(),
   );
 
@@ -1423,10 +1459,7 @@ class _DashboardHomeState extends State<DashboardHome>
                         .map(
                           (e) => DropdownMenuItem(
                             value: e.key,
-                            child: Text(
-                              e.value,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            child: Text(e.value, softWrap: true),
                           ),
                         )
                         .toList(),
@@ -2974,6 +3007,9 @@ class _DashboardHomeState extends State<DashboardHome>
             ? Colors.transparent
             : null,
         appBar: AppBar(
+          toolbarHeight: MediaQuery.sizeOf(context).width < 600
+              ? (MediaQuery.textScalerOf(context).scale(18) > 24 ? 88 : 64)
+              : 72,
           flexibleSpace: Platform.isWindows
               ? GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -3005,16 +3041,13 @@ class _DashboardHomeState extends State<DashboardHome>
                         border: Border.all(color: Colors.white70),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Pomodoro Club',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          ),
+                      child: const Text(
+                        'Pomodoro Club',
+                        softWrap: true,
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
                         ),
                       ),
                     )
@@ -3058,94 +3091,109 @@ class _DashboardHomeState extends State<DashboardHome>
         ),
         body: LayoutBuilder(
           builder: (context, constraints) {
-            if (background.desktop?.compact == true || focusMode) {
-              return focusPlayer();
-            }
-            final wide = constraints.maxWidth >= 950 && !focusMode;
-            final page = focusMode
-                ? focusCard()
-                : [
-                    indicatorsPage,
-                    projectsPage,
-                    workPage,
-                    () => WritingScreen(repo: repo),
-                    dataPage,
-                  ][section]();
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            final playerVisible =
+                background.desktop?.compact == true || focusMode;
+            final wide = constraints.maxWidth >= 950;
+            visitedSections.add(section);
+            final builders = [
+              indicatorsPage,
+              projectsPage,
+              workPage,
+              () => WritingScreen(repo: repo),
+              dataPage,
+            ];
+            return Stack(
+              fit: StackFit.expand,
               children: [
-                if (wide)
-                  SizedBox(
-                    width: 220,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 16),
-                          for (var i = 0; i < sections.length; i++)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: FilledButton.tonal(
-                                onPressed: () => setState(() => section = i),
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: section == i
-                                      ? const Color(0xffdfe7e1)
-                                      : Colors.transparent,
-                                  alignment: Alignment.centerLeft,
-                                  minimumSize: const Size(double.infinity, 48),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(icons[i], size: 20),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        sections[i],
-                                        overflow: TextOverflow.ellipsis,
+                Offstage(
+                  offstage: playerVisible,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (wide)
+                        SizedBox(
+                          width: 220,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: ListView(
+                              key: const PageStorageKey('sidebar-scroll'),
+                              children: [
+                                const SizedBox(height: 16),
+                                for (var i = 0; i < sections.length; i++)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: FilledButton.tonal(
+                                      onPressed: () => selectSection(i),
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: section == i
+                                            ? const Color(0xffdfe7e1)
+                                            : Colors.transparent,
+                                        alignment: Alignment.centerLeft,
+                                        minimumSize: const Size(
+                                          double.infinity,
+                                          48,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(icons[i], size: 20),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(
+                                              sections[i],
+                                              softWrap: true,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  ],
+                                  ),
+                                const SizedBox(height: 20),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  'I&W · Native 0.1.31',
+                                  style: TextStyle(fontSize: 11),
                                 ),
-                              ),
-                            ),
-                          const Spacer(),
-                          Text(
-                            repo.status,
-                            maxLines: 4,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Color(0xff727780),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'I&W · Native 0.1.30',
-                            style: TextStyle(fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                Expanded(
-                  child: ListView(
-                    controller: pageScroll,
-                    padding: EdgeInsets.all(wide ? 28 : 16),
-                    children: [
-                      if (!wide && !focusMode)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: Text(
-                            repo.status,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xff727780),
+                              ],
                             ),
                           ),
                         ),
-                      page,
+                      Expanded(
+                        key: const ValueKey('dashboard-page-stack'),
+                        child: Column(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                              child: ActivityStatus(
+                                repo: repo,
+                                inspect: () => selectSection(4),
+                              ),
+                            ),
+                            Expanded(
+                              child: IndexedStack(
+                                index: section,
+                                children: [
+                                  for (var i = 0; i < builders.length; i++)
+                                    visitedSections.contains(i)
+                                        ? ListView(
+                                            key: ValueKey('section:$i'),
+                                            controller: pageScrolls[i],
+                                            padding: EdgeInsets.all(
+                                              wide ? 28 : 16,
+                                            ),
+                                            children: [builders[i]()],
+                                          )
+                                        : const SizedBox.shrink(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
+                if (playerVisible) Positioned.fill(child: focusPlayer()),
               ],
             );
           },
@@ -3156,8 +3204,7 @@ class _DashboardHomeState extends State<DashboardHome>
                 background.desktop?.compact != true
             ? NavigationBar(
                 selectedIndex: section,
-                onDestinationSelected: (value) =>
-                    setState(() => section = value),
+                onDestinationSelected: selectSection,
                 destinations: [
                   for (var i = 0; i < sections.length; i++)
                     NavigationDestination(
@@ -3177,7 +3224,11 @@ class _DashboardHomeState extends State<DashboardHome>
     repo.removeListener(changed);
     WidgetsBinding.instance.removeObserver(this);
     overlayAllowed.dispose();
-    pageScroll.dispose();
+    scrollSave?.cancel();
+    savePagePositions();
+    for (final controller in pageScrolls) {
+      controller.dispose();
+    }
     if (widget.backgroundEnabled && Platform.isWindows) {
       windowManager.removeListener(this);
     }

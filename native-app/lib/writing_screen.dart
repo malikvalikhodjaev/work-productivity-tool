@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' as q;
 
 import 'domain.dart';
@@ -54,6 +55,7 @@ class _WritingScreenState extends State<WritingScreen> {
   final date = TextEditingController(text: today());
   final editorFocus = FocusNode(debugLabel: 'Essay editor');
   final editorScroll = ScrollController();
+  final editorLayoutKey = GlobalKey(debugLabel: 'writing-editor-layout');
   q.QuillController controller = q.QuillController.basic();
   Timer? debounce;
   StreamSubscription<q.DocChange>? changesSubscription;
@@ -73,7 +75,25 @@ class _WritingScreenState extends State<WritingScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.initialEntry != null) open(widget.initialEntry!);
+    editorScroll.addListener(rememberPosition);
+    if (widget.initialEntry != null) {
+      open(widget.initialEntry!);
+    } else {
+      final id = repo.local.get('writingSelected');
+      final entry =
+          repo.local.draft('composer:$id') ??
+          repo.writingEntries.where((a) => a['id'] == id).firstOrNull;
+      if (entry != null) open(entry);
+    }
+  }
+
+  void rememberPosition() {
+    if (selected == null) return;
+    repo.local.set('writingPosition:$selected', {
+      'base': controller.selection.baseOffset,
+      'extent': controller.selection.extentOffset,
+      'scroll': editorScroll.hasClients ? editorScroll.offset : 0,
+    });
   }
 
   void closeClean() {
@@ -108,6 +128,7 @@ class _WritingScreenState extends State<WritingScreen> {
         repo.cache('writing:${article['id']}');
     final entry = saved.isNotEmpty ? saved : article;
     selected = article['id'].toString();
+    repo.local.set('writingSelected', selected);
     title.text = (entry['title'] ?? '').toString();
     date.text = (entry['date'] ?? today()).toString();
     mode = (entry['status'] ?? 'draft').toString();
@@ -118,10 +139,31 @@ class _WritingScreenState extends State<WritingScreen> {
               {'insert': '\n'},
             ],
           };
+    final document = q.Document.fromJson(editorDocument(doc)['ops']);
+    final position = object(repo.local.get('writingPosition:$selected'));
     controller = q.QuillController(
-      document: q.Document.fromJson(editorDocument(doc)['ops']),
-      selection: const TextSelection.collapsed(offset: 0),
+      document: document,
+      selection: TextSelection(
+        baseOffset: (position['base'] as int? ?? 0).clamp(
+          0,
+          document.length - 1,
+        ),
+        extentOffset: (position['extent'] as int? ?? 0).clamp(
+          0,
+          document.length - 1,
+        ),
+      ),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && editorScroll.hasClients) {
+        editorScroll.jumpTo(
+          (position['scroll'] as num? ?? 0).toDouble().clamp(
+            0,
+            editorScroll.position.maxScrollExtent,
+          ),
+        );
+      }
+    });
     controller.addListener(changed);
     changesSubscription = controller.changes.listen((event) {
       final typed = event.change.operations.any(
@@ -170,13 +212,30 @@ class _WritingScreenState extends State<WritingScreen> {
   void persistDraft() {
     if (selected != null && !inTrash) {
       repo.local.keepDraft('composer:$selected', article());
+      rememberPosition();
+    }
+  }
+
+  void saveEntry() {
+    if (selected == null || inTrash) return;
+    try {
+      persistDraft();
+      repo.saveWriting(article());
+      setState(() => status = 'Сохранено локально · отправка в очереди');
+    } catch (e) {
+      setState(() => status = e.toString());
     }
   }
 
   void changed() {
     if (converting) return;
     debounce?.cancel();
-    debounce = Timer(const Duration(milliseconds: 300), persistDraft);
+    debounce = Timer(const Duration(milliseconds: 300), () {
+      persistDraft();
+      if (mounted && !inTrash) {
+        setState(() => status = 'Черновик сохранён на устройстве');
+      }
+    });
   }
 
   @override
@@ -279,8 +338,7 @@ class _WritingScreenState extends State<WritingScreen> {
                   (a['title'] ?? '').toString().isEmpty
                       ? 'Без темы'
                       : a['title'].toString(),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                  softWrap: true,
                 ),
                 subtitle: Text(
                   '${a['date']} · ${a['status'] == 'published' ? 'Опубликовано' : 'Черновик'}',
@@ -290,7 +348,7 @@ class _WritingScreenState extends State<WritingScreen> {
             ),
       ],
     );
-    final editor = selected == null
+    final editorContent = selected == null
         ? const Center(child: Text('Выбери запись или начни новое эссе.'))
         : Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -402,20 +460,7 @@ class _WritingScreenState extends State<WritingScreen> {
                 runSpacing: 8,
                 children: [
                   FilledButton(
-                    onPressed: trashed
-                        ? null
-                        : () {
-                            try {
-                              persistDraft();
-                              repo.saveWriting(article());
-                              setState(
-                                () => status =
-                                    'Сохранено локально · отправка в очереди',
-                              );
-                            } catch (e) {
-                              setState(() => status = e.toString());
-                            }
-                          },
+                    onPressed: trashed ? null : saveEntry,
                     child: const Text('Сохранить'),
                   ),
                   OutlinedButton.icon(
@@ -472,6 +517,13 @@ class _WritingScreenState extends State<WritingScreen> {
                   ),
                 ],
               ),
+              if (!trashed)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Черновик сохраняется на устройстве. «Сохранить» или Ctrl+S добавляет запись в синхронизацию.',
+                  ),
+                ),
               if (status.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -481,6 +533,16 @@ class _WritingScreenState extends State<WritingScreen> {
               ReflectionHints(repo: repo),
             ],
           );
+    final editor = KeyedSubtree(
+      key: editorLayoutKey,
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.keyS, control: true):
+              saveEntry,
+        },
+        child: editorContent,
+      ),
+    );
     if (widget.clean) {
       return PopScope(
         canPop: false,

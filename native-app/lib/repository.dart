@@ -646,6 +646,164 @@ class DashboardRepository extends ChangeNotifier {
   Json entity(String key, Json source) => local.draft(key) ?? source;
 
   /// Cell commands have their own identity and retain the exact before/value pair.
+  void editGridCell(
+    String table,
+    String id,
+    String columnId,
+    dynamic before,
+    dynamic value,
+  ) {
+    gridCommand('editCells', {
+      'table': table,
+      'id': id,
+      'changes': [
+        {'columnId': columnId, 'before': before, 'value': value},
+      ],
+    });
+    final history = rows(local.get('gridUndo'));
+    local.set(
+      'gridUndo',
+      [
+        ...history,
+        {
+          'serverId': serverId,
+          'table': table,
+          'id': id,
+          'columnId': columnId,
+          'before': before,
+          'value': value,
+        },
+      ].reversed.take(50).toList().reversed.toList(),
+    );
+    notifyListeners();
+  }
+
+  bool get canUndoGrid =>
+      rows(local.get('gridUndo')).any((r) => r['serverId'] == serverId);
+  void editGoalField(
+    String id,
+    String field,
+    dynamic value, {
+    bool remember = true,
+    Json? expectedGoal,
+  }) {
+    if (!['title', 'unit', 'baseline', 'target', 'dueDate'].contains(field)) {
+      throw ArgumentError('Это поле редактируется через подробности цели.');
+    }
+    final goal =
+        expectedGoal ??
+        entities('goals', 'goal').firstWhere((g) => g['id'] == id);
+    final before = goal[field];
+    final input = {
+      for (final key in [
+        'id',
+        'title',
+        'unit',
+        'baseline',
+        'target',
+        'direction',
+        'dueDate',
+        'status',
+        'parentId',
+        'characteristicId',
+      ])
+        if (goal.containsKey(key)) key: goal[key],
+      field: value,
+    };
+    nativeSave(
+      'workspace',
+      'saveGoal',
+      input,
+      'goal:$id',
+      expectedUpdatedAt: goal['updatedAt'],
+    );
+    if (remember) {
+      local.set(
+        'goalUndo',
+        [
+          ...rows(local.get('goalUndo')),
+          {
+            'serverId': serverId,
+            'id': id,
+            'field': field,
+            'before': before,
+            'value': value,
+          },
+        ].reversed.take(50).toList().reversed.toList(),
+      );
+    }
+    notifyListeners();
+  }
+
+  bool get canUndoGoal =>
+      rows(local.get('goalUndo')).any((r) => r['serverId'] == serverId);
+  void undoGoalField() {
+    final history = rows(local.get('goalUndo'));
+    final change = history.where((r) => r['serverId'] == serverId).lastOrNull;
+    if (change == null) return;
+    final goal = entities(
+      'goals',
+      'goal',
+    ).where((g) => g['id'] == change['id']).firstOrNull;
+    if (goal == null ||
+        jsonEncode(goal[change['field']]) != jsonEncode(change['value'])) {
+      throw StateError('Цель уже изменилась. Проверь значение перед отменой.');
+    }
+    editGoalField(
+      change['id'].toString(),
+      change['field'].toString(),
+      change['before'],
+      remember: false,
+    );
+    history.remove(change);
+    local.set('goalUndo', history);
+    notifyListeners();
+  }
+
+  void undoGridCell() {
+    final history = rows(local.get('gridUndo'));
+    final change = history.where((r) => r['serverId'] == serverId).lastOrNull;
+    if (change == null) return;
+    final table = change['table'].toString(),
+        column = change['columnId'].toString();
+    if (pending.any(
+      (q) =>
+          q['state'] == 'conflict' &&
+          object(object(q['body'])['input'])['id'] == change['id'],
+    )) {
+      throw StateError(
+        'Сначала разбери конфликт этой строки в Данных. Исходная правка сохранена.',
+      );
+    }
+    final row = rows(portfolioProjection()[table])
+        .where((r) => r['id'] == change['id'])
+        .firstOrNull;
+    final col = gridColumns(table).where((c) => c['id'] == column).firstOrNull;
+    if (row == null || col == null || col['type'] == 'computed') {
+      throw StateError(
+        'Строка или столбец недоступны; исходная правка сохранена.',
+      );
+    }
+    final current = col['custom'] == true
+        ? object(row['customValues'])[column]
+        : row[column];
+    if (jsonEncode(current) != jsonEncode(change['value'])) {
+      throw StateError(
+        'Ячейка уже изменилась. Открой её и проверь значение перед отменой.',
+      );
+    }
+    gridCommand('editCells', {
+      'table': table,
+      'id': change['id'],
+      'changes': [
+        {'columnId': column, 'before': current, 'value': change['before']},
+      ],
+    });
+    history.remove(change);
+    local.set('gridUndo', history);
+    notifyListeners();
+  }
+
   void gridCommand(String action, Json input) {
     if (serverId == null || cache('portfolio')['tableEditing'] != 1) {
       throw StateError('Подключи приложение к обновлённому серверу таблиц.');

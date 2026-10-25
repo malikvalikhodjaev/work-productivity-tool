@@ -569,16 +569,16 @@ class PomodoroChecklist extends StatelessWidget {
     final norms = repo.pomodoroTargetsForDate();
     final denseButtons = rowsFirst && compact;
     final buttonConstraints = denseButtons
-        ? const BoxConstraints(minWidth: 32, minHeight: 32)
+        ? const BoxConstraints(minWidth: 48, minHeight: 48)
         : null;
     final buttonDensity = denseButtons
-        ? VisualDensity.compact
+        ? VisualDensity.standard
         : VisualDensity.standard;
     final buttonStyle = denseButtons
         ? IconButton.styleFrom(
-            minimumSize: const Size(32, 32),
-            fixedSize: const Size(32, 32),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            minimumSize: const Size(48, 48),
+            fixedSize: const Size(48, 48),
+            tapTargetSize: MaterialTapTargetSize.padded,
             padding: const EdgeInsets.all(4),
           )
         : null;
@@ -586,7 +586,7 @@ class PomodoroChecklist extends StatelessWidget {
       builder: (context, box) {
         final stacked =
             box.maxWidth / (MediaQuery.textScalerOf(context).scale(14) / 14) <
-            290;
+            360;
         final controls = Row(
           mainAxisSize: MainAxisSize.min,
           children: [

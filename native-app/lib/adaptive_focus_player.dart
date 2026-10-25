@@ -37,6 +37,15 @@ class AdaptiveFocusPlayer extends StatefulWidget {
 }
 
 class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
+  final coreScroll = ScrollController();
+  final checklistScroll = ScrollController();
+  @override
+  void dispose() {
+    coreScroll.dispose();
+    checklistScroll.dispose();
+    super.dispose();
+  }
+
   void open(String name) {
     showModalBottomSheet<void>(
       context: context,
@@ -86,7 +95,7 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
-      final height = min(900.0, max(0.0, box.maxHeight - 16));
+      final height = min(900.0, max(0.0, box.maxHeight));
       final dense = height < 540;
       final tiny = height < 310;
       final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
@@ -146,11 +155,11 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
                     : () => open(name),
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.white,
-                  minimumSize: const Size(0, 30),
+                  minimumSize: const Size(48, 48),
                   textStyle: Theme.of(context).textTheme.labelLarge!
                       .copyWith(fontSize: tiny ? 12 : 14),
                   padding: const EdgeInsets.symmetric(horizontal: 8),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  tapTargetSize: MaterialTapTargetSize.padded,
                 ),
                 child: Text(
                   name == 'break'
@@ -167,9 +176,9 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
         key: const ValueKey('focus-fixed-core'),
         padding: EdgeInsets.fromLTRB(
           dense ? 8 : 18,
-          dense ? 4 : 8,
+          dense ? 0 : 8,
           dense ? 8 : 18,
-          4,
+          dense ? 0 : 4,
         ),
         child: DefaultTextStyle(
           style: Theme.of(context).textTheme.bodyMedium!
@@ -186,7 +195,7 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
                 visibleLines: dense ? 1 : 2,
                 edit: widget.editWeeklyProblem,
               ),
-              SizedBox(height: dense ? 2 : 6),
+              SizedBox(height: dense ? 0 : 6),
               FocusProblemLine(
                 kind: 'day',
                 label: 'Сегодня',
@@ -195,27 +204,33 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
                 visibleLines: dense ? 1 : 2,
                 edit: widget.editDailyProblem,
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: dense ? 0 : 4),
               Row(
                 children: [
                   Expanded(flex: 1, child: clock),
                   const SizedBox(width: 8),
                   Expanded(
-                    flex: 2,
+                    flex: dense ? 3 : 2,
                     child: Align(
                       alignment: Alignment.centerRight,
-                      child: SizedBox(
-                        height: dense ? 38 : 48,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: widget.actions,
+                      child: Theme(
+                        data: Theme.of(context).copyWith(
+                          filledButtonTheme: FilledButtonThemeData(
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(48, 48),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: dense ? 4 : 24,
+                              ),
+                            ),
+                          ),
                         ),
+                        child: widget.actions,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: dense ? 0 : 4),
               ConstrainedBox(
                 constraints: BoxConstraints(
                   maxHeight: tiny
@@ -241,7 +256,6 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
                   ),
                 ),
               ),
-              tools,
             ],
           ),
         ),
@@ -253,7 +267,10 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
         borderRadius: BorderRadius.circular(18),
         clipBehavior: Clip.antiAlias,
         child: Scrollbar(
+          controller: checklistScroll,
+          thumbVisibility: true,
           child: SingleChildScrollView(
+            controller: checklistScroll,
             key: const ValueKey('focus-checklist-scroll'),
             primary: false,
             child: widget.norms,
@@ -261,12 +278,17 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
         ),
       );
       return Padding(
-        padding: const EdgeInsets.all(8),
+        padding: EdgeInsets.all(dense ? 4 : 8),
         child: Center(
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: 560, maxHeight: height),
             child: Container(
-              padding: const EdgeInsets.all(8),
+              padding: EdgeInsets.fromLTRB(
+                dense ? 4 : 8,
+                dense ? 0 : 8,
+                dense ? 4 : 8,
+                dense ? 0 : 8,
+              ),
               decoration: BoxDecoration(
                 color: const Color(0xb312261f),
                 borderRadius: BorderRadius.circular(24),
@@ -274,9 +296,27 @@ class _AdaptiveFocusPlayerState extends State<AdaptiveFocusPlayer> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  core,
-                  const SizedBox(height: 8),
-                  Flexible(fit: FlexFit.loose, child: checklist),
+                  Flexible(
+                    flex: dense ? 11 : 3,
+                    fit: FlexFit.loose,
+                    child: Scrollbar(
+                      controller: coreScroll,
+                      thumbVisibility: true,
+                      child: SingleChildScrollView(
+                        controller: coreScroll,
+                        primary: false,
+                        key: const ValueKey('focus-core-scroll'),
+                        child: core,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: dense ? 4 : 8),
+                  Flexible(
+                    flex: dense ? 9 : 2,
+                    fit: FlexFit.loose,
+                    child: checklist,
+                  ),
+                  tools,
                 ],
               ),
             ),

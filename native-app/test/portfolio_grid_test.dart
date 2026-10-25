@@ -155,15 +155,19 @@ void main() {
       );
       await tester.tap(find.text('Продажа дома'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), '  Дом\nМой план  ');
-      final editable = tester.widget<EditableText>(find.byType(EditableText));
+      final cell = find.byKey(const ValueKey('inline:projects:house:name'));
+      final input = find.descendant(of: cell, matching: find.byType(TextField));
+      await tester.enterText(input, '  Дом\nМой план  ');
+      final editable = tester.widget<EditableText>(
+        find.descendant(of: cell, matching: find.byType(EditableText)),
+      );
       expect(editable.focusNode.hasFocus, isTrue);
       for (var i = 0; i < 4; i++) {
         repo.notifyListeners();
         await tester.pump(const Duration(seconds: 1));
       }
       expect(
-        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        tester.widget<TextField>(input).controller!.text,
         '  Дом\nМой план  ',
       );
       expect(editable.focusNode.hasFocus, isTrue);

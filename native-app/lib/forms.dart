@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'domain.dart';
+import 'adaptive_detail.dart';
 
 class FieldSpec {
   final String key, label;
@@ -68,14 +69,14 @@ Future<bool> editFields(
     return Map<String, dynamic>.from(values);
   }
 
-  final result = await showDialog<bool>(
-    context: context,
+  final result = await showAdaptiveDetail<bool>(
+    context,
     builder: (context) => _FormControllerOwner(
       controllers: controllers,
       child: StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(title),
-          content: SizedBox(
+        builder: (context, setState) => DetailFrame(
+          title: title,
+          body: SizedBox(
             width: 580,
             child: SingleChildScrollView(
               child: Column(

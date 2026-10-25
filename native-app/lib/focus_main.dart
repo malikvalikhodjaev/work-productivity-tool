@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'focus_home.dart';
 import 'focus_repository.dart';
 import 'local_database.dart';
+import 'interaction_theme.dart';
 import 'focus_art_catalog.dart';
 
 Future<void> main() async {
@@ -51,11 +52,13 @@ class FocusNormsApp extends StatelessWidget {
       GlobalWidgetsLocalizations.delegate,
       GlobalCupertinoLocalizations.delegate,
     ],
-    theme: ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff37594b)),
-      scaffoldBackgroundColor: const Color(0xfff6f7f8),
-      fontFamily: 'Segoe UI',
+    theme: interactionTheme(
+      ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff37594b)),
+        scaffoldBackgroundColor: const Color(0xfff6f7f8),
+        fontFamily: 'Segoe UI',
+      ),
     ),
     home: FocusHome(
       repo: repo,

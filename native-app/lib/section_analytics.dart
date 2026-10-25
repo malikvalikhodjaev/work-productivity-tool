@@ -175,7 +175,7 @@ class _WorkAnalyticsState extends State<WorkAnalytics> {
           scrollDirection: Axis.horizontal,
           child: DataTable(
             dataRowMinHeight: 64,
-            dataRowMaxHeight: 180,
+            dataRowMaxHeight: double.infinity,
             columns: const [
               DataColumn(label: Text('День')),
               DataColumn(label: Text('Часы')),
