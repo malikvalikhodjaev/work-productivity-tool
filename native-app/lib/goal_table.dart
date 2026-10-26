@@ -291,6 +291,7 @@ class _GoalsTableState extends State<GoalsTable> {
                   );
                 case 'status':
                   return DropdownButtonFormField<String>(
+                    itemHeight: null,
                     key: ValueKey('goal-status:${g['id']}:${g['status']}'),
                     initialValue: goalStatusOptions.containsKey(g['status'])
                         ? g['status'].toString()

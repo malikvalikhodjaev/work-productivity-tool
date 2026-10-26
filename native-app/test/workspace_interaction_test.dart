@@ -161,7 +161,7 @@ void main() {
     expect(next.focusNode!.hasFocus, isTrue);
   });
   testWidgets(
-    'detail resizes from side to full width without losing typed text',
+    'detail stays centered and adapts to a narrow screen without losing typed text',
     (tester) async {
       tester.view.physicalSize = const Size(1400, 900);
       tester.view.devicePixelRatio = 1;
@@ -193,7 +193,11 @@ void main() {
         tester
             .getSize(find.byKey(const ValueKey('adaptive-detail-panel')))
             .width,
-        600,
+        720,
+      );
+      expect(
+        tester.getCenter(find.byKey(const ValueKey('adaptive-detail-panel'))),
+        const Offset(700, 450),
       );
       await tester.enterText(find.byType(TextField), '  Исходный\nтекст  ');
       tester.view.physicalSize = const Size(360, 780);

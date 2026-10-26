@@ -144,13 +144,14 @@ Future<bool> editFields(
                                   },
                                 )
                               : DropdownButtonFormField<String>(
+                                  itemHeight: null,
                                   initialValue:
                                       field.options!.containsKey(
                                         values[field.key]?.toString(),
                                       )
                                       ? values[field.key]?.toString()
                                       : field.options!.keys.firstOrNull,
-                                  hint: const Text('No Data'),
+                                  hint: const Text('Выбрать'),
                                   isExpanded: true,
                                   decoration: InputDecoration(
                                     labelText: field.labelAbove
@@ -265,13 +266,13 @@ Widget metricCard(
           const SizedBox(height: 12),
           Text(
             current == null
-                ? 'No Data'
+                ? 'Нет замеров'
                 : '$current${unit.isEmpty ? '' : ' $unit'}',
             style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Text(
-            target == null ? 'Цель · No Data' : 'Ориентир · $target $unit',
+            target == null ? 'Ориентир не задан' : 'Ориентир · $target $unit',
             style: const TextStyle(fontSize: 12, color: Color(0xff6b7280)),
           ),
           const SizedBox(height: 14),
@@ -285,7 +286,11 @@ Widget metricCard(
           ),
           const SizedBox(height: 7),
           Text(
-            percent == null ? 'No Data' : '$percent%',
+            percent == null
+                ? current == null
+                      ? 'Запиши первый факт для сравнения'
+                      : 'Задай ориентир для сравнения'
+                : '$percent%',
             style: const TextStyle(fontSize: 12),
           ),
         ],

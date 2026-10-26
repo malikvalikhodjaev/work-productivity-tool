@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// The same route and form state survive resizing from a side panel to a page.
+/// A centered form keeps its state while adapting to narrow windows/keyboard.
 Future<T?> showAdaptiveDetail<T>(
   BuildContext context, {
   required WidgetBuilder builder,
@@ -19,23 +19,30 @@ Future<T?> showAdaptiveDetail<T>(
         const SingleActivator(LogicalKeyboardKey.escape): () =>
             Navigator.maybePop(context),
       },
-      child: LayoutBuilder(
-        builder: (context, size) {
-          final side = size.maxWidth >= 1100;
-          return Align(
-            alignment: Alignment.centerRight,
-            child: SizedBox(
-              key: const ValueKey('adaptive-detail-panel'),
-              width: side ? min(600, size.maxWidth * .48) : size.maxWidth,
-              height: size.maxHeight,
-              child: Material(
-                elevation: side ? 12 : 0,
-                color: Theme.of(context).colorScheme.surface,
-                child: SafeArea(child: Builder(builder: builder)),
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: LayoutBuilder(
+          builder: (context, size) {
+            final wide = size.maxWidth >= 700;
+            return Align(
+              alignment: Alignment.center,
+              child: SizedBox(
+                key: const ValueKey('adaptive-detail-panel'),
+                width: wide ? min(720, size.maxWidth - 48) : size.maxWidth,
+                height: wide ? max(0, size.maxHeight - 48) : size.maxHeight,
+                child: Material(
+                  elevation: wide ? 12 : 0,
+                  borderRadius: BorderRadius.circular(wide ? 16 : 0),
+                  clipBehavior: Clip.antiAlias,
+                  color: Theme.of(context).colorScheme.surface,
+                  child: SafeArea(child: Builder(builder: builder)),
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     ),
   ),

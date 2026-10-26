@@ -42,6 +42,7 @@ import 'goal_progress.dart';
 import 'goal_table.dart';
 import 'goal_status.dart';
 import 'model_link.dart';
+import 'systems_panel.dart';
 import 'activity_status.dart';
 import 'dashboard_timer_bar.dart';
 import 'dashboard_window_header.dart';
@@ -262,7 +263,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.37',
+        'clientVersion': '0.1.38',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -1910,18 +1911,27 @@ class _DashboardHomeState extends State<DashboardHome>
         .firstOrNull;
     if (system == null) {
       return const Text(
-        'Характеристики · No Data',
+        'Система для наблюдения не выбрана',
         style: TextStyle(fontSize: 11, color: Color(0xff727780)),
+      );
+    }
+    final named = rows(system['characteristics'])
+        .where((c) => (c['name'] ?? '').toString().trim().isNotEmpty)
+        .toList();
+    if (named.isEmpty) {
+      return TextButton(
+        onPressed: () => editSystem(system),
+        child: const Text('Настроить характеристики системы'),
       );
     }
     return Wrap(
       spacing: 6,
       runSpacing: 6,
-      children: rows(system['characteristics'])
+      children: named
           .map(
             (c) => Chip(
               label: Text(
-                '${c['kind'] == 'limit' ? '≤ ' : ''}${c['name']} · ${c['current'] ?? 'No Data'} → ${c['target'] ?? 'No Data'}',
+                '${c['kind'] == 'limit' ? 'Ограничитель · ' : ''}${c['name']} · сейчас: ${c['current'] ?? 'не измерено'} · ориентир: ${c['target'] ?? 'не задан'}',
                 style: const TextStyle(fontSize: 11),
               ),
             ),
@@ -2467,36 +2477,39 @@ class _DashboardHomeState extends State<DashboardHome>
     );
   }
 
-  Widget systemsPanel() => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      sectionTitle(
-        'Системы · три приоритета и ограничитель',
-        trailing: TextButton(
-          onPressed: () => editSystem(),
-          child: const Text('＋ Система'),
-        ),
-      ),
-      ...repo
-          .entities('systems', 'system')
-          .map(
-            (s) => Card(
-              child: ListTile(
-                title: Text(s['name'].toString()),
-                subtitle: Text(
-                  rows(s['characteristics'])
-                      .map(
-                        (c) =>
-                            '${c['kind'] == 'limit' ? '≤ ' : ''}${c['name']} · ${c['current'] ?? 'No Data'} → ${c['target'] ?? 'No Data'}',
-                      )
-                      .join('\n'),
-                ),
-                onTap: () => editSystem(s),
-              ),
-            ),
-          ),
-    ],
+  Widget systemsPanel() => SystemsPanel(
+    repo: repo,
+    configure: (system) => editSystem(system),
+    openWork: () => selectSection(2),
+    measure: measureSystemCharacteristic,
   );
+
+  Future<void> measureSystemCharacteristic(
+    Json system,
+    Json characteristic,
+  ) async {
+    await editFields(
+      context,
+      title: 'Замер · ${characteristic['name']}',
+      initial: {'value': characteristic['current']},
+      fields: const [
+        FieldSpec('value', 'Характеристика сейчас', numeric: true),
+        FieldSpec('evidence', 'Что подтверждает замер', lines: 3),
+      ],
+      save: (input) async {
+        if (input['value'] is! num || !(input['value'] as num).isFinite) {
+          throw ArgumentError(
+            'Укажи числовое значение. Ноль можно записать явно.',
+          );
+        }
+        repo.recordGoalMeasurement(
+          {...characteristic, 'characteristicId': characteristic['id']},
+          input['value'] as num,
+          evidence: (input['evidence'] ?? '').toString(),
+        );
+      },
+    );
+  }
 
   Future<void> editSystem([Json? previous]) async {
     final id = previous?['id'] ?? uuid.v4(), key = 'system:$id';
@@ -3217,7 +3230,7 @@ class _DashboardHomeState extends State<DashboardHome>
                                 const SizedBox(height: 20),
                                 const SizedBox(height: 12),
                                 const Text(
-                                  'I&W · Native 0.1.37',
+                                  'I&W · Native 0.1.38',
                                   style: TextStyle(fontSize: 11),
                                 ),
                               ],
