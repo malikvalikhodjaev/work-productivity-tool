@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
@@ -110,6 +111,11 @@ class WorkspaceTable extends StatefulWidget {
   final VoidCallback? reset;
   final Future<void> Function(WorkColumn)? rename;
   final VoidCallback? addColumn;
+  final Future<void> Function(WorkColumn)? removeColumn;
+  final bool Function(WorkColumn)? canRemoveColumn;
+  final bool cleanGrid;
+  final Widget Function(Json, Widget, ValueChanged<Offset>)? rowWrapper;
+  final bool rowDragging;
   const WorkspaceTable({
     super.key,
     required this.repo,
@@ -126,6 +132,11 @@ class WorkspaceTable extends StatefulWidget {
     this.reset,
     this.rename,
     this.addColumn,
+    this.removeColumn,
+    this.canRemoveColumn,
+    this.cleanGrid = false,
+    this.rowWrapper,
+    this.rowDragging = false,
   });
   @override
   State<WorkspaceTable> createState() => _WorkspaceTableState();
@@ -137,6 +148,33 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
   late final TextEditingController query;
   bool scrolling = false;
   double offset = 0;
+  final viewportKey = GlobalKey();
+  Offset? dragPosition;
+  Timer? dragScroll;
+  void dragHover(Offset position) {
+    dragPosition = position;
+    dragScroll ??= Timer.periodic(const Duration(milliseconds: 40), (_) {
+      if (!widget.rowDragging || !mounted) {
+        dragScroll?.cancel();
+        dragScroll = null;
+        return;
+      }
+      final box = viewportKey.currentContext?.findRenderObject() as RenderBox?;
+      if (box == null || dragPosition == null || !vertical.hasClients) return;
+      final y = box.globalToLocal(dragPosition!).dy;
+      final delta = y < 48
+          ? -12.0
+          : y > box.size.height - 48
+          ? 12.0
+          : 0.0;
+      if (delta != 0) {
+        vertical.jumpTo(
+          (vertical.offset + delta).clamp(0, vertical.position.maxScrollExtent),
+        );
+      }
+    });
+  }
+
   Json get view => object(widget.repo.local.get(widget.viewKey));
   @override
   void initState() {
@@ -217,6 +255,58 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.cleanGrid) return buildTable(context);
+    final outer = Theme.of(context), dark = outer.brightness == Brightness.dark;
+    final panel = dark ? const Color(0xff202225) : Colors.white;
+    final head = dark ? const Color(0xff292d31) : const Color(0xfff5f6f7);
+    final line = dark ? const Color(0xff3d4146) : const Color(0xffe3e6e8);
+    final text = dark ? const Color(0xffecedef) : const Color(0xff252a2e);
+    final label = dark ? const Color(0xffb6bcc2) : const Color(0xff646c74);
+    final clean = outer.copyWith(
+      colorScheme: outer.colorScheme.copyWith(
+        surface: panel,
+        surfaceContainer: panel,
+        surfaceContainerLow: panel,
+        surfaceContainerHigh: head,
+        surfaceContainerHighest: dark
+            ? const Color(0xff3b4046)
+            : const Color(0xffeef0f1),
+        secondaryContainer: dark
+            ? const Color(0xff30383d)
+            : const Color(0xffeef2f4),
+        onSurface: text,
+        onSurfaceVariant: label,
+        outlineVariant: line,
+      ),
+      cardTheme: outer.cardTheme.copyWith(color: panel),
+      dividerColor: line,
+      iconTheme: outer.iconTheme.copyWith(color: label),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: text,
+          disabledForegroundColor: label.withValues(alpha: .55),
+          textStyle: outer.textTheme.bodyMedium,
+        ),
+      ),
+      inputDecorationTheme: outer.inputDecorationTheme.copyWith(
+        fillColor: panel,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(7),
+          borderSide: BorderSide(color: line),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(7),
+          borderSide: BorderSide(color: line),
+        ),
+      ),
+    );
+    return Theme(
+      data: clean,
+      child: Builder(builder: buildTable),
+    );
+  }
+
+  Widget buildTable(BuildContext context) {
     final cols = columns;
     if (cols.isEmpty) return const SizedBox.shrink();
     final shown = arrangeTableRows(
@@ -239,13 +329,22 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
           onChanged: (s) => change({'query': s}),
         ),
       ),
-      ...widget.tools,
       if (widget.addColumn != null)
-        TextButton.icon(
+        OutlinedButton.icon(
           key: const ValueKey('table-add-column'),
           onPressed: widget.addColumn,
           icon: const Icon(Icons.add),
           label: const Text('Столбец'),
+        ),
+      ...widget.tools,
+      if (widget.rowWrapper != null &&
+          (view['sort'] ?? '').toString().isNotEmpty)
+        TextButton.icon(
+          key: const ValueKey('table-manual-order'),
+          onPressed: () =>
+              change({'sort': null, 'descending': false, 'group': ''}),
+          icon: const Icon(Icons.swap_vert),
+          label: const Text('Порядок строк'),
         ),
       if (widget.grouping)
         SizedBox(
@@ -309,6 +408,11 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
         const SizedBox(height: 8),
         LayoutBuilder(
           builder: (context, box) {
+            final unpinned = widget.cleanGrid && box.maxWidth < 560;
+            double cellWidth(WorkColumn col) =>
+                unpinned && col.id == cols.first.id
+                ? min(width(col), max(280.0, box.maxWidth))
+                : width(col);
             final pinned = min(
               width(cols.first),
               max(130.0, box.maxWidth * .48),
@@ -318,129 +422,189 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
               Widget content(WorkColumn col, double w) => SizedBox(
                 key: ValueKey('column-cell:${col.id}'),
                 width: w,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
-                  ),
-                  child: head
-                      ? Row(
-                          children: [
-                            Expanded(
-                              child: DragTarget<String>(
-                                onWillAcceptWithDetails: (d) =>
-                                    d.data != col.id &&
-                                    cols.any((c) => c.id == d.data),
-                                onAcceptWithDetails: (d) {
-                                  final order = cols.map((c) => c.id).toList();
-                                  final from = order.indexOf(d.data),
-                                      to = order.indexOf(col.id);
-                                  order.removeAt(from);
-                                  order.insert(to, d.data);
-                                  change({'order': order});
-                                },
-                                builder: (context, candidate, rejected) =>
-                                    Draggable<String>(
-                                      key: ValueKey('column-drag:${col.id}'),
-                                      data: col.id,
-                                      affinity: Axis.horizontal,
-                                      feedback: Material(
-                                        elevation: 4,
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(12),
+                child: DecoratedBox(
+                  decoration: widget.cleanGrid && col.id != cols.first.id
+                      ? BoxDecoration(
+                          border: Border(
+                            right: BorderSide(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .outlineVariant,
+                            ),
+                          ),
+                        )
+                      : const BoxDecoration(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 8,
+                    ),
+                    child: head
+                        ? Row(
+                            children: [
+                              Expanded(
+                                child: DragTarget<String>(
+                                  onWillAcceptWithDetails: (d) =>
+                                      d.data != col.id &&
+                                      cols.any((c) => c.id == d.data),
+                                  onAcceptWithDetails: (d) {
+                                    final order = cols
+                                        .map((c) => c.id)
+                                        .toList();
+                                    final from = order.indexOf(d.data),
+                                        to = order.indexOf(col.id);
+                                    order.removeAt(from);
+                                    order.insert(to, d.data);
+                                    change({'order': order});
+                                  },
+                                  builder: (context, candidate, rejected) =>
+                                      Draggable<String>(
+                                        key: ValueKey('column-drag:${col.id}'),
+                                        data: col.id,
+                                        affinity: Axis.horizontal,
+                                        feedback: Material(
+                                          elevation: 4,
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(12),
+                                            child: Text(col.title),
+                                          ),
+                                        ),
+                                        childWhenDragging: Opacity(
+                                          opacity: .4,
                                           child: Text(col.title),
                                         ),
-                                      ),
-                                      childWhenDragging: Opacity(
-                                        opacity: .4,
-                                        child: Text(col.title),
-                                      ),
-                                      child: DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          border: candidate.isEmpty
-                                              ? null
-                                              : Border(
-                                                  left: BorderSide(
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .primary,
-                                                    width: 2,
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            border: candidate.isEmpty
+                                                ? null
+                                                : Border(
+                                                    left: BorderSide(
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .primary,
+                                                      width: 2,
+                                                    ),
                                                   ),
-                                                ),
-                                        ),
-                                        child: TextButton(
-                                          onPressed: () => change({
-                                            'sort': col.id,
-                                            'descending':
-                                                view['sort'] == col.id &&
-                                                view['descending'] != true,
-                                          }),
-                                          child: Tooltip(
-                                            message: col.hint ?? col.title,
-                                            child: Text(
-                                              '${col.title}${view['sort'] == col.id
-                                                  ? view['descending'] == true
-                                                        ? ' ↓'
-                                                        : ' ↑'
-                                                  : ''}',
-                                              softWrap: true,
+                                          ),
+                                          child: TextButton(
+                                            style: widget.cleanGrid
+                                                ? TextButton.styleFrom(
+                                                    alignment:
+                                                        Alignment.centerLeft,
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 4,
+                                                          vertical: 8,
+                                                        ),
+                                                    foregroundColor:
+                                                        Theme.of(context)
+                                                            .colorScheme
+                                                            .onSurfaceVariant,
+                                                  )
+                                                : null,
+                                            onPressed: () => change({
+                                              'sort': col.id,
+                                              'descending':
+                                                  view['sort'] == col.id &&
+                                                  view['descending'] != true,
+                                            }),
+                                            child: Tooltip(
+                                              message: col.hint ?? col.title,
+                                              child: Text(
+                                                '${col.title}${view['sort'] == col.id
+                                                    ? view['descending'] == true
+                                                          ? ' ↓'
+                                                          : ' ↑'
+                                                    : ''}',
+                                                softWrap: true,
+                                              ),
                                             ),
                                           ),
                                         ),
                                       ),
+                                ),
+                              ),
+                              IconButton(
+                                key: ValueKey('column-rename:${col.id}'),
+                                tooltip: 'Переименовать столбец «${col.title}»',
+                                onPressed: () => renameColumn(col),
+                                constraints: const BoxConstraints(
+                                  minWidth: 32,
+                                  minHeight: 40,
+                                ),
+                                padding: const EdgeInsets.all(4),
+                                icon: const Icon(Icons.edit_outlined, size: 16),
+                              ),
+                              if (widget.removeColumn != null)
+                                PopupMenuButton<String>(
+                                  key: ValueKey('column-menu:${col.id}'),
+                                  tooltip: 'Меню столбца',
+                                  child: const SizedBox(
+                                    width: 28,
+                                    height: 40,
+                                    child: Icon(Icons.more_vert, size: 16),
+                                  ),
+                                  onSelected: (action) {
+                                    if (action == 'rename') renameColumn(col);
+                                    if (action == 'remove') {
+                                      widget.removeColumn!(col);
+                                    }
+                                  },
+                                  itemBuilder: (_) => [
+                                    const PopupMenuItem(
+                                      value: 'rename',
+                                      child: Text('Переименовать'),
                                     ),
-                              ),
-                            ),
-                            IconButton(
-                              key: ValueKey('column-rename:${col.id}'),
-                              tooltip: 'Переименовать столбец «${col.title}»',
-                              onPressed: () => renameColumn(col),
-                              constraints: const BoxConstraints(
-                                minWidth: 32,
-                                minHeight: 40,
-                              ),
-                              padding: const EdgeInsets.all(4),
-                              icon: const Icon(Icons.edit_outlined, size: 16),
-                            ),
-                            Semantics(
-                              label: 'Изменить ширину: ${col.title}',
-                              child: MouseRegion(
-                                cursor: SystemMouseCursors.resizeColumn,
-                                child: GestureDetector(
-                                  key: ValueKey('column-resize:${col.id}'),
-                                  behavior: HitTestBehavior.opaque,
-                                  onHorizontalDragUpdate: (event) => change({
-                                    'widths': {
-                                      ...object(view['widths']),
-                                      col.id: (width(col) + event.delta.dx)
-                                          .clamp(100, 600),
-                                    },
-                                  }),
-                                  child: SizedBox(
-                                    width: 12,
-                                    height: 48,
-                                    child: Center(
-                                      child: Container(
-                                        width: 1,
-                                        height: 28,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .outlineVariant,
+                                    PopupMenuItem(
+                                      key: ValueKey('column-remove:${col.id}'),
+                                      value: 'remove',
+                                      enabled:
+                                          widget.canRemoveColumn?.call(col) ??
+                                          true,
+                                      child: const Text('Убрать столбец'),
+                                    ),
+                                  ],
+                                ),
+                              Semantics(
+                                label: 'Изменить ширину: ${col.title}',
+                                child: MouseRegion(
+                                  cursor: SystemMouseCursors.resizeColumn,
+                                  child: GestureDetector(
+                                    key: ValueKey('column-resize:${col.id}'),
+                                    behavior: HitTestBehavior.opaque,
+                                    onHorizontalDragUpdate: (event) => change({
+                                      'widths': {
+                                        ...object(view['widths']),
+                                        col.id: (width(col) + event.delta.dx)
+                                            .clamp(100, 600),
+                                      },
+                                    }),
+                                    child: SizedBox(
+                                      width: 12,
+                                      height: 48,
+                                      child: Center(
+                                        child: Container(
+                                          width: 1,
+                                          height: 28,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .outlineVariant,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
+                            ],
+                          )
+                        : Semantics(
+                            label: col.title,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: widget.cell(context, row, col),
                             ),
-                          ],
-                        )
-                      : Semantics(
-                          label: col.title,
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: widget.cell(context, row, col),
                           ),
-                        ),
+                  ),
                 ),
               );
               return Container(
@@ -485,8 +649,8 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        content(cols.first, pinned),
-                        const VerticalDivider(width: 1),
+                        if (!unpinned) content(cols.first, pinned),
+                        if (!unpinned) const VerticalDivider(width: 1),
                         Expanded(
                           child: SingleChildScrollView(
                             controller: horizontal(id),
@@ -495,8 +659,8 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                for (final col in cols.skip(1))
-                                  content(col, width(col)),
+                                for (final col in cols.skip(unpinned ? 0 : 1))
+                                  content(col, cellWidth(col)),
                               ],
                             ),
                           ),
@@ -524,30 +688,40 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
                   ),
                 );
               }
-              lines.add(line(row['id'].toString(), row));
+              final content = line(row['id'].toString(), row);
+              lines.add(
+                widget.rowWrapper?.call(row, content, dragHover) ?? content,
+              );
             }
             final tableHeight = min(
               600.0 * min(scale, 1.4),
               max(140.0, shown.length * 82.0 * scale + 20),
             );
+            final bodyViewport = Scrollbar(
+              key: viewportKey,
+              controller: vertical,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: vertical,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: lines,
+                ),
+              ),
+            );
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 line('_header', null),
-                SizedBox(
-                  height: tableHeight,
-                  child: Scrollbar(
-                    controller: vertical,
-                    thumbVisibility: true,
-                    child: SingleChildScrollView(
-                      controller: vertical,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: lines,
-                      ),
+                if (widget.cleanGrid)
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: 600.0 * min(scale, 1.4),
                     ),
-                  ),
-                ),
+                    child: bodyViewport,
+                  )
+                else
+                  SizedBox(height: tableHeight, child: bodyViewport),
                 Scrollbar(
                   controller: horizontal('_footer'),
                   thumbVisibility: true,
@@ -559,12 +733,12 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
                       width: max(
                         box.maxWidth,
                         cols
-                                .skip(1)
+                                .skip(unpinned ? 0 : 1)
                                 .fold<double>(
                                   0,
-                                  (sum, col) => sum + width(col),
+                                  (sum, col) => sum + cellWidth(col),
                                 ) +
-                            pinned,
+                            (unpinned ? 0 : pinned),
                       ),
                       height: 20,
                     ),
@@ -580,6 +754,7 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
 
   @override
   void dispose() {
+    dragScroll?.cancel();
     query.dispose();
     vertical.dispose();
     for (final c in scrolls.values) {

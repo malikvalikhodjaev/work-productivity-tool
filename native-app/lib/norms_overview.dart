@@ -102,6 +102,7 @@ class _NormsOverviewState extends State<NormsOverview> {
             viewKey: 'userNormsWeek:${widget.repo.serverId}',
             grouping: false,
             compactToolbar: true,
+            cleanGrid: true,
             items: items,
             columns: const [
               WorkColumn('title', 'Работа', width: 340),

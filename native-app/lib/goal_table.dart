@@ -7,7 +7,10 @@ import 'goal_progress.dart';
 import 'goal_status.dart';
 import 'goal_workspace.dart';
 import 'goal_columns.dart';
+import 'goal_change_scale.dart';
 import 'model_hierarchy.dart';
+import 'goal_hierarchy.dart';
+import 'goal_row_drag.dart';
 import 'repository.dart';
 import 'workspace_table.dart';
 import 'inline_cell.dart';
@@ -37,6 +40,159 @@ class GoalsTable extends StatefulWidget {
 }
 
 class _GoalsTableState extends State<GoalsTable> {
+  bool dragging = false;
+  String get hiddenColumnsKey => 'goalHiddenColumns:${widget.repo.serverId}';
+  Set<String> get hiddenColumns =>
+      (widget.repo.local.get(hiddenColumnsKey) as List? ?? [])
+          .whereType<String>()
+          .toSet();
+  Future<void> removeColumn(WorkColumn column) async {
+    try {
+      final definition = widget.repo.goalColumns().firstWhere(
+        (c) => c['id'] == column.id,
+      );
+      if (column.id == 'title') return;
+      if (definition['custom'] == true) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Убрать «${column.title}»?'),
+            content: const Text(
+              'Столбец исчезнет из таблицы. Его значения сохранятся; вернуть столбец можно через «＋ Столбец».',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Убрать'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true || !mounted) return;
+        widget.repo.goalGridCommand('updateGoalColumn', {
+          'id': definition['id'],
+          'title': definition['title'],
+          'expectedRevision': definition['revision'] ?? 0,
+          'archived': true,
+        });
+      } else {
+        widget.repo.setUiPreference(
+          hiddenColumnsKey,
+          {...hiddenColumns, column.id}.toList(),
+        );
+      }
+      final view = object(widget.repo.local.get(tableViewKey));
+      if (view['sort'] == column.id) {
+        widget.repo.setUiPreference(tableViewKey, {
+          ...view,
+          'sort': null,
+          'descending': false,
+        });
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (mounted) error(e);
+    }
+  }
+
+  Future<void> addColumn() async {
+    final hidden = widget.repo
+        .goalColumns(archived: true)
+        .where(
+          (c) =>
+              c['id'] != 'delta' &&
+              (c['archived'] == true || hiddenColumns.contains(c['id'])),
+        )
+        .toList();
+    if (hidden.isEmpty) {
+      await editGoalColumn(context, widget.repo);
+      return;
+    }
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Столбцы'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'new'),
+            child: const Text('＋ Новый столбец'),
+          ),
+          const Divider(),
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text('Вернуть в таблицу'),
+          ),
+          for (final c in hidden)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, c['id'].toString()),
+              child: Text(c['title'].toString()),
+            ),
+        ],
+      ),
+    );
+    if (selected == null || !mounted) return;
+    if (selected == 'new') {
+      await editGoalColumn(context, widget.repo);
+      return;
+    }
+    try {
+      final definition = hidden.firstWhere((c) => c['id'] == selected);
+      if (definition['archived'] == true) {
+        widget.repo.goalGridCommand('updateGoalColumn', {
+          'id': selected,
+          'title': definition['title'],
+          'expectedRevision': definition['revision'] ?? 0,
+          'archived': false,
+        });
+      }
+      widget.repo.setUiPreference(
+        hiddenColumnsKey,
+        ({...hiddenColumns}..remove(selected)).toList(),
+      );
+      setState(() {});
+    } catch (e) {
+      error(e);
+    }
+  }
+
+  String get tableViewKey =>
+      'goalWorkbench:${widget.repo.serverId}:${widget.rootId ?? 'all'}';
+  bool get manualOrder =>
+      (object(widget.repo.local.get(tableViewKey))['sort'] ?? '')
+          .toString()
+          .isEmpty;
+  bool accepts(GoalDragData data, Json? target, String placement) {
+    if (data.serverId != widget.repo.serverId ||
+        target?['id'] == data.id ||
+        !manualOrder) {
+      return false;
+    }
+    try {
+      final all = widget.repo.entities('goals', 'goal');
+      relocateGoal(all, goalDropInput(all, data.id, target, placement));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void drop(GoalDragData data, Json? target, String placement) {
+    try {
+      final all = widget.repo.entities('goals', 'goal');
+      widget.repo.moveGoal(goalDropInput(all, data.id, target, placement));
+      if (target != null && placement == 'inside') {
+        collapse({...collapsed}..remove(target['id']));
+      }
+      setState(() => dragging = false);
+    } catch (e) {
+      error(e);
+    }
+  }
+
   String get preferenceKey =>
       'goalFilter:${widget.repo.serverId}:${widget.rootId ?? 'all'}';
   Json get filter => object(widget.repo.local.get(preferenceKey));
@@ -399,189 +555,224 @@ class _GoalsTableState extends State<GoalsTable> {
         label: const Text('Отменить правку'),
       ),
     ];
-    return Column(
+    return Stack(
       key: const ValueKey('goals-table-section'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (items.isEmpty)
-          Text(
-            widget.goals.isEmpty
-                ? 'Добавь первую цель кнопкой «＋ Цель».'
-                : 'По этим фильтрам целей нет. Измени или сбрось фильтры.',
-          ),
-        WorkspaceTable(
-          key: const ValueKey('goals-hierarchy-table'),
-          repo: widget.repo,
-          viewKey:
-              'goalWorkbench:${widget.repo.serverId}:${widget.rootId ?? 'all'}',
-          grouping: false,
-          tools: tools,
-          compactToolbar: true,
-          reset: () =>
-              setFilter({'mode': 'current', 'status': '', 'branch': ''}),
-          items: items,
-          collapsed: (filter['status'] ?? '').toString().isNotEmpty
-              ? const {}
-              : collapsed,
-          rowKey: (r) => 'goal-row:${r['id']}',
-          rename: (column) => editGoalColumn(
-            context,
-            widget.repo,
-            column: widget.repo.goalColumns().firstWhere(
-              (c) => c['id'] == column.id,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (items.isEmpty)
+              Text(
+                widget.goals.isEmpty
+                    ? 'Добавь первую цель кнопкой «＋ Цель».'
+                    : 'По этим фильтрам целей нет. Измени или сбрось фильтры.',
+              ),
+            WorkspaceTable(
+              key: const ValueKey('goals-hierarchy-table'),
+              repo: widget.repo,
+              viewKey: tableViewKey,
+              grouping: false,
+              tools: tools,
+              compactToolbar: true,
+              cleanGrid: true,
+              rowDragging: dragging,
+              rowWrapper: (g, content, hover) => GoalDropSurface(
+                key: ValueKey('goal-drop:${g['id']}'),
+                accepts: (d, p) => accepts(d, g, p),
+                drop: (d, p) => drop(d, g, p),
+                hover: hover,
+                child: content,
+              ),
+              reset: () =>
+                  setFilter({'mode': 'current', 'status': '', 'branch': ''}),
+              items: items,
+              collapsed: (filter['status'] ?? '').toString().isNotEmpty
+                  ? const {}
+                  : collapsed,
+              rowKey: (r) => 'goal-row:${r['id']}',
+              rename: (column) => editGoalColumn(
+                context,
+                widget.repo,
+                column: widget.repo.goalColumns().firstWhere(
+                  (c) => c['id'] == column.id,
+                ),
+              ),
+              addColumn: addColumn,
+              removeColumn: removeColumn,
+              canRemoveColumn: (c) => c.id != 'title',
+              columns: [
+                for (final c in widget.repo.goalColumns().where(
+                  (c) => c['id'] != 'delta' && !hiddenColumns.contains(c['id']),
+                ))
+                  WorkColumn(
+                    c['id'].toString(),
+                    c['title'].toString(),
+                    width: (c['width'] as num? ?? 200).toDouble(),
+                    hint: c['id'] == 'dueDate' ? goalDeadlineHint : null,
+                  ),
+              ],
+              value: (g, id) => id == '*'
+                  ? '${g['title']} ${g['physicalSystem'] ?? ''} ${g['unit'] ?? ''} ${object(g['customValues']).values.join(' ')} ${goalStatusLabel(g['status'])}'
+                  : id == 'measurement'
+                  ? object(g['measurement'])['date']
+                  : id == 'status'
+                  ? goalStatusLabel(g[id])
+                  : object(g['customValues']).containsKey(id)
+                  ? object(g['customValues'])[id]
+                  : g[id],
+              cell: (context, g, col) {
+                switch (col.id) {
+                  case 'title':
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        left: min((g['_depth'] as int) * 14.0, 56),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          GoalDragHandle(
+                            key: ValueKey('goal-drag:${g['id']}'),
+                            data: GoalDragData(
+                              g['id'].toString(),
+                              widget.repo.serverId ?? '',
+                            ),
+                            title: g['title'].toString(),
+                            enabled:
+                                manualOrder &&
+                                g['_inTrash'] != true &&
+                                g['_inArchive'] != true &&
+                                widget.repo.cache(
+                                      'workspace',
+                                    )['goalHierarchyVersion'] ==
+                                    1,
+                            dragging: (value) =>
+                                setState(() => dragging = value),
+                          ),
+                          if (g['_hasChildren'] == true)
+                            IconButton(
+                              key: ValueKey('goal-toggle:${g['id']}'),
+                              tooltip: collapsed.contains(g['id'])
+                                  ? 'Раскрыть подцели'
+                                  : 'Свернуть подцели',
+                              onPressed: () {
+                                final next = {...collapsed};
+                                if (!next.remove(g['id'])) {
+                                  next.add(g['id'].toString());
+                                }
+                                collapse(next);
+                              },
+                              icon: Icon(
+                                collapsed.contains(g['id'])
+                                    ? Icons.chevron_right
+                                    : Icons.expand_more,
+                              ),
+                            ),
+                          Expanded(child: field(g, 'title')),
+                          rowMenu(g),
+                        ],
+                      ),
+                    );
+                  case 'physicalSystem':
+                  case 'target':
+                  case 'unit':
+                  case 'dueDate':
+                    return field(g, col.id);
+                  case 'current':
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        KeyedSubtree(
+                          key: ValueKey('goal-cell:current:${g['id']}'),
+                          child: goalScaleRatio(g) != null
+                              ? GoalChangeScale(
+                                  key: ValueKey('goal-scale:${g['id']}'),
+                                  goal: g,
+                                  measure: () => widget.measure(g),
+                                  configure: () => widget.edit(g),
+                                )
+                              : editable(
+                                  goalNumber(g['current']),
+                                  () => widget.measure(g),
+                                ),
+                        ),
+                        if (object(g['measurement'])['pending'] == true)
+                          const Text('На устройстве'),
+                      ],
+                    );
+                  case 'status':
+                    return DropdownButtonFormField<String>(
+                      itemHeight: null,
+                      key: ValueKey('goal-status:${g['id']}:${g['status']}'),
+                      initialValue: goalStatusOptions.containsKey(g['status'])
+                          ? g['status'].toString()
+                          : null,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 8,
+                        ),
+                      ),
+                      items: [
+                        for (final status in goalStatusOptions.entries)
+                          DropdownMenuItem(
+                            value: status.key,
+                            child: Text(status.value),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null || value == g['status']) return;
+                        try {
+                          widget.repo.editGoalField(
+                            g['id'].toString(),
+                            'status',
+                            value,
+                            expectedGoal: g,
+                          );
+                        } catch (e) {
+                          error(e);
+                        }
+                      },
+                    );
+                  default:
+                    return GoalCustomCell(
+                      repo: widget.repo,
+                      goal: g,
+                      column: widget.repo.goalColumns().firstWhere(
+                        (c) => c['id'] == col.id,
+                      ),
+                    );
+                }
+              },
+            ),
+          ],
+        ),
+        if (dragging)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: GoalDropSurface(
+              key: const ValueKey('goal-drop-root'),
+              root: true,
+              accepts: (d, p) => accepts(d, null, p),
+              drop: (d, p) => drop(d, null, p),
+              child: Container(
+                height: 48,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                ),
+                child: const Text('На верхний уровень'),
+              ),
             ),
           ),
-          addColumn: () => editGoalColumn(context, widget.repo),
-          columns: [
-            for (final c in widget.repo.goalColumns())
-              WorkColumn(
-                c['id'].toString(),
-                c['title'].toString(),
-                width: (c['width'] as num? ?? 200).toDouble(),
-                hint: c['id'] == 'dueDate' ? goalDeadlineHint : null,
-              ),
-          ],
-          value: (g, id) => id == '*'
-              ? '${g['title']} ${g['physicalSystem'] ?? ''} ${g['unit'] ?? ''} ${object(g['customValues']).values.join(' ')} ${goalStatusLabel(g['status'])}'
-              : id == 'measurement'
-              ? object(g['measurement'])['date']
-              : id == 'status'
-              ? goalStatusLabel(g[id])
-              : object(g['customValues']).containsKey(id)
-              ? object(g['customValues'])[id]
-              : g[id],
-          cell: (context, g, col) {
-            switch (col.id) {
-              case 'title':
-                return Padding(
-                  padding: EdgeInsets.only(
-                    left: min((g['_depth'] as int) * 14.0, 56),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      if (g['_hasChildren'] == true)
-                        IconButton(
-                          key: ValueKey('goal-toggle:${g['id']}'),
-                          tooltip: collapsed.contains(g['id'])
-                              ? 'Раскрыть подцели'
-                              : 'Свернуть подцели',
-                          onPressed: () {
-                            final next = {...collapsed};
-                            if (!next.remove(g['id'])) {
-                              next.add(g['id'].toString());
-                            }
-                            collapse(next);
-                          },
-                          icon: Icon(
-                            collapsed.contains(g['id'])
-                                ? Icons.chevron_right
-                                : Icons.expand_more,
-                          ),
-                        ),
-                      Expanded(child: field(g, 'title')),
-                      rowMenu(g),
-                    ],
-                  ),
-                );
-              case 'physicalSystem':
-              case 'target':
-              case 'unit':
-              case 'dueDate':
-                return field(g, col.id);
-              case 'current':
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    KeyedSubtree(
-                      key: ValueKey('goal-cell:current:${g['id']}'),
-                      child: editable(
-                        goalNumber(g['current']),
-                        () => widget.measure(g),
-                      ),
-                    ),
-                    if (object(g['measurement'])['pending'] == true)
-                      const Text('На устройстве'),
-                  ],
-                );
-              case 'delta':
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (g['delta'] is num)
-                      Text(
-                        'С начала: ${g['delta'] > 0 ? '+' : ''}${goalDifferenceNumber(g['delta'])} ${g['unit'] ?? ''}'
-                        '${g['changePercent'] is num ? ' (${g['changePercent'] > 0 ? '+' : ''}${goalNumber((g['changePercent'] as num).round())}%)' : ''}',
-                      )
-                    else
-                      editable('Заполнить', () => widget.measure(g)),
-                    if (g['lastChange'] is num)
-                      Text(
-                        'К прошлому: ${g['lastChange'] > 0 ? '+' : ''}${goalDifferenceNumber(g['lastChange'])}',
-                      ),
-                    if (g['percent'] is num) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        'К предпочтительной: ${g['percent']}%${g['reached'] == true ? ' · достигнуто' : ''}',
-                      ),
-                      LinearProgressIndicator(
-                        value: ((g['percent'] as num) / 100)
-                            .clamp(0, 1)
-                            .toDouble(),
-                      ),
-                    ],
-                  ],
-                );
-              case 'status':
-                return DropdownButtonFormField<String>(
-                  itemHeight: null,
-                  key: ValueKey('goal-status:${g['id']}:${g['status']}'),
-                  initialValue: goalStatusOptions.containsKey(g['status'])
-                      ? g['status'].toString()
-                      : null,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 8,
-                    ),
-                  ),
-                  items: [
-                    for (final status in goalStatusOptions.entries)
-                      DropdownMenuItem(
-                        value: status.key,
-                        child: Text(status.value),
-                      ),
-                  ],
-                  onChanged: (value) {
-                    if (value == null || value == g['status']) return;
-                    try {
-                      widget.repo.editGoalField(
-                        g['id'].toString(),
-                        'status',
-                        value,
-                        expectedGoal: g,
-                      );
-                    } catch (e) {
-                      error(e);
-                    }
-                  },
-                );
-              default:
-                return GoalCustomCell(
-                  repo: widget.repo,
-                  goal: g,
-                  column: widget.repo.goalColumns().firstWhere(
-                    (c) => c['id'] == col.id,
-                  ),
-                );
-            }
-          },
-        ),
       ],
     );
   }

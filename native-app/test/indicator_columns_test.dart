@@ -47,6 +47,97 @@ Widget page(DashboardRepository repo) => MaterialApp(
   ),
 );
 void main() {
+  testWidgets(
+    'narrow table keeps indicator readable and scrolls columns instead of squeezing its title',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 780);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repo = repository();
+      addTearDown(repo.dispose);
+      await tester.pumpWidget(page(repo));
+      await tester.pumpAndSettle();
+      final row = find.byKey(const ValueKey('goal-row:g'));
+      expect(tester.getRect(row).height, lessThan(200));
+      expect(
+        find.byKey(const ValueKey('goal-menu:g')).hitTestable(),
+        findsOneWidget,
+      );
+      final source = jsonEncode(repo.entities('goals', 'goal'));
+      final header = find.byKey(const ValueKey('workspace-sticky-header'));
+      await tester.dragFrom(tester.getCenter(header), const Offset(-260, 0));
+      await tester.pumpAndSettle();
+      expect(jsonEncode(repo.entities('goals', 'goal')), source);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'remove and restore columns without an extra change column or loss of raw custom data',
+    (tester) async {
+      tester.view.physicalSize = const Size(1800, 1100);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repo = repository();
+      addTearDown(repo.dispose);
+      final custom = uuid.v4();
+      repo.goalGridCommand('createGoalColumn', {
+        'id': custom,
+        'title': 'Мой контекст',
+        'type': 'text',
+      });
+      repo.editGoalCell('g', custom, null, '  исходный\nтекст  ');
+      await tester.pumpWidget(page(repo));
+      await tester.pumpAndSettle();
+      WorkspaceTable table() =>
+          tester.widget<WorkspaceTable>(find.byType(WorkspaceTable));
+      expect(table().columns.any((c) => c.id == 'delta'), isFalse);
+      await tester.tap(
+        find.byKey(const ValueKey('column-menu:physicalSystem')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('column-remove:physicalSystem')),
+      );
+      await tester.pumpAndSettle();
+      expect(table().columns.any((c) => c.id == 'physicalSystem'), isFalse);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(page(repo));
+      await tester.pumpAndSettle();
+      expect(table().columns.any((c) => c.id == 'physicalSystem'), isFalse);
+      await tester.tap(find.byKey(const ValueKey('table-add-column')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Физическая система'));
+      await tester.pumpAndSettle();
+      expect(table().columns.any((c) => c.id == 'physicalSystem'), isTrue);
+      await tester.ensureVisible(find.byKey(ValueKey('column-menu:$custom')));
+      await tester.tap(find.byKey(ValueKey('column-menu:$custom')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey('column-remove:$custom')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Убрать'));
+      await tester.pumpAndSettle();
+      expect(table().columns.any((c) => c.id == custom), isFalse);
+      expect(
+        object(repo.entities('goals', 'goal').single['customValues'])[custom],
+        '  исходный\nтекст  ',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('table-add-column')),
+      );
+      await tester.tap(find.byKey(const ValueKey('table-add-column')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Мой контекст'));
+      await tester.pumpAndSettle();
+      expect(table().columns.any((c) => c.id == custom), isTrue);
+      expect(
+        object(repo.entities('goals', 'goal').single['customValues'])[custom],
+        '  исходный\nтекст  ',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
   test('offline column definitions and exact custom cells persist in projections without rewriting commands', () {
     final repo = repository();
     addTearDown(repo.dispose);

@@ -12,6 +12,7 @@ import 'durable_timer.dart';
 import 'grid_definitions.dart';
 import 'goal_grid_definitions.dart';
 import 'model_hierarchy.dart';
+import 'goal_hierarchy.dart';
 import 'active_timer_conflict.dart';
 
 class ApiFailure implements Exception {
@@ -630,6 +631,31 @@ class DashboardRepository extends ChangeNotifier {
           if (input['id'] == null && input['clientId'] != null)
             'id': input['clientId'],
         };
+    if (module == 'workspace' && action == 'saveGoal') {
+      final earlier = local.queue
+          .where((q) => q['entity'] == entity)
+          .firstOrNull;
+      if (earlier != null) {
+        final original = object(object(earlier['body'])['input']);
+        final moveAfter = local.queue.any(
+          (q) =>
+              q['created'] > earlier['created'] &&
+              object(q['body'])['action'] == 'moveGoal' &&
+              object(object(q['body'])['input'])['id'] == input['id'],
+        );
+        if (moveAfter && parentOf(input) != input['expectedParentId']) {
+          throw StateError(
+            'Сначала синхронизируй перенос ветви, затем выбери другого родителя. Текст формы сохранён.',
+          );
+        }
+        input = {
+          ...input,
+          if (original.containsKey('expectedParentId'))
+            'expectedParentId': original['expectedParentId'],
+          if (moveAfter) 'parentId': parentOf(original),
+        };
+      }
+    }
     local.enqueue(entity, '/api/native/command', {
       'requestId': uuid.v4(),
       'serverId': serverId,
@@ -781,6 +807,7 @@ class DashboardRepository extends ChangeNotifier {
       ])
         if (goal.containsKey(key)) key: goal[key],
       field: value,
+      'expectedParentId': parentOf(goal),
     };
     nativeSave(
       'workspace',
@@ -861,6 +888,20 @@ class DashboardRepository extends ChangeNotifier {
     status = 'Сохранено на устройстве · ожидает синхронизации';
     notifyListeners();
     requestAutoSync();
+  }
+
+  void moveGoal(Json input) {
+    if (cache('workspace')['goalHierarchyVersion'] != 1) {
+      throw StateError(
+        'Сначала синхронизируйся с обновлённым сервером индикаторов.',
+      );
+    }
+    final all = entities('goals', 'goal');
+    relocateGoal(all, input);
+    goalGridCommand('moveGoal', {
+      ...input,
+      'expectedHierarchy': goalHierarchySignature(all),
+    });
   }
 
   void editGoalCell(
@@ -1239,12 +1280,28 @@ class DashboardRepository extends ChangeNotifier {
           items[key] = {
             ...items[key]!,
             'customValues': object(row['customValues']),
+            'sortOrder': row['sortOrder'],
+            if (parentOf(items[key]!) == items[key]!['expectedParentId'])
+              'parentId': parentOf(row),
           };
         }
       }
     }
     for (final queued in pending) {
       final body = object(queued['body']), input = object(body['input']);
+      if (collection == 'goals' &&
+          queued['state'] != 'conflict' &&
+          body['module'] == 'workspace' &&
+          body['action'] == 'moveGoal') {
+        try {
+          for (final row in relocateGoal(items.values.toList(), input)) {
+            items['goal:${row['id']}'] = row;
+          }
+        } catch (_) {
+          /* The immutable command remains available for review. */
+        }
+        continue;
+      }
       if (collection == 'goals' &&
           queued['state'] != 'conflict' &&
           body['module'] == 'workspace' &&
@@ -1733,13 +1790,22 @@ class DashboardRepository extends ChangeNotifier {
     } else if (item['route'] == '/api/native/command') {
       switch (body['module']) {
         case 'workspace':
-          if (['editGoalCell', 'updateGoalColumn'].contains(body['action'])) {
+          if ([
+            'editGoalCell',
+            'updateGoalColumn',
+            'moveGoal',
+          ].contains(body['action'])) {
             final fresh = await request('/api/workspace');
             if (item['server_id'] != serverId) {
               throw StateError('Правка связана с другой установкой.');
             }
             local.capture('workspace', fresh);
-            if (body['action'] == 'editGoalCell') {
+            if (body['action'] == 'moveGoal') {
+              relocateGoal(rows(fresh['goals']), input);
+              input['expectedHierarchy'] = goalHierarchySignature(
+                rows(fresh['goals']),
+              );
+            } else if (body['action'] == 'editGoalCell') {
               final row = rows(fresh['goals'])
                   .where((g) => g['id'] == input['id'])
                   .firstOrNull;
@@ -1797,6 +1863,9 @@ class DashboardRepository extends ChangeNotifier {
             input['requestId'] = uuid.v4();
           } else {
             body['expectedUpdatedAt'] = current['updatedAt'];
+            if (body['action'] == 'saveGoal') {
+              input['expectedParentId'] = parentOf(current);
+            }
           }
         case 'portfolio':
           if ([
