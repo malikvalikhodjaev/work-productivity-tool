@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'domain.dart';
 import 'repository.dart';
 
+const goalDeadlineHint =
+    'Желательно не растягивать дедлайн, чтобы не попасть в «синдром студента» — откладывание работы до последнего момента.';
+
 /// A read-only projection: queued measurements are visible without rewriting
 /// the archive, the scale, or any earlier measurement.
 List<Json> goalMeasurements(DashboardRepository repo, Json goal) {
@@ -42,7 +45,13 @@ Json evaluateGoal(Json goal, List<Json> history) {
   num? value(dynamic raw) => raw is num && raw.isFinite ? raw : null;
   final latest = history.firstOrNull ?? object(goal['measurement']);
   final current = value(latest['value'] ?? goal['current']);
-  final baseline = value(goal['baseline']), target = value(goal['target']);
+  final baseline =
+      value(goal['baseline']) ??
+      history.reversed
+          .map((m) => value(m['value']))
+          .whereType<num>()
+          .firstOrNull;
+  final target = value(goal['target']);
   final delta = current != null && baseline != null ? current - baseline : null;
   final previous = history.length > 1 ? value(history[1]['value']) : null;
   final ratio =
@@ -57,11 +66,15 @@ Json evaluateGoal(Json goal, List<Json> history) {
     'current': current,
     'measurement': latest,
     'history': history,
+    'comparisonBaseline': baseline,
     'delta': delta,
     'lastChange': current != null && previous != null
         ? current - previous
         : null,
-    'percent': ratio == null ? null : (ratio * 100).clamp(0, 100).round(),
+    'percent': ratio == null ? null : (ratio * 100).round(),
+    'changePercent': delta == null || baseline == null || baseline == 0
+        ? null
+        : delta / baseline.abs() * 100,
     'reached': current == null || target == null
         ? null
         : goal['direction'] == 'down'
@@ -97,6 +110,12 @@ Future<void> showGoalHistory(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (goal['comparisonBaseline'] is num) ...[
+              Text(
+                'Исходное значение: ${goalNumber(goal['comparisonBaseline'])} ${goal['unit'] ?? ''}',
+              ),
+              const SizedBox(height: 12),
+            ],
             if (rows(goal['history']).isEmpty)
               const Text('Заполнить · добавь первый замер'),
             for (final m in rows(goal['history'])) ...[

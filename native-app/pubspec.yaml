@@ -1,7 +1,7 @@
 name: indicators_work
 description: Indicators & Work Dashboard for Windows and Android.
 publish_to: none
-version: 0.1.35+37
+version: 0.1.36+38
 environment:
   sdk: '>=3.13.0 <4.0.0'
 dependencies:
@@ -27,6 +27,13 @@ dev_dependencies:
   flutter_lints: ^6.0.0
 flutter:
   uses-material-design: true
+  fonts:
+    - family: NotoSans
+      fonts:
+        - asset: assets/fonts/NotoSans.ttf
+    - family: NotoSerif
+      fonts:
+        - asset: assets/fonts/NotoSerif.ttf
   assets:
     - assets/audio/
     - assets/audio/ringtones/
@@ -34,3 +41,5 @@ flutter:
     - assets/iw.ico
     - assets/iw.png
     - assets/reflection-hints.json
+    - assets/fonts/NotoSans-OFL.txt
+    - assets/fonts/NotoSerif-OFL.txt

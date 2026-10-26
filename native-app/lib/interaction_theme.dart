@@ -27,7 +27,7 @@ ThemeData interactionTheme(ThemeData theme) => theme.copyWith(
       tapTargetSize: MaterialTapTargetSize.padded,
     ),
   ),
-  focusColor: const Color(0x5537594b),
+  focusColor: theme.colorScheme.primary.withValues(alpha: .25),
   dataTableTheme: const DataTableThemeData(
     dataRowMinHeight: 56,
     dataRowMaxHeight: double.infinity,

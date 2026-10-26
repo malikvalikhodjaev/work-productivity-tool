@@ -66,9 +66,8 @@ class _GoalsTableState extends State<GoalsTable> {
       label: const {
         'title': 'Цель',
         'unit': 'Единица / период',
-        'baseline': 'Было',
-        'target': 'Хочу',
-        'dueDate': 'Срок · ГГГГ-ММ-ДД',
+        'target': 'Предпочтительная мною шкала',
+        'dueDate': 'Дедлайн цели · ГГГГ-ММ-ДД',
       }[id]!,
       displayText: id == 'title' ? '${goal['_wbs']} · ${goal['title']}' : null,
       draft: object(widget.repo.local.get(draftKey))['text'] as String?,
@@ -174,7 +173,7 @@ class _GoalsTableState extends State<GoalsTable> {
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
           child: Text(
-            'Ячейка — изменить. Для текущего значения открывается новый замер с датой. У каждой цели свой замер; прогресс подцелей не складывается.',
+            'Текущее значение открывает новый замер. Дата сохраняется автоматически, предыдущие значения — в истории. У каждой цели своя шкала; изменения подцелей не складываются.',
           ),
         ),
         if (items.isEmpty)
@@ -190,13 +189,15 @@ class _GoalsTableState extends State<GoalsTable> {
             columns: const [
               WorkColumn('title', 'Цель', width: 340),
               WorkColumn('unit', 'Единица / период'),
-              WorkColumn('baseline', 'Было'),
-              WorkColumn('current', 'Сейчас'),
-              WorkColumn('target', 'Хочу'),
-              WorkColumn('delta', 'Изменение', width: 190),
-              WorkColumn('percent', 'Прогресс', width: 190),
-              WorkColumn('measurement', 'Дата замера'),
-              WorkColumn('dueDate', 'Срок'),
+              WorkColumn('current', 'Шкала/характеристика сейчас', width: 240),
+              WorkColumn('target', 'Предпочтительная мною шкала', width: 240),
+              WorkColumn('delta', 'Изменение', width: 260),
+              WorkColumn(
+                'dueDate',
+                'Дедлайн цели',
+                hint: goalDeadlineHint,
+                width: 200,
+              ),
               WorkColumn('status', 'Состояние'),
               WorkColumn('_actions', 'Действия', width: 280),
             ],
@@ -238,7 +239,6 @@ class _GoalsTableState extends State<GoalsTable> {
                       ],
                     ),
                   );
-                case 'baseline':
                 case 'target':
                 case 'unit':
                 case 'dueDate':
@@ -260,39 +260,33 @@ class _GoalsTableState extends State<GoalsTable> {
                     ],
                   );
                 case 'delta':
-                  return g['delta'] is num
-                      ? Text(
-                          '${g['delta'] > 0 ? '+' : ''}${goalNumber(g['delta'])}'
-                          '${g['lastChange'] is num ? '\nК прошлому: ${goalNumber(g['lastChange'])}' : ''}',
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (g['delta'] is num)
+                        Text(
+                          'С начала: ${g['delta'] > 0 ? '+' : ''}${goalNumber(g['delta'])} ${g['unit'] ?? ''}'
+                          '${g['changePercent'] is num ? ' (${g['changePercent'] > 0 ? '+' : ''}${goalNumber((g['changePercent'] as num).round())}%)' : ''}',
                         )
-                      : editable(
-                          'Заполнить',
-                          () => g['current'] == null
-                              ? widget.measure(g)
-                              : widget.edit(g),
-                        );
-                case 'percent':
-                  return g['percent'] is num
-                      ? Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              '${g['percent']}%${g['reached'] == true ? ' · достигнуто' : ''}',
-                            ),
-                            const SizedBox(height: 6),
-                            LinearProgressIndicator(
-                              value: (g['percent'] as num) / 100,
-                            ),
-                          ],
-                        )
-                      : editable('Заполнить шкалу', () => widget.edit(g));
-                case 'measurement':
-                  return editable(
-                    object(g['measurement'])['date']?.toString() ?? 'Заполнить',
-                    () => object(g['measurement'])['date'] == null
-                        ? widget.measure(g)
-                        : widget.history(g),
+                      else
+                        editable('Заполнить', () => widget.measure(g)),
+                      if (g['lastChange'] is num)
+                        Text(
+                          'К прошлому: ${g['lastChange'] > 0 ? '+' : ''}${goalNumber(g['lastChange'])}',
+                        ),
+                      if (g['percent'] is num) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          'К предпочтительной: ${g['percent']}%${g['reached'] == true ? ' · достигнуто' : ''}',
+                        ),
+                        LinearProgressIndicator(
+                          value: ((g['percent'] as num) / 100)
+                              .clamp(0, 1)
+                              .toDouble(),
+                        ),
+                      ],
+                    ],
                   );
                 case 'status':
                   return editable(switch (g['status']) {

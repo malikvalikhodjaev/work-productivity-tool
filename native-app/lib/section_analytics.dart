@@ -182,7 +182,7 @@ class _WorkAnalyticsState extends State<WorkAnalytics> {
                 DataRow(
                   color: WidgetStatePropertyAll(
                     repo.pomodoroCapacityForDate(day)['over'] == true
-                        ? const Color(0xffffeeee)
+                        ? Theme.of(context).colorScheme.errorContainer
                         : null,
                   ),
                   cells: [

@@ -66,6 +66,24 @@ class FakeWindow implements DesktopWindowPort {
 
 void main() {
   test(
+    'minimize during dashboard restoration still shows the active timer',
+    () async {
+      final window = FakeWindow();
+      final original = window.rectangle;
+      final controller = DesktopTimerWindow(window, changed: () {});
+      await controller.showPlayer(pinned: false);
+      await Future.wait([
+        controller.showDashboard(),
+        controller.minimize(active: true, enabled: true),
+      ]);
+      expect(controller.compact, true);
+      expect(window.visible, true);
+      expect(window.isPinned, true);
+      await controller.showDashboard();
+      expect(window.rectangle, original);
+    },
+  );
+  test(
     'double-click toggle preserves timer mode and restored geometry',
     () async {
       final window = FakeWindow();

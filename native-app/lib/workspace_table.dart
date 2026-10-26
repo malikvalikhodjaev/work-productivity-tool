@@ -9,7 +9,8 @@ import 'repository.dart';
 class WorkColumn {
   final String id, title;
   final double width;
-  const WorkColumn(this.id, this.title, {this.width = 160});
+  final String? hint;
+  const WorkColumn(this.id, this.title, {this.width = 160, this.hint});
 }
 
 /// Search keeps ancestors; sorting changes sibling presentation only. WBS remains
@@ -441,13 +442,16 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
                                       view['sort'] == col.id &&
                                       view['descending'] != true,
                                 }),
-                                child: Text(
-                                  '${col.title}${view['sort'] == col.id
-                                      ? view['descending'] == true
-                                            ? ' ↓'
-                                            : ' ↑'
-                                      : ''}',
-                                  softWrap: true,
+                                child: Tooltip(
+                                  message: col.hint ?? col.title,
+                                  child: Text(
+                                    '${col.title}${view['sort'] == col.id
+                                        ? view['descending'] == true
+                                              ? ' ↓'
+                                              : ' ↑'
+                                        : ''}',
+                                    softWrap: true,
+                                  ),
                                 ),
                               ),
                             ),
@@ -488,15 +492,17 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
                       ),
                 decoration: BoxDecoration(
                   color: head
-                      ? const Color(0xffe9eeeb)
+                      ? Theme.of(context).colorScheme.surfaceContainerHigh
                       : widget.repo.local.get('${widget.viewKey}:selection') ==
                             row['id']
-                      ? const Color(0xffdfeee6)
+                      ? Theme.of(context).colorScheme.secondaryContainer
                       : row['_depth'] == 0
-                      ? const Color(0xfff1f4f2)
-                      : Colors.white,
-                  border: const Border(
-                    bottom: BorderSide(color: Color(0xffdce1dd)),
+                      ? Theme.of(context).colorScheme.surfaceContainer
+                      : Theme.of(context).cardTheme.color,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                    ),
                   ),
                 ),
                 child: Listener(

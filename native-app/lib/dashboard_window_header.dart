@@ -23,11 +23,14 @@ class DashboardWindowHeader extends StatelessWidget
           height: 32,
           child: WindowCaption(
             backgroundColor: Colors.transparent,
-            brightness: themed ? Brightness.dark : Brightness.light,
+            brightness: themed ? Brightness.dark : Theme.of(context).brightness,
             title: Text(
               themed ? 'Pomodoro Club' : 'Indicators & Work Dashboard',
-              style: Theme.of(context).textTheme.bodySmall!
-                  .copyWith(color: themed ? Colors.white : Colors.black87),
+              style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                color: themed
+                    ? Colors.white
+                    : Theme.of(context).colorScheme.onSurface,
+              ),
             ),
           ),
         ),

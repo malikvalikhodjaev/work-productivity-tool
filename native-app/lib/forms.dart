@@ -9,6 +9,7 @@ class FieldSpec {
   final int lines;
   final bool numeric, integer, nullable, labelAbove, obscure, timeTypes;
   final Map<String, String>? options;
+  final String? hint;
   const FieldSpec(
     this.key,
     this.label, {
@@ -20,6 +21,7 @@ class FieldSpec {
     this.obscure = false,
     this.timeTypes = false,
     this.options,
+    this.hint,
   });
 }
 
@@ -170,6 +172,14 @@ Future<bool> editFields(
                                     } catch (_) {}
                                   },
                                 ),
+                          if (field.hint != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                field.hint!,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
                         ],
                       ),
                     ),

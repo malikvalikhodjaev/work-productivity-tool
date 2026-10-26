@@ -91,16 +91,16 @@ void main() {
     expect(find.text('No Data'), findsNothing);
     expect(goalNumber(null), 'Заполнить');
     expect(goalNumber(0), '0');
-    final baseline = find.descendant(
-      of: find.byKey(const ValueKey('goal-cell:baseline:g')),
+    final target = find.descendant(
+      of: find.byKey(const ValueKey('goal-cell:target:g')),
       matching: find.byType(TextButton),
     );
-    await tester.ensureVisible(baseline);
-    await tester.tap(baseline);
+    await tester.ensureVisible(target);
+    await tester.tap(target);
     await tester.pump();
     expect(
       find.descendant(
-        of: find.byKey(const ValueKey('goal-cell:baseline:g')),
+        of: find.byKey(const ValueKey('goal-cell:target:g')),
         matching: find.byType(TextField),
       ),
       findsOneWidget,

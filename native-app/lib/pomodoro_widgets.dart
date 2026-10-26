@@ -7,6 +7,7 @@ import 'repository.dart';
 import 'time_composition.dart';
 import 'focus_theme.dart';
 import 'time_type_picker.dart';
+import 'app_appearance.dart';
 
 Future<void> editPomodoroCapacity(
   BuildContext context,
@@ -621,7 +622,15 @@ class PomodoroChecklist extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: repo,
-    builder: (context, _) => buildChecklist(context),
+    builder: (context, _) => Theme(
+      data: dashboardTheme(switch (repo.local.get('appAppearance')) {
+        'pomodoro' => 'pomodoro',
+        'green' => 'green',
+        'blue' => 'blue',
+        _ => 'neutral',
+      }, font: repo.local.get('appFont')?.toString() ?? 'system'),
+      child: Builder(builder: buildChecklist),
+    ),
   );
 
   Widget buildChecklist(BuildContext context) {

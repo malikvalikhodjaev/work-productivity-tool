@@ -70,7 +70,10 @@ class DesktopTimerWindow {
   }
 
   Future<void> minimize({required bool active, required bool enabled}) async {
-    if (!active || !enabled || transitioning) return;
+    if (!active || !enabled) return;
+    while (transitioning) {
+      await _transitionDone!.future;
+    }
     _transitionDone = Completer<void>();
     transitioning = true;
     try {

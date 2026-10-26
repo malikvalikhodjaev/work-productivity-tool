@@ -79,8 +79,16 @@ class WorkStageBoard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Material(
-                          color:
-                              stageColors[stage.key] ?? const Color(0xffeeeeee),
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Color.alphaBlend(
+                                  (stageColors[stage.key] ?? Colors.grey)
+                                      .withValues(alpha: .15),
+                                  Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainer,
+                                )
+                              : stageColors[stage.key] ??
+                                    const Color(0xffeeeeee),
                           borderRadius: BorderRadius.circular(12),
                           child: InkWell(
                             key: ValueKey('work-stage:${stage.key}'),

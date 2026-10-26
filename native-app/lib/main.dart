@@ -16,7 +16,8 @@ import 'background.dart';
 import 'domain.dart';
 import 'forms.dart';
 import 'local_database.dart';
-import 'interaction_theme.dart';
+import 'app_appearance.dart';
+import 'section_navigation.dart';
 import 'reminders.dart';
 import 'repository.dart';
 import 'sync_panel.dart';
@@ -84,49 +85,53 @@ class DashboardApp extends StatelessWidget {
     this.backgroundEnabled = true,
   });
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'Indicators & Work Dashboard',
-    debugShowCheckedModeBanner: false,
-    locale: const Locale('ru'),
-    supportedLocales: const [Locale('ru'), Locale('en')],
-    localizationsDelegates: const [
-      GlobalMaterialLocalizations.delegate,
-      GlobalWidgetsLocalizations.delegate,
-      GlobalCupertinoLocalizations.delegate,
-      q.FlutterQuillLocalizations.delegate,
-    ],
-    theme: interactionTheme(
-      ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xff37594b),
-          surface: const Color(0xfff6f7f8),
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: repo,
+    builder: (context, _) {
+      final style = repo.local.get('appAppearance')?.toString() ?? 'neutral';
+      return MaterialApp(
+        title: 'Indicators & Work Dashboard',
+        debugShowCheckedModeBanner: false,
+        locale: const Locale('ru'),
+        supportedLocales: const [Locale('ru'), Locale('en')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          q.FlutterQuillLocalizations.delegate,
+        ],
+        theme: dashboardTheme(
+          style,
+          font: repo.local.get('appFont')?.toString() ?? 'system',
         ),
-        scaffoldBackgroundColor: const Color(0xfff6f7f8),
-        cardTheme: const CardThemeData(
-          color: Colors.white,
-          elevation: 0,
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(18)),
-            side: BorderSide(color: Color(0xffe7e9ed)),
-          ),
+        darkTheme: dashboardTheme(
+          style,
+          brightness: Brightness.dark,
+          font: repo.local.get('appFont')?.toString() ?? 'system',
         ),
-        inputDecorationTheme: const InputDecorationTheme(
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(10)),
-          ),
-          filled: true,
-          fillColor: Colors.white,
+        themeMode: style == 'system'
+            ? ThemeMode.system
+            : style == 'dark'
+            ? ThemeMode.dark
+            : ThemeMode.light,
+        builder: (context, child) {
+          final media = MediaQuery.of(context);
+          return MediaQuery(
+            data: media.copyWith(
+              textScaler: TextScaler.linear(
+                media.textScaler.scale(1) * appearanceTextScale(repo),
+              ),
+            ),
+            child: child!,
+          );
+        },
+        home: DashboardHome(
+          repo: repo,
+          folder: folder,
+          backgroundEnabled: backgroundEnabled,
         ),
-        fontFamily: 'Segoe UI',
-      ),
-    ),
-    home: DashboardHome(
-      repo: repo,
-      folder: folder,
-      backgroundEnabled: backgroundEnabled,
-    ),
+      );
+    },
   );
 }
 
@@ -215,6 +220,12 @@ class _DashboardHomeState extends State<DashboardHome>
           }),
     );
     board = repo.local.get('workView') != 'list';
+    // This release makes the owner's requested minimize behaviour the default.
+    // Later explicit choices in Settings continue to take precedence.
+    if (repo.local.get('minimizeTimerPolicy') != 1) {
+      repo.local.set('timerOnMinimize', true);
+      repo.local.set('minimizeTimerPolicy', 1);
+    }
     if (repo.local.get('focusRotation') == null) {
       repo.local.set('focusRotation', {
         'enabled': focusArt.containsKey(repo.local.get('theme')),
@@ -249,7 +260,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.35',
+        'clientVersion': '0.1.36',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -2268,14 +2279,23 @@ class _DashboardHomeState extends State<DashboardHome>
           },
         ),
         FieldSpec('unit', 'Единица и период · например UZS / месяц'),
-        FieldSpec('baseline', 'Было · исходное значение', numeric: true),
-        FieldSpec('target', 'Хочу · ориентир (можно позже)', numeric: true),
+        FieldSpec(
+          'target',
+          'Предпочтительная мною шкала',
+          numeric: true,
+          labelAbove: true,
+        ),
         FieldSpec(
           'direction',
           'Направление',
           options: {'up': 'Увеличить', 'down': 'Уменьшить'},
         ),
-        FieldSpec('dueDate', 'Срок · YYYY-MM-DD', nullable: true),
+        FieldSpec(
+          'dueDate',
+          'Дедлайн цели · ГГГГ-ММ-ДД',
+          nullable: true,
+          hint: goalDeadlineHint,
+        ),
         FieldSpec(
           'status',
           'Состояние',
@@ -2311,10 +2331,14 @@ class _DashboardHomeState extends State<DashboardHome>
     await editFields(
       context,
       title: 'Замер · ${goal['title']}',
-      initial: {'date': today(), 'value': goal['current']},
+      initial: {'value': goal['current']},
       fields: const [
-        FieldSpec('value', 'Стало · новое значение', numeric: true),
-        FieldSpec('date', 'Дата · YYYY-MM-DD'),
+        FieldSpec(
+          'value',
+          'Шкала/характеристика сейчас',
+          numeric: true,
+          labelAbove: true,
+        ),
         FieldSpec('evidence', 'Что подтверждает замер', lines: 3),
       ],
       save: (input) async {
@@ -2323,12 +2347,11 @@ class _DashboardHomeState extends State<DashboardHome>
             'Укажи числовое значение замера. Ноль можно записать явно.',
           );
         }
-        repo.nativeSave('workspace', 'measure', {
-          ...input,
-          'kind': goal['characteristicId'] == null ? 'goal' : 'characteristic',
-          'targetId': goal['characteristicId'] ?? goal['id'],
-          'workRef': goal['workRef'],
-        }, 'measurement:${uuid.v4()}');
+        repo.recordGoalMeasurement(
+          goal,
+          input['value'] as num,
+          evidence: (input['evidence'] ?? '').toString(),
+        );
       },
     );
   }
@@ -2348,7 +2371,7 @@ class _DashboardHomeState extends State<DashboardHome>
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
           child: Text(
-            'Начни с одной цели: задай «Было» и единицу, затем нажми «Новый замер». Ориентир «Хочу» можно добавить позже. Без ориентира видно изменение; для расчёта прогресса нажми «Заполнить».',
+            'Укажи единицу, запиши характеристику сейчас и предпочтительную шкалу. Дата замера ставится при сохранении. Предыдущие значения доступны в истории; первый замер задаёт начало сравнения.',
           ),
         ),
         const ExpansionTile(
@@ -2360,7 +2383,7 @@ class _DashboardHomeState extends State<DashboardHome>
                 'Руководства: часы чтения и применения — отдельные нормы. В замере можно записывать, какую идею применяешь, что меняется в проекте, карьере или результате и чем это подтверждается.\n\n'
                 'Выручка — платежи клиентов. Прибыль бизнеса — выручка минус расходы. Личный доход — полученное себе. Для каждого денежного показателя укажи валюту и период; в месячном замере записывай итог выбранного месяца.\n\n'
                 'Сон: записывай часы за ночь на дату пробуждения. Минимум указан в карточке нормы.\n\n'
-                'Для прогресса цели нужны база, цель и текущий замер. Незаполненные ячейки предлагают «Заполнить». Дата замера показывает, к какому моменту относится последний факт.',
+                'Изменение показывает разницу с началом и с прошлым замером. Полоса и процент показывают движение от исходного значения к предпочтительному. Без определённой шкалы процент не вычисляется. Все замеры и их даты сохраняются в истории.',
               ),
             ),
           ],
@@ -2912,7 +2935,7 @@ class _DashboardHomeState extends State<DashboardHome>
     await showDialog<void>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Настройки · нормативы на день'),
+        title: const Text('Настройки'),
         content: SizedBox(
           width: 700,
           child: SingleChildScrollView(
@@ -2921,6 +2944,8 @@ class _DashboardHomeState extends State<DashboardHome>
               builder: (c, _) => Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  AppearanceSettings(repo: repo),
+                  const Divider(height: 32),
                   ListTile(
                     leading: const Icon(Icons.music_note_outlined),
                     title: const Text('Библиотека рингтонов'),
@@ -3158,7 +3183,9 @@ class _DashboardHomeState extends State<DashboardHome>
                                       onPressed: () => selectSection(i),
                                       style: FilledButton.styleFrom(
                                         backgroundColor: section == i
-                                            ? const Color(0xffdfe7e1)
+                                            ? Theme.of(context)
+                                                  .colorScheme
+                                                  .secondaryContainer
                                             : Colors.transparent,
                                         alignment: Alignment.centerLeft,
                                         minimumSize: const Size(
@@ -3183,7 +3210,7 @@ class _DashboardHomeState extends State<DashboardHome>
                                 const SizedBox(height: 20),
                                 const SizedBox(height: 12),
                                 const Text(
-                                  'I&W · Native 0.1.35',
+                                  'I&W · Native 0.1.36',
                                   style: TextStyle(fontSize: 11),
                                 ),
                               ],
@@ -3248,16 +3275,11 @@ class _DashboardHomeState extends State<DashboardHome>
             MediaQuery.sizeOf(context).width < 950 &&
                 !focusMode &&
                 background.desktop?.compact != true
-            ? NavigationBar(
-                selectedIndex: section,
-                onDestinationSelected: selectSection,
-                destinations: [
-                  for (var i = 0; i < sections.length; i++)
-                    NavigationDestination(
-                      icon: Icon(icons[i]),
-                      label: sections[i],
-                    ),
-                ],
+            ? SectionNavigation(
+                selected: section,
+                select: selectSection,
+                labels: sections,
+                icons: icons,
               )
             : null,
       ),

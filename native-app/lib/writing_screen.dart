@@ -440,8 +440,10 @@ class _WritingScreenState extends State<WritingScreen> {
                 constraints: const BoxConstraints(minHeight: 320),
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: const Color(0xffe6e8ec)),
+                  color: Theme.of(context).cardTheme.color,
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: q.QuillEditor.basic(
@@ -570,7 +572,7 @@ class _WritingScreenState extends State<WritingScreen> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 840),
                 child: Material(
-                  color: const Color(0xfffafbf9),
+                  color: Theme.of(context).colorScheme.surface,
                   child: ListView(
                     padding: const EdgeInsets.all(24),
                     children: [editor],

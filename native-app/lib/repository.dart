@@ -757,6 +757,30 @@ class DashboardRepository extends ChangeNotifier {
 
   bool get canUndoGoal =>
       rows(local.get('goalUndo')).any((r) => r['serverId'] == serverId);
+
+  /// A new immutable measurement, never a rewrite of the previous fact.
+  /// Capture the owner's local measurement date when Save is pressed.
+  void recordGoalMeasurement(Json goal, num value, {String evidence = ''}) {
+    if (!value.isFinite) {
+      throw ArgumentError('Укажи конечное числовое значение.');
+    }
+    if ((goal['unit'] ?? '').toString().trim().isEmpty) {
+      throw ArgumentError('Сначала укажи единицу шкалы.');
+    }
+    final date = DateTime.fromMillisecondsSinceEpoch(
+      now,
+      isUtc: true,
+    ).add(const Duration(hours: 5)).toIso8601String().substring(0, 10);
+    nativeSave('workspace', 'measure', {
+      'value': value,
+      'date': date,
+      'evidence': evidence,
+      'kind': goal['characteristicId'] == null ? 'goal' : 'characteristic',
+      'targetId': goal['characteristicId'] ?? goal['id'],
+      'workRef': goal['workRef'],
+    }, 'measurement:${uuid.v4()}');
+  }
+
   void undoGoalField() {
     final history = rows(local.get('goalUndo'));
     final change = history.where((r) => r['serverId'] == serverId).lastOrNull;
