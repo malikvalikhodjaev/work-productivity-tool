@@ -128,11 +128,11 @@ function alphaCard(alpha, depth = 0) {
   const body = `<article class="alpha-card">
     <div class="alpha-card-top"><span class="alpha-type">${escape(alpha.typeName)}</span><span class="status-pill ${alpha.assessment.ok ? 'confirmed' : alpha.state === 'empty' ? 'empty' : 'warning'}">${state.title}</span></div>
     ${parent ? `<p class="alpha-parent-label">Подальфа: ${escape(parent.uniqueName || parent.typeName)}</p>` : ''}
-    <h3>${escape(alpha.uniqueName || 'No Data')}</h3>
-    <p class="alpha-description">${escape(alpha.description || 'No Data')}</p>
+    <h3>${escape(alpha.uniqueName || 'Не записано')}</h3>
+    <p class="alpha-description">${escape(alpha.description || 'Не записано')}</p>
     ${alpha.stateLabel ? `<p class="alpha-state-label">По шаблону: ${escape(alpha.stateLabel)}</p>` : ''}
     <div class="alpha-checks"><span class="${alpha.filledDate ? 'has-value' : ''}">${alpha.filledDate ? 'Слот заполнен' : 'Слот не заполнен'}</span><span class="${alpha.criteria ? 'has-value' : ''}">${alpha.criteria ? 'Критерий задан' : 'Нет критерия'}</span><span class="${alpha.evidence ? 'has-value' : ''}">${alpha.evidence ? 'Есть подтверждение' : 'Нет подтверждения'}</span></div>
-    <p class="alpha-date">Дата заполнения: <strong>${alpha.filledDate ? escape(alpha.filledDate) : 'No Data'}</strong></p>
+    <p class="alpha-date">Дата заполнения: <strong>${alpha.filledDate ? escape(alpha.filledDate) : 'Не записано'}</strong></p>
     ${alpha.nextStep ? `<p class="alpha-step">Далее: ${escape(alpha.nextStep)}</p>` : ''}
     ${!alpha.assessment.ok && children.length ? '<p class="zone-issues">Состояния подальф учитываются отдельно.</p>' : ''}
     <div data-impact-ref="alpha:${alpha.id}"></div><div class="alpha-card-footer"><button class="text-button" data-alpha-edit="${alpha.id}">Заполнить / изменить</button><button class="text-button" data-alpha-child="${alpha.id}">＋ Подальфа</button><button class="text-button" data-alpha-task="${alpha.id}">＋ Задача</button><button class="text-button" data-timer-work="alpha:${alpha.id}" data-timer-title="${escape(alpha.uniqueName || alpha.typeName)}">◷ Таймер</button></div>
@@ -186,7 +186,7 @@ function render() {
   window.dispatchEvent(new Event('rhythm:portfolio-rendered'));
 }
 
-function tableValue(value) { return value === null || value === undefined || value === '' ? 'No Data' : String(value); }
+function tableValue(value) { return value === null || value === undefined || value === '' ? 'Не записано' : String(value); }
 function countLabel(count, one, few, many) { return `${count} ${count % 100 >= 11 && count % 100 <= 14 ? many : count % 10 === 1 ? one : count % 10 >= 2 && count % 10 <= 4 ? few : many}`; }
 
 function makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyResults, alphaBackup, storedEntries, references) {
@@ -280,49 +280,49 @@ function makeDataTables(week, snapshot, imported, ratings, dailyProblems, dailyR
     },
     work: {
       title: 'Работы Coda',
-      note: imported.snapshot.available ? `${countLabel(imported.snapshot.work.length, 'строка', 'строки', 'строк')} · снимок доски на ${tableValue(imported.snapshot.capturedAt)} · не все строки являются активными задачами` : 'No Data · снимок Coda не загружен',
+      note: imported.snapshot.available ? `${countLabel(imported.snapshot.work.length, 'строка', 'строки', 'строк')} · снимок доски на ${tableValue(imported.snapshot.capturedAt)} · не все строки являются активными задачами` : 'снимок Coda не загружен',
       sourceUrl: imported.snapshot.sources.work,
       columns: ['Работа', 'Стадия', 'Проект', 'Тип работы', 'Цели', 'Срок', 'Чек-бокс'],
       rows: imported.snapshot.work.map(item => [item.title, item.stage, Array.isArray(item.projects)?item.projects.join(', '):null, item.workType, Array.isArray(item.goals)?item.goals.join(', '):null, item.deadline, item.done === undefined ? null : item.done ? 'Отмечено' : 'Не отмечено'])
     },
     goals: {
       title: 'Цели Coda',
-      note: imported.snapshot.available ? `${countLabel(imported.snapshot.goals.length, 'цель', 'цели', 'целей')} · снимок на ${tableValue(imported.snapshot.capturedAt)} · статус «Записана» не означает достижение` : 'No Data · снимок Coda не загружен',
+      note: imported.snapshot.available ? `${countLabel(imported.snapshot.goals.length, 'цель', 'цели', 'целей')} · снимок на ${tableValue(imported.snapshot.capturedAt)} · статус «Записана» не означает достижение` : 'снимок Coda не загружен',
       sourceUrl: imported.snapshot.sources.goals,
       columns: ['Цель', 'Статус', 'Область', 'Как измеряем', 'Выполнение', 'Срок'],
       rows: imported.snapshot.goals.map(item => [item.title, item.status, item.area, item.measurement, item.completion, item.deadline])
     },
     issues: {
       title: 'Issues Coda',
-      note: imported.snapshot.available ? `${countLabel(imported.snapshot.issues.length, 'заполненная строка', 'заполненные строки', 'заполненных строк')} · пустые строки источника исключены` : 'No Data · снимок Coda не загружен',
+      note: imported.snapshot.available ? `${countLabel(imported.snapshot.issues.length, 'заполненная строка', 'заполненные строки', 'заполненных строк')} · пустые строки источника исключены` : 'снимок Coda не загружен',
       sourceUrl: imported.snapshot.sources.issues,
       columns: ['Задача / вопрос', 'Статус', 'Заметка'],
       rows: imported.snapshot.issues.map(item => [item.title, item.status, item.note])
     },
     reference: {
       title: 'Справочник альф',
-      note: imported.reference.available ? `${countLabel(imported.reference.rows.length, 'строка', 'строки', 'строк')} · исходный шаблон, не прогресс проектов` : 'No Data · справочник не загружен',
+      note: imported.reference.available ? `${countLabel(imported.reference.rows.length, 'строка', 'строки', 'строк')} · исходный шаблон, не прогресс проектов` : 'справочник не загружен',
       sourceUrl: imported.reference.sources.catalog,
       columns: ['Уровень', 'Область', 'Альфа', 'Состояние', 'Контрольный вопрос', 'Статус в шаблоне'],
       rows: imported.reference.rows.map(item => [item.level, item.area, item.alpha, item.state, item.question, item.checkStatus])
     },
     roles: {
       title: 'Роли и практики',
-      note: imported.reference.available ? `${countLabel(imported.reference.roles.length, 'роль', 'роли', 'ролей')} · подсказки из «Менеджмент и инженерка»` : 'No Data · справочник не загружен',
+      note: imported.reference.available ? `${countLabel(imported.reference.roles.length, 'роль', 'роли', 'ролей')} · подсказки из «Менеджмент и инженерка»` : 'справочник не загружен',
       sourceUrl: imported.reference.sources.management,
       columns: ['Роль', 'Практика', 'Область'],
       rows: imported.reference.roles.map(item => [item.role, item.practice, item.area])
     },
     mistakes: {
       title: 'Типовые ошибки',
-      note: imported.reference.available ? `${countLabel(imported.reference.mistakes.length, 'ошибка', 'ошибки', 'ошибок')} · подсказки из «Менеджмент и инженерка»` : 'No Data · справочник не загружен',
+      note: imported.reference.available ? `${countLabel(imported.reference.mistakes.length, 'ошибка', 'ошибки', 'ошибок')} · подсказки из «Менеджмент и инженерка»` : 'справочник не загружен',
       sourceUrl: imported.reference.sources.management,
       columns: ['Ошибка', 'Почему важно'],
       rows: imported.reference.mistakes.map(item => [item.mistake, item.reason])
     },
     actions: {
       title: 'Рабочие ходы',
-      note: imported.reference.available ? `${countLabel(imported.reference.actions.length, 'действие', 'действия', 'действий')} · подсказки из «Менеджмент и инженерка»` : 'No Data · справочник не загружен',
+      note: imported.reference.available ? `${countLabel(imported.reference.actions.length, 'действие', 'действия', 'действий')} · подсказки из «Менеджмент и инженерка»` : 'справочник не загружен',
       sourceUrl: imported.reference.sources.management,
       columns: ['Что делать', 'Почему важно'],
       rows: imported.reference.actions.map(item => [item.action, item.reason])
@@ -342,7 +342,7 @@ function renderData() {
   $('data-source').hidden = !table.sourceUrl;
   $('data-source').innerHTML = table.sourceUrl ? `Источник: <a href="${escape(table.sourceUrl)}" target="_blank" rel="noopener noreferrer">открыть в Coda ↗</a>` : '';
   $('data-table-head').innerHTML = `<tr>${table.columns.map(column => `<th scope="col">${escape(column)}</th>`).join('')}</tr>`;
-  $('data-table-body').innerHTML = table.rows.length ? table.rows.map(row => `<tr>${row.map((value, index) => `<td>${activeDataTable === 'sources' && value && ((index === 3 && /^https?:\/\//i.test(value)) || (index === 4 && /^\/api\/references\/[a-z0-9-]+\/attachment$/.test(value))) ? `<a href="${escape(value)}" target="_blank" rel="noopener noreferrer">${index === 4 ? 'Скриншот ↗' : escape(value)}</a>` : escape(tableValue(value))}</td>`).join('')}</tr>`).join('') : `<tr><td class="data-empty" colspan="${table.columns.length}">No Data</td></tr>`;
+  $('data-table-body').innerHTML = table.rows.length ? table.rows.map(row => `<tr>${row.map((value, index) => `<td>${activeDataTable === 'sources' && value && ((index === 3 && /^https?:\/\//i.test(value)) || (index === 4 && /^\/api\/references\/[a-z0-9-]+\/attachment$/.test(value))) ? `<a href="${escape(value)}" target="_blank" rel="noopener noreferrer">${index === 4 ? 'Скриншот ↗' : escape(value)}</a>` : escape(tableValue(value))}</td>`).join('')}</tr>`).join('') : `<tr><td class="data-empty" colspan="${table.columns.length}">Не записано</td></tr>`;
   $('data-download').disabled = table.rows.length === 0;
   document.querySelectorAll('[data-table]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.table === activeDataTable)));
 }
@@ -386,17 +386,17 @@ async function loadData() {
       if(currentRequest!==dataRequestId)return;
       dataTables.writing={title:'Эссе и заметки',note:'data/writing.json · личный архив, черновики и корзина · месяцы по дате записи',columns:['ID','Дата','Тема','Состояние','Слов','Опубликовано','В корзине','Версия','Правок','Изменено'],rows:writing.entries.map(p=>[p.id,p.date,p.title,p.trashedAt?'Корзина':p.status==='published'?'Публикация':'Черновик',p.words,p.publishedAt,p.trashedAt,p.revision,p.edits,p.updatedAt])};
     }
-    for (const key of ['work', 'goals', 'issues']) $('import-' + key + '-count').textContent = imported.snapshot.available ? imported.snapshot[key].length : 'No Data';
+    for (const key of ['work', 'goals', 'issues']) $('import-' + key + '-count').textContent = imported.snapshot.available ? imported.snapshot[key].length : 'Не записано';
     $('import-captured-at').textContent = tableValue(imported.snapshot.capturedAt);
     $('reference-summary-text').textContent = imported.reference.available
       ? `${imported.reference.rows.length} строк справочника · ${imported.reference.roles.length} ролей · ${imported.reference.mistakes.length} ошибок · ${imported.reference.actions.length} рабочих ходов. Подсказки для адаптации под проект.`
-      : 'No Data · пакет шаблонов ещё не загружен.';
+      : 'пакет шаблонов ещё не загружен.';
     $('reference-links').innerHTML = [['catalog', 'Шаблон объектов ↗'], ['management', 'Менеджмент и инженерка ↗']]
       .filter(([key]) => /^https?:\/\//i.test(imported.reference.sources[key] ?? ''))
       .map(([key, title]) => `<a href="${escape(imported.reference.sources[key])}" target="_blank" rel="noopener noreferrer">${title}</a>`).join('');
     $('reference-guide-content').innerHTML = imported.reference.available
       ? `<p>Создай экземпляр шаблона для конкретного проекта. Заполняй только нужные поля и возвращайся к проверке состояния:</p><ol>${imported.reference.guidance.map(item => `<li>${escape(item)}</li>`).join('')}</ol><p><strong>Поля карточки:</strong> ${imported.reference.objectFields.map(escape).join(' · ')}</p>`
-      : '<p>No Data · подсказки появятся после загрузки пакета шаблонов.</p>';
+      : '<p>подсказки появятся после загрузки пакета шаблонов.</p>';
     renderData();
   } catch (error) {
     if (currentRequest !== dataRequestId) return;
@@ -404,11 +404,11 @@ async function loadData() {
     $('data-error').textContent = error.message;
     $('data-error').hidden = false;
     $('data-table-title').textContent = 'Таблица недоступна';
-    $('data-table-note').textContent = 'No Data';
-    for (const id of ['data-entries-count', 'data-projects-count', 'data-alphas-count', 'data-tasks-count', 'import-work-count', 'import-goals-count', 'import-issues-count']) $(id).textContent = 'No Data';
+    $('data-table-note').textContent = 'Не записано';
+    for (const id of ['data-entries-count', 'data-projects-count', 'data-alphas-count', 'data-tasks-count', 'import-work-count', 'import-goals-count', 'import-issues-count']) $(id).textContent = 'Не записано';
     $('data-source').hidden = true;
     $('data-table-head').innerHTML = '<tr><th scope="col">Данные</th></tr>';
-    $('data-table-body').innerHTML = '<tr><td class="data-empty">No Data</td></tr>';
+    $('data-table-body').innerHTML = '<tr><td class="data-empty">Не записано</td></tr>';
     $('data-download').disabled = true;
   } finally { if (currentRequest === dataRequestId) $('data-refresh').disabled = false; }
 }

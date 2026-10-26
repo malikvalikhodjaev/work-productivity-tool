@@ -28,7 +28,6 @@ import 'adaptive_focus_player.dart';
 import 'work_stage_board.dart';
 import 'focus_theme.dart';
 import 'focus_gallery_settings.dart';
-import 'timer_command_notice.dart';
 import 'daily_problem_banner.dart';
 import 'weekly_problem_card.dart';
 import 'section_analytics.dart';
@@ -45,7 +44,6 @@ import 'characteristic_fields.dart';
 import 'model_link.dart';
 import 'systems_panel.dart';
 import 'norms_overview.dart';
-import 'activity_status.dart';
 import 'dashboard_timer_bar.dart';
 import 'dashboard_window_header.dart';
 
@@ -265,7 +263,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.42',
+        'clientVersion': '0.1.43',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -635,7 +633,7 @@ class _DashboardHomeState extends State<DashboardHome>
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           Text(
-                            '${norm['actualMinutes'] == null ? 'No Data' : (norm['actualMinutes'] as num).toStringAsFixed(1)} / ${norm['minutes']} мин',
+                            '${norm['actualMinutes'] == null ? 'Не записано' : (norm['actualMinutes'] as num).toStringAsFixed(1)} / ${norm['minutes']} мин',
                           ),
                           if ((norm['pendingMinutes'] as num? ?? 0) > 0)
                             const Text(
@@ -1270,14 +1268,10 @@ class _DashboardHomeState extends State<DashboardHome>
               const SizedBox(height: 12),
               if (s != null)
                 Text(
-                  '${(elapsedMs(s, repo.now) / 60000).toStringAsFixed(1)} мин · ${repo.isLocal || repo.durableTimer ? 'сохранение на устройстве' : 'общий сеанс'}',
+                  '${(elapsedMs(s, repo.now) / 60000).toStringAsFixed(1)} мин',
                   style: const TextStyle(color: Colors.white70),
                 ),
               const SizedBox(height: 18),
-              TimerCommandNotice(
-                repo: repo,
-                retry: () => safe(repo.checkPendingTimer),
-              ),
               Wrap(
                 spacing: 10,
                 runSpacing: 8,
@@ -1621,10 +1615,6 @@ class _DashboardHomeState extends State<DashboardHome>
             ),
             if (inLeisure(s)) LeisureInfo(session: s, now: repo.now),
           ],
-          TimerCommandNotice(
-            repo: repo,
-            retry: () => safe(repo.checkPendingTimer),
-          ),
         ],
       ),
       actions: Wrap(
@@ -2138,7 +2128,7 @@ class _DashboardHomeState extends State<DashboardHome>
         if (all.isEmpty)
           const Padding(
             padding: EdgeInsets.all(24),
-            child: Text('No Data · создай работу или запиши проблему дня.'),
+            child: Text('создай работу или запиши проблему дня.'),
           )
         else if (board)
           WorkStageBoard(
@@ -2445,7 +2435,7 @@ class _DashboardHomeState extends State<DashboardHome>
           (n) => ListTile(
             title: Text(n['title'].toString()),
             subtitle: Text(
-              '${n['actualMinutes'] == null ? 'No Data' : (n['actualMinutes'] as num).toStringAsFixed(1)} / ${n['minutes']} мин · с ${n['time']}, каждый час',
+              '${n['actualMinutes'] == null ? 'Не записано' : (n['actualMinutes'] as num).toStringAsFixed(1)} / ${n['minutes']} мин · с ${n['time']}, каждый час',
             ),
             trailing: IconButton(
               onPressed: () =>
@@ -2808,7 +2798,7 @@ class _DashboardHomeState extends State<DashboardHome>
         ),
         SyncPanel(repo: repo),
         SelectableText(
-          'SQLite: ${p.join(widget.folder, 'indicators-work.sqlite')}\nУстройство: ${repo.deviceId}\nСервер: ${repo.serverId ?? 'No Data'}',
+          'SQLite: ${p.join(widget.folder, 'indicators-work.sqlite')}\nУстройство: ${repo.deviceId}\nСервер: ${repo.serverId ?? 'Не записано'}',
         ),
         sectionTitle('Очередь отправки · ${repo.pending.length}'),
         ...repo.pending.map(
@@ -2816,7 +2806,7 @@ class _DashboardHomeState extends State<DashboardHome>
             child: ListTile(
               title: Text(item['entity'].toString()),
               subtitle: Text(
-                '${item['state']} · ${item['error'] ?? 'Ожидает квитанцию'}',
+                '${item['state'] == 'conflict' ? 'Не удалось отправить' : 'Ожидает отправки'} · ${item['error'] ?? 'Сохранено на устройстве'}',
               ),
               onTap: () => showDialog<void>(
                 context: context,
@@ -2995,6 +2985,8 @@ class _DashboardHomeState extends State<DashboardHome>
                   ),
                   const SizedBox(height: 12),
                   PomodoroWeek(repo: repo),
+                  const Divider(height: 32),
+                  SyncPanel(repo: repo),
                 ],
               ),
             ),
@@ -3131,12 +3123,6 @@ class _DashboardHomeState extends State<DashboardHome>
                   tooltip: 'Скрыть таймер в трей',
                 ),
               ] else ...[
-                ActivityStatus(
-                  repo: repo,
-                  showTimer: false,
-                  compact: true,
-                  inspect: () => selectSection(4),
-                ),
                 IconButton(
                   onPressed: settings,
                   icon: const Icon(Icons.settings_outlined),
@@ -3210,7 +3196,7 @@ class _DashboardHomeState extends State<DashboardHome>
                                 const SizedBox(height: 20),
                                 const SizedBox(height: 12),
                                 const Text(
-                                  'I&W · Native 0.1.42',
+                                  'I&W · Native 0.1.43',
                                   style: TextStyle(fontSize: 11),
                                 ),
                               ],

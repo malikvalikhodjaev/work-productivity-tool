@@ -12,7 +12,7 @@ function dateLabel(value) {
 
 function renderIndicator(item) {
   const observed = item.score !== null;
-  const assessment = observed ? `${item.score}/10` : 'No Data';
+  const assessment = observed ? `${item.score}/10` : 'Не записано';
   const details = observed ? `Оценка от ${dateLabel(item.assessedAt)}` : 'В этом периоде оценки нет';
   const note = item.note && item.note !== 'Исходная оценка из личного описания.' ? `<p class="assessment-note"><strong>Заметка:</strong> ${escapeHtml(item.note)}</p>` : '';
   return `<article class="assessment-card"><div class="assessment-top"><h3>${escapeHtml(item.title)}</h3></div><div class="assessment-score"><strong>${assessment}</strong><small>цель ${item.targetMin}–${item.targetMax}</small></div><div class="assessment-track" role="progressbar" aria-label="${escapeHtml(item.title)}" aria-valuemin="0" aria-valuemax="10" ${observed ? `aria-valuenow="${item.score}"` : ''} aria-valuetext="${escapeHtml(assessment)}"><div class="assessment-target-band"></div><div class="assessment-fill" style="width:${observed ? item.score * 10 : 0}%"></div></div><div class="assessment-date">${escapeHtml(details)}</div><details class="assessment-details"><summary>Что улучшить</summary><p>${escapeHtml(item.context)}</p><p class="assessment-next"><strong>Действие:</strong> ${escapeHtml(item.nextStep)}</p>${note}</details><button class="text-button" type="button" data-assess="${item.id}">Оценить →</button></article>`;
@@ -25,7 +25,7 @@ function render() {
   byId('assessment-grid').innerHTML = assessment.indicators.map(renderIndicator).join('');
   for (const [id, metricId] of [['financial-house-hours', 'house_sale'], ['financial-business-hours', 'business']]) {
     const metric = activity.metrics.find(item => item.id === metricId);
-    byId(id).textContent = metric?.recordCount ? `${number.format(metric.actual)} ч` : 'No Data';
+    byId(id).textContent = metric?.recordCount ? `${number.format(metric.actual)} ч` : 'Не записано';
   }
   byId('financial-period-label').textContent = `За ${activity.start === activity.end ? dateLabel(activity.end) : `${dateLabel(activity.start)} — ${dateLabel(activity.end)}`}`;
   document.querySelectorAll('[data-period]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.period === period)));
@@ -45,10 +45,10 @@ async function loadOverview(nextPeriod = period) {
     window.dispatchEvent(new CustomEvent('rhythm:overview-loaded', { detail: result.activity }));
   } catch (error) {
     if (currentRequest !== requestId) return;
-    byId('period-date-label').textContent = 'No Data';
+    byId('period-date-label').textContent = 'Не записано';
     byId('assessment-grid').innerHTML = `<div class="assessment-empty">${escapeHtml(error.message)}</div>`;
-    byId('financial-house-hours').textContent = 'No Data';
-    byId('financial-business-hours').textContent = 'No Data';
+    byId('financial-house-hours').textContent = 'Не записано';
+    byId('financial-business-hours').textContent = 'Не записано';
   }
 }
 

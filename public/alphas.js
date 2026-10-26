@@ -60,7 +60,7 @@ function renderFocus() {
   $('alpha-make-focus').disabled = !selectedId || dirty || saving;
   const selected = selectedId && focusResult?.workRef === `alpha:${selectedId}`;
   const label = { planned: 'Выбрано', in_progress: 'В работе', blocked: 'Есть препятствие', ready: 'Готово' };
-  $('alpha-focus-state').textContent = selected ? `Главное сегодня · ${label[focusResult.status]} · ${focusResult.progress === null ? 'No Data' : `${focusResult.progress}%`}` : dirty || !selectedId ? 'Сначала сохрани запись' : 'Можно выбрать эту работу главной на день';
+  $('alpha-focus-state').textContent = selected ? `Главное сегодня · ${label[focusResult.status]} · ${focusResult.progress === null ? 'Не записано' : `${focusResult.progress}%`}` : dirty || !selectedId ? 'Сначала сохрани запись' : 'Можно выбрать эту работу главной на день';
 }
 async function loadFocus() {
   try { const data = await request('/api/daily-results'); focusResult = data.entries.find(item => item.date === data.today) ?? null; }

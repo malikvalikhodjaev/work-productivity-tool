@@ -23,7 +23,7 @@ export class PortfolioGrid {
     <div class="grid-scroll"><table class="project-table editable-grid"><thead><tr><th></th>${columns.map(c=>`<th scope="col"><button type="button" class="grid-heading" data-grid-column="${escape(c.id)}">${escape(c.title)} <small>${types[c.type]}</small></button></th>`).join('')}<th></th></tr></thead><tbody>${tree.map(({row,depth,wbs,hasChildren})=>{
       const shown={...row,_wbs:wbs};
       return `<tr data-tree-row="${escape(row.id)}" aria-level="${depth+1}"><td><div class="tree-row-controls">${hasChildren?`<button type="button" class="text-button" data-tree-toggle="${escape(row.id)}" aria-label="Свернуть или развернуть ${escape(row.uniqueName || row.typeName)}" aria-expanded="${!this.collapsed.has(row.id)}">${this.collapsed.has(row.id)?'▸':'▾'}</button>`:''}<button type="button" class="text-button" aria-label="Открыть строку ${escape(row.name || row.uniqueName || row.typeName)}" data-grid-row="${escape(row.id)}">↗</button></div></td>${columns.map(c=>`<td>${c.type==='computed'?`<span class="grid-computed">${escape(gridCellText(shown,c))}</span>`:`<button type="button" class="grid-cell" ${['uniqueName','name'].includes(c.id)?`style="padding-left:${12+depth*22}px"`:''} data-grid-cell="${escape(c.id)}" data-grid-id="${escape(row.id)}">${escape(gridCellText(shown,c))}</button>`}</td>`).join('')}<td>${this.table==='alphas'?`<button type="button" class="text-button" aria-label="Иерархия ${escape(row.uniqueName || row.typeName)}" data-grid-hierarchy="${escape(row.id)}">⋯</button>`:''}<button type="button" class="text-button" data-grid-open="${escape(row.id)}">${this.table==='projects'?'Моделер':'Карточка альфы'}</button></td></tr>`;
-    }).join('')}</tbody></table></div>${items.length?'':'<p class="project-empty">No Data · добавь первую строку.</p>'}`;
+    }).join('')}</tbody></table></div>${items.length?'':'<p class="project-empty">добавь первую строку.</p>'}`;
   }
   click(event){
     const button=event.target.closest('button');if(!button)return;
@@ -56,8 +56,8 @@ export class PortfolioGrid {
   cellDialog(row,column){
     const before=gridCellValue(row,column);
     let field;
-    if(column.type==='select')field=`<select name="value">${column.custom?'<option value="">No Data</option>':''}${Object.entries(column.options).map(([v,l])=>`<option value="${escape(v)}" ${v===before?'selected':''}>${escape(l)}</option>`).join('')}</select>`;
-    else if(column.type==='checkbox')field=`<select name="value"><option value="">No Data</option><option value="true" ${before===true?'selected':''}>Да</option><option value="false" ${before===false?'selected':''}>Нет</option></select>`;
+    if(column.type==='select')field=`<select name="value">${column.custom?'<option value="">Не записано</option>':''}${Object.entries(column.options).map(([v,l])=>`<option value="${escape(v)}" ${v===before?'selected':''}>${escape(l)}</option>`).join('')}</select>`;
+    else if(column.type==='checkbox')field=`<select name="value"><option value="">Не записано</option><option value="true" ${before===true?'selected':''}>Да</option><option value="false" ${before===false?'selected':''}>Нет</option></select>`;
     else if(column.type==='text')field=`<textarea name="value" rows="7" maxlength="${column.maxLength ?? 10000}">${escape(before)}</textarea>`;
     else field=`<input name="value" type="${column.type==='number'?'number':'date'}" ${column.type==='number'?'step="any"':''} value="${escape(before)}">`;
     const dialog=this.dialog(column.title,`<p>${escape(row.name || row.uniqueName || row.typeName)}</p><label>${escape(column.title)}${field}</label>`,async form=>{

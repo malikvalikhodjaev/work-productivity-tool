@@ -4,7 +4,7 @@ let state = { week: null, entries: [] }, selected = null, baseline = null, savin
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tashkent', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const monday = date => { const d = new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7); return d.toISOString().slice(0, 10); };
 const current = () => monday(today());
-root.innerHTML = `<div class="weekly-problem-heading"><h2>Главная проблема недели</h2><label>Неделя<select id="weekly-problem-week"></select></label></div><form id="weekly-problem-form"><label for="weekly-problem-text">The biggest problem of the week is…</label><textarea id="weekly-problem-text" rows="3" maxlength="2000" placeholder="No Data" required></textarea><div class="weekly-problem-actions"><button type="submit" class="button primary">Сохранить</button><button type="button" id="weekly-problem-refresh" class="text-button">Обновить</button><button type="button" id="weekly-problem-export" class="text-button">Выгрузить историю</button><span id="weekly-problem-status" role="status"></span></div></form><details><summary>Как выбрать главное на неделю?</summary><p>Какой разрыв сейчас сильнее всего мешает нужному результату? Какую систему и её характеристику важно изменить? Что будет иначе к концу недели и по какому факту я это проверю?</p></details><details id="weekly-problem-reference" hidden><summary>Референс · Marc Andreessen</summary><blockquote></blockquote><p>Цитата прислана владельцем. Ссылка на первоисточник: No Data.</p></details><details id="weekly-problem-revisions" hidden><summary>Предыдущие формулировки</summary><div></div></details>`;
+root.innerHTML = `<div class="weekly-problem-heading"><h2>Главная проблема недели</h2><label>Неделя<select id="weekly-problem-week"></select></label></div><form id="weekly-problem-form"><label for="weekly-problem-text">The biggest problem of the week is…</label><textarea id="weekly-problem-text" rows="3" maxlength="2000" placeholder="Не записано" required></textarea><div class="weekly-problem-actions"><button type="submit" class="button primary">Сохранить</button><button type="button" id="weekly-problem-refresh" class="text-button">Обновить</button><button type="button" id="weekly-problem-export" class="text-button">Выгрузить историю</button><span id="weekly-problem-status" role="status"></span></div></form><details><summary>Как выбрать главное на неделю?</summary><p>Какой разрыв сейчас сильнее всего мешает нужному результату? Какую систему и её характеристику важно изменить? Что будет иначе к концу недели и по какому факту я это проверю?</p></details><details id="weekly-problem-reference" hidden><summary>Референс · Marc Andreessen</summary><blockquote></blockquote><p>Цитата прислана владельцем. Ссылка на первоисточник не указана.</p></details><details id="weekly-problem-revisions" hidden><summary>Предыдущие формулировки</summary><div></div></details>`;
 const $ = id => document.getElementById(`weekly-problem-${id}`);
 const key = week => `weekly-problem-composer:${week}`;
 function draftWeeks() { try { return Object.keys(localStorage).filter(k => /^weekly-problem-composer:\d{4}-\d{2}-\d{2}$/.test(k)).map(k => k.slice('weekly-problem-composer:'.length)); } catch { return []; } }
@@ -23,7 +23,7 @@ function render() {
   const entry = state.entries.find(e => e.week === selected), composer = draft(selected);
   baseline = composer ? composer.expectedUpdatedAt : entry?.updatedAt ?? null;
   $('text').value = composer ? composer.text : entry?.text ?? '';
-  status(composer ? 'Черновик в браузере · нажми «Сохранить»' : entry ? 'Сохранено' : 'No Data · проблема недели не записана');
+  status(composer ? 'Черновик в браузере · нажми «Сохранить»' : entry ? 'Сохранено' : 'проблема недели не записана');
   $('revisions').hidden = !entry?.revisions?.length;
   $('revisions').querySelector('div').replaceChildren(...(entry?.revisions ?? []).toReversed().map(revision => { const p = document.createElement('p'); p.textContent = `${revision.updatedAt}\n${revision.text}`; return p; }));
   $('text').readOnly = readonly;
@@ -60,7 +60,7 @@ $('form').addEventListener('submit', async event => {
           const data = await latest.json(), entry = data.entries.find(e => e.week === week);
           const comparison = document.createElement('div'), text = document.createElement('p'), accept = document.createElement('button');
           comparison.className = 'weekly-problem-comparison';
-          text.textContent = `На сервере сейчас: ${entry?.text ?? 'No Data'}`;
+          text.textContent = `На сервере сейчас: ${entry?.text ?? 'Не записано'}`;
           accept.type = 'button'; accept.className = 'button secondary'; accept.textContent = 'Сравнил · сохранить мою формулировку следующей правкой';
           accept.addEventListener('click', () => { baseline = entry?.updatedAt ?? null; keepDraft(); comparison.remove(); status('Твоя формулировка сохранена в черновике. Нажми «Сохранить», чтобы добавить новую правку.'); });
           comparison.append(text, accept); root.querySelector('.weekly-problem-comparison')?.remove(); $('form').after(comparison);

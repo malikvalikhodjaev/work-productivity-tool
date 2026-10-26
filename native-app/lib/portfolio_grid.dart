@@ -155,7 +155,7 @@ class _PortfolioGridState extends State<PortfolioGrid> {
                         if (col['custom'] == true || col['type'] == 'checkbox')
                           const DropdownMenuItem(
                             value: '',
-                            child: Text('No Data'),
+                            child: Text('Не записано'),
                           ),
                         for (final item
                             in (col['type'] == 'checkbox'

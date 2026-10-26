@@ -9,6 +9,7 @@ import 'package:indicators_work/local_database.dart';
 import 'package:indicators_work/main.dart';
 import 'package:indicators_work/repository.dart';
 import 'package:indicators_work/project_review.dart';
+import 'package:indicators_work/section_navigation.dart';
 
 LocalDatabase database() {
   final db = LocalDatabase(':memory:');
@@ -69,8 +70,11 @@ Future<void> openWork(WidgetTester tester, DashboardRepository repo) async {
   await tester.pumpWidget(
     DashboardApp(repo: repo, folder: '.', backgroundEnabled: false),
   );
-  await tester.tap(find.text('Работа').last);
+  final workTab = find.byKey(const ValueKey('section-tab:2'));
+  await tester.ensureVisible(workTab);
   await tester.pump();
+  await tester.tap(workTab);
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -80,7 +84,7 @@ void main() {
       final db = database();
       final repo = DashboardRepository(db);
       addTearDown(repo.dispose);
-      expect(repo.todayProblemText, startsWith('No Data'));
+      expect(repo.todayProblemText, equals('Проблема дня ещё не загружена'));
       db.capture('problems', {
         'entries': [
           {'date': '2020-01-01', 'text': 'Старая проблема'},
@@ -116,28 +120,34 @@ void main() {
       await tester.ensureVisible(
         find.widgetWithText(TextButton, 'Фокус').first,
       );
+      await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(TextButton, 'Фокус').first);
       await tester.pumpAndSettle();
-      expect(find.byType(NavigationBar), findsNothing);
+      expect(find.byType(SectionNavigation), findsNothing);
       expect(find.byTooltip('Все разделы'), findsOneWidget);
       expect(find.text('Главный разрыв сегодня'), findsOneWidget);
       final banner = find.byKey(const ValueKey('daily-problem-above-timer'));
       expect(tester.getTopLeft(banner).dy, greaterThanOrEqualTo(0));
       expect(
         tester.getBottomLeft(banner).dy,
-        lessThan(tester.getTopLeft(find.byType(FittedBox)).dy),
+        lessThan(
+          tester
+              .getTopLeft(find.textContaining(RegExp(r'^\d{2}:\d{2}$')).first)
+              .dy,
+        ),
       );
       expect(repo.active?['workRef'], 'case:one');
       expect(commands, hasLength(1));
       await tester.tap(find.byTooltip('Все разделы'));
       await tester.pumpAndSettle();
-      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.byType(SectionNavigation), findsOneWidget);
       await tester.ensureVisible(
         find.widgetWithText(TextButton, 'Фокус').first,
       );
+      await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(TextButton, 'Фокус').first);
       await tester.pumpAndSettle();
-      expect(find.byType(NavigationBar), findsNothing);
+      expect(find.byType(SectionNavigation), findsNothing);
       expect(commands, hasLength(1));
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
@@ -167,7 +177,7 @@ void main() {
       await tester.tap(find.text('▶ Запустить'));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsNothing);
-      expect(find.byType(NavigationBar), findsNothing);
+      expect(find.byType(SectionNavigation), findsNothing);
       expect(
         find.text('Главная проблема на сегодня не записана'),
         findsOneWidget,
@@ -188,9 +198,10 @@ void main() {
       await tester.ensureVisible(
         find.widgetWithText(TextButton, 'Фокус').first,
       );
+      await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(TextButton, 'Фокус').first);
       await tester.pumpAndSettle();
-      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.byType(SectionNavigation), findsOneWidget);
       expect(repo.active, isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       repo.dispose();

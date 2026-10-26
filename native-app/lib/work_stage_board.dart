@@ -34,7 +34,7 @@ String caseStatusText(Json item) => switch (item['status']) {
   'new' => 'Новый',
   'watching' => 'Наблюдение',
   'active' => 'В работе',
-  _ => 'No Data',
+  _ => 'Статус не выбран',
 };
 
 class WorkStageBoard extends StatelessWidget {

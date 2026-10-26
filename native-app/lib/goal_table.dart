@@ -15,7 +15,6 @@ import 'characteristic_fields.dart';
 import 'repository.dart';
 import 'workspace_table.dart';
 import 'inline_cell.dart';
-import 'activity_status.dart';
 
 class GoalsTable extends StatefulWidget {
   final DashboardRepository repo;
@@ -853,12 +852,7 @@ class GoalFocusPage extends StatelessWidget {
       }
       return Scaffold(
         key: ValueKey('goal-focus:$goalId'),
-        appBar: AppBar(
-          title: const Text('Моделирование характеристики'),
-          actions: [
-            ActivityStatus(repo: repo, compact: true, showTimer: false),
-          ],
-        ),
+        appBar: AppBar(title: const Text('Моделирование характеристики')),
         bottomNavigationBar: timer?.call(context),
         body: root == null
             ? const Center(

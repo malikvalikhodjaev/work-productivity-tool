@@ -106,7 +106,7 @@ void main() {
           ),
         ),
       );
-      expect(find.text('No Data'), findsOneWidget);
+      expect(find.text('Не записано'), findsOneWidget);
       expect(find.text('Private reference text').hitTestable(), findsNothing);
       await tester.tap(find.byType(DropdownButton<String>));
       await tester.pumpAndSettle();

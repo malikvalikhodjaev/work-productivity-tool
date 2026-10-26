@@ -148,7 +148,7 @@ class _WorkAnalyticsState extends State<WorkAnalytics> {
           ],
         ),
         Text(
-          'Учтено за неделю: ${known ? hours(entries).toStringAsFixed(1) : 'No Data'} ч',
+          'Учтено за неделю: ${known ? hours(entries).toStringAsFixed(1) : 'Не записано'} ч',
           style: const TextStyle(fontSize: 20),
         ),
         const Text(
@@ -193,26 +193,26 @@ class _WorkAnalyticsState extends State<WorkAnalytics> {
                         known
                             ? hours(entries.where((e) => e['date'] == day))
                                   .toStringAsFixed(1)
-                            : 'No Data',
+                            : 'Не записано',
                       ),
                     ),
                     DataCell(
                       Text(
                         normsKnown || repo.cache('timer').isNotEmpty
                             ? '${repo.pomodoroCapacityForDate(day)['actualPomodoros']}'
-                            : 'No Data',
+                            : 'Не записано',
                       ),
                     ),
                     DataCell(
                       Text(
                         normsKnown
                             ? '${repo.pomodoroCapacityForDate(day)['planned']}'
-                            : 'No Data',
+                            : 'Не записано',
                       ),
                     ),
                     DataCell(
                       Text(
-                        '${repo.pomodoroCapacityForDate(day)['limit'] ?? 'No Data'}',
+                        '${repo.pomodoroCapacityForDate(day)['limit'] ?? 'Не записано'}',
                       ),
                     ),
                     DataCell(
@@ -227,7 +227,7 @@ class _WorkAnalyticsState extends State<WorkAnalytics> {
                                               .firstOrNull ??
                                           {},
                                     )['text'] ??
-                                    'No Data · не записана')
+                                    'Не записана')
                                 .toString(),
                           ),
                         ),
@@ -238,8 +238,7 @@ class _WorkAnalyticsState extends State<WorkAnalytics> {
                         width: 260,
                         child: SelectableText(
                           key: ValueKey('work-weekly-problem:$day'),
-                          (repo.weeklyProblem(week)['text'] ??
-                                  'No Data · не записана')
+                          (repo.weeklyProblem(week)['text'] ?? 'Не записана')
                               .toString(),
                         ),
                       ),
@@ -306,10 +305,14 @@ class ModelAnalytics extends StatelessWidget {
         Text(
           known
               ? 'Слотов: ${alphas.length} · с проектным именем: $adapted / ${alphas.length}'
-              : 'Слоты: No Data',
+              : 'Слоты пока не заданы',
         ),
-        Text('Непустых строк в текущей модели: ${known ? lines : 'No Data'}'),
-        Text('Неделя: ${source['week'] ?? 'No Data'} · по сохранённой истории'),
+        Text(
+          'Непустых строк в текущей модели: ${known ? lines : 'Не записано'}',
+        ),
+        Text(
+          'Неделя: ${source['week'] ?? 'Не записано'} · по сохранённой истории',
+        ),
         for (final field in {
           'created': 'Создано строк',
           'edits': 'Сохранённых изменений',
@@ -318,7 +321,7 @@ class ModelAnalytics extends StatelessWidget {
           'addedLines': 'Добавлено непустых строк при сохранении',
         }.entries)
           Text(
-            '${field.value}: ${source['recordedHistory'] == true ? activity[field.key] ?? 0 : 'No Data'}',
+            '${field.value}: ${source['recordedHistory'] == true ? activity[field.key] ?? 0 : 'Не записано'}',
           ),
         const Text(
           'Счётчики описывают действия с моделью. Полезность изменений и состояние системы проверяются отдельно. Импорт и исходный снимок не входят в счётчики действий. Создание из шаблона входит в созданные строки.',
@@ -418,7 +421,7 @@ class _WritingAnalyticsState extends State<WritingAnalytics> {
           ],
         ),
         Text(
-          known ? 'За неделю: $count записей · $words слов' : 'No Data',
+          known ? 'За неделю: $count записей · $words слов' : 'Не записано',
           style: const TextStyle(fontSize: 20),
         ),
         const Text(
@@ -460,7 +463,7 @@ class _WritingAnalyticsState extends State<WritingAnalytics> {
         Text(
           known
               ? 'В архиве: ${entries.length} записей · ${entries.fold<int>(0, (sum, e) => sum + writingWords(e))} слов · ${entries.where((e) => e['favorite'] == true).length} избранных'
-              : 'Архив: No Data',
+              : 'Архив: Не записано',
         ),
       ],
     );

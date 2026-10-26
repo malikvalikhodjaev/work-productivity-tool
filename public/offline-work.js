@@ -70,15 +70,15 @@ function render() {
   if(resting(s)){$('phase').textContent='LEISURE · НА УСТРОЙСТВЕ';$('pause').textContent='Вернуться к работе';}
   const records=Object.values(state.queue).reverse();
   const pending=records.filter(r=>r.status==='pending').length, conflicts=records.filter(r=>r.status==='conflict').length;
-  $('counts').textContent=`К отправке: ${pending} · Разобрать: ${conflicts}`;
-  $('records').innerHTML=records.map(r=>`<article class="record"><strong>${esc(r.session.title)}</strong><div class="record-meta"><span>${esc(stamp(r.session.startedAt))}</span><span>${duration(r.session.intervals.reduce((v,i)=>v+i.end-i.start,0))}</span><span>${r.session.phase!=='work'?'Перерыв · ':''}${r.status==='synced'?(r.receipt.status==='excluded'?'На сервере · без учёта времени':'На сервере'):r.status==='conflict'?'Нужен разбор':'Сохранено здесь · ждёт отправки'}</span></div>${r.session.observation?`<p class="note">${esc(r.session.observation)}</p>`:''}${r.error?`<p class="record-error">${esc(r.error)}${r.details?.length?' '+r.details.map(d=>esc(d.title)).join(', '):''}</p>`:''}${r.status==='conflict'?`<div class="toolbar"><button class="secondary" data-retry="${esc(r.session.id)}">Проверить снова</button><button class="secondary" data-exclude="${esc(r.session.id)}">Сохранить без учёта времени</button></div>`:''}</article>`).join('')||'<p class="note">No Data</p>';
+  $('counts').textContent=`К отправке: ${pending} · С ошибкой: ${conflicts}`;
+  $('records').innerHTML=records.map(r=>`<article class="record"><strong>${esc(r.session.title)}</strong><div class="record-meta"><span>${esc(stamp(r.session.startedAt))}</span><span>${duration(r.session.intervals.reduce((v,i)=>v+i.end-i.start,0))}</span><span>${r.session.phase!=='work'?'Перерыв · ':''}${r.status==='synced'?(r.receipt.status==='excluded'?'На сервере · без учёта времени':'На сервере'):r.status==='conflict'?'Не отправлено':'Сохранено здесь · ждёт отправки'}</span></div>${r.session.observation?`<p class="note">${esc(r.session.observation)}</p>`:''}${r.error?`<p class="record-error">${esc(r.error)}${r.details?.length?' '+r.details.map(d=>esc(d.title)).join(', '):''}</p>`:''}${r.status==='conflict'?`<div class="toolbar"><button class="secondary" data-retry="${esc(r.session.id)}">Проверить снова</button><button class="secondary" data-exclude="${esc(r.session.id)}">Сохранить без учёта времени</button></div>`:''}</article>`).join('')||'<p class="note">Не записано</p>';
   $('sync').disabled=syncing||readOnly;
   for(const b of $('active-card').querySelectorAll('button')) b.disabled=acting||readOnly;
 }
 function tick() {
   const s=active(); if(!s) return;
   const view=sessionView(s,Date.now()); $('clock').textContent=duration(resting(s)?view.leisureRemainingMs:s.mode==='pomodoro'?view.remainingMs:view.elapsedMs);
-  $('active-note').textContent=s.status==='paused'?'Пауза · время не учитывается':view.expired?'Интервал завершён. Подтверди факт или продли на 5 минут.':'Сохранено на устройстве · можно закрыть страницу';
+  $('active-note').textContent=s.status==='paused'?'Пауза · время не учитывается':view.expired?'Интервал завершён. Подтверди факт или продли на 5 минут.':'';
   if(resting(s)){
     $('active-note').textContent=`Leisure до ${stamp(s.leisure.until)} · работа на паузе · отдых ${(view.leisureMs/60000).toFixed(1)} мин`;
     const key=`${s.id}:${s.leisure.start}:${s.leisure.until}`;

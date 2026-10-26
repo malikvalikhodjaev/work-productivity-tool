@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'domain.dart';
 import 'repository.dart';
 
 class DailyProblemBanner extends StatelessWidget {
@@ -42,16 +41,6 @@ class DailyProblemBanner extends StatelessWidget {
             ),
           ),
         ),
-        if (repo.local.draft('problem:${today()}') != null)
-          const Text(
-            'Изменения на устройстве · ожидают синхронизации',
-            style: TextStyle(color: Colors.white70, fontSize: 10),
-          )
-        else if (!repo.online && repo.todayProblemLoaded)
-          const Text(
-            'Без связи · сохранённая запись',
-            style: TextStyle(color: Colors.white70, fontSize: 10),
-          ),
         if (edit != null && !compact)
           TextButton(
             onPressed: edit,

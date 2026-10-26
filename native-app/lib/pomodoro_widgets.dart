@@ -907,11 +907,6 @@ class PomodoroChecklist extends StatelessWidget {
                   'Дневной лимит общий для всех типов времени.',
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
-              if (norms.any((n) => (n['pendingPomodoros'] as int) > 0))
-                const Text(
-                  'Есть помидорки, ожидающие синхронизации.',
-                  style: TextStyle(fontSize: 12),
-                ),
               if (!compact)
                 const Padding(
                   padding: EdgeInsets.only(top: 8),
@@ -981,7 +976,7 @@ class PomodoroWeek extends StatelessWidget {
             if (groups.isEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: 12),
-                child: Text('No Data — на эту неделю нормы ещё не заданы.'),
+                child: Text('На эту неделю нормы ещё не заданы.'),
               )
             else
               SingleChildScrollView(

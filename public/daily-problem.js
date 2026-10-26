@@ -27,7 +27,7 @@ function selectDate() {
   savedEntry = entries.find(item => item.date === $('daily-problem-date').value) ?? null;
   $('daily-problem-text').value = savedEntry?.text ?? '';
   dirty = false;
-  setStatus(savedEntry ? 'Сохранено' : 'No Data');
+  setStatus(savedEntry ? 'Сохранено' : 'Не записано');
   controls();
 }
 

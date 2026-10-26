@@ -45,7 +45,7 @@ export function gridCellValue(row, column) {
 export function gridCellText(row, column) {
   const value = gridCellValue(row,column);
   if (column.id === 'parentId' && (value === null || value === '')) return 'Верхний уровень';
-  if (value === null || value === '') return 'No Data';
+  if (value === null || value === '') return 'Не записано';
   if (column.type === 'checkbox') return value ? '✓' : '—';
   return column.options?.[value] ?? String(value);
 }

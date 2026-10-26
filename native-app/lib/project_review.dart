@@ -83,7 +83,7 @@ class ProjectReview extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             if (repo.cache('portfolio').isEmpty)
-              const Text('No Data · проекты ещё не загружены')
+              const Text('проекты ещё не загружены')
             else
               Text(
                 'Активных проектов: ${entries.length} · альф к возврату: $due',
@@ -93,22 +93,18 @@ class ProjectReview extends StatelessWidget {
                 tilePadding: EdgeInsets.zero,
                 title: Text(object(entry['project'])['name'].toString()),
                 subtitle: Text(
-                  '${entry['zonesKnown'] != true ? 'Зоны: No Data' : 'Зон с пробелами: ${(entry['zones'] as List).length}'} · альф к возврату: ${rows(entry['alphas']).where((a) => a['due'] == true).length}',
+                  '${entry['zonesKnown'] != true ? 'Зоны не заданы' : 'Зон с пробелами: ${(entry['zones'] as List).length}'} · альф к возврату: ${rows(entry['alphas']).where((a) => a['due'] == true).length}',
                 ),
                 children: [
                   if (rows(object(entry['project'])['zones']).isEmpty)
-                    const ListTile(
-                      title: Text('No Data · зоны проекта ещё не заданы'),
-                    ),
+                    const ListTile(title: Text('зоны проекта ещё не заданы')),
                   for (final zone in entry['zones'] as List)
                     ListTile(
                       leading: const Icon(Icons.help_outline),
                       title: Text(zone.toString()),
                     ),
                   if (rows(entry['alphas']).isEmpty)
-                    const ListTile(
-                      title: Text('No Data · в проекте пока нет альф'),
-                    ),
+                    const ListTile(title: Text('в проекте пока нет альф')),
                   for (final row in rows(entry['alphas']))
                     ListTile(
                       leading: Icon(

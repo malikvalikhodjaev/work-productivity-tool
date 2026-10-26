@@ -32,7 +32,7 @@ class ActivityStatus extends StatelessWidget {
       final last = syncTime(repo.local.get('lastSyncAt'));
       final error = repo.local.get('lastSyncError');
       final label = conflicts > 0
-          ? 'Нужен разбор · $conflicts изменений сохранены на устройстве'
+          ? 'Не отправлено · $conflicts изменений сохранены на устройстве'
           : repo.syncing
           ? 'Синхронизация…${pending.isEmpty ? '' : ' · изменений: ${pending.length}'}'
           : pending.isNotEmpty
@@ -45,7 +45,7 @@ class ActivityStatus extends StatelessWidget {
       final active = repo.active;
       if (compact) {
         final short = conflicts > 0
-            ? 'Нужен разбор: $conflicts'
+            ? 'Не отправлено: $conflicts'
             : repo.syncing
             ? 'Синхронизация…'
             : pending.isNotEmpty
@@ -136,7 +136,7 @@ class ActivityStatus extends StatelessWidget {
                   Expanded(child: Text(label, softWrap: true)),
                   IconButton(
                     tooltip: conflicts > 0
-                        ? 'Синхронизировать; конфликты доступны в Данных'
+                        ? 'Синхронизировать; причины ошибок доступны в Данных'
                         : 'Синхронизировать сейчас',
                     onPressed: repo.syncing ? null : repo.synchronize,
                     icon: const Icon(Icons.sync),
@@ -156,7 +156,7 @@ class ActivityStatus extends StatelessWidget {
                   child: TextButton.icon(
                     onPressed: inspect,
                     icon: const Icon(Icons.manage_search),
-                    label: const Text('Открыть данные и разбор'),
+                    label: const Text('Показать причину ошибки'),
                   ),
                 ),
             ],

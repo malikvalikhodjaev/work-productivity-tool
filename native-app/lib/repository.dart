@@ -30,6 +30,8 @@ class DashboardRepository extends ChangeNotifier {
   final http.Client _http;
   Timer? _poll;
   bool syncing = false, online = false;
+  bool _syncRequestedWhileBusy = false;
+  bool _disposed = false;
   bool focusStarting = false;
   bool _sharedActionInFlight = false;
   Future<void>? _timerCheck;
@@ -122,7 +124,12 @@ class DashboardRepository extends ChangeNotifier {
   }
 
   void requestAutoSync() {
-    if (automaticSync) unawaited(synchronize());
+    if (_disposed || !automaticSync) return;
+    if (syncing) {
+      _syncRequestedWhileBusy = true;
+    } else {
+      unawaited(synchronize());
+    }
   }
 
   Json get todayProblem {
@@ -136,7 +143,7 @@ class DashboardRepository extends ChangeNotifier {
   bool get todayProblemLoaded =>
       cache('problems').isNotEmpty || local.draft('problem:${today()}') != null;
   String get todayProblemText {
-    if (!todayProblemLoaded) return 'No Data · проблема дня ещё не загружена';
+    if (!todayProblemLoaded) return 'Проблема дня ещё не загружена';
     final text = (todayProblem['text'] ?? '').toString();
     return text.trim().isEmpty
         ? 'Главная проблема на сегодня не записана'
@@ -165,7 +172,7 @@ class DashboardRepository extends ChangeNotifier {
       weeklyProblems.where((e) => e['week'] == week).firstOrNull ?? {};
   String get weeklyProblemText =>
       (weeklyProblem(weekStart())['text'] ??
-              'No Data · главная проблема недели не записана')
+              'Главная проблема недели не записана')
           .toString();
 
   void saveWeeklyProblem(String week, String text) {
@@ -423,8 +430,23 @@ class DashboardRepository extends ChangeNotifier {
     return response.bodyBytes;
   }
 
+  bool _isGoalCommand(Json item) {
+    final body = object(item['body']), input = object(body['input']);
+    return item['route'] == '/api/native/command' &&
+        body['module'] == 'workspace' &&
+        ([
+              'saveGoal',
+              'editGoalFields',
+              'editGoalCell',
+              'moveGoal',
+              'createGoalColumn',
+              'updateGoalColumn',
+            ].contains(body['action']) ||
+            body['action'] == 'measure' && input['kind'] == 'goal');
+  }
+
   Future<void> synchronize() async {
-    if (syncing) return;
+    if (_disposed || syncing) return;
     final syncBase = base;
     syncing = true;
     notifyListeners();
@@ -444,12 +466,12 @@ class DashboardRepository extends ChangeNotifier {
       online = true;
       await recoverLegacyGoalValidation();
       if (local.get('pendingTimer') != null) await _recoverTimerCommand();
+      var goalCommandsBlocked = false;
       for (final queued in pending) {
         if (base != syncBase) {
           throw StateError('Адрес изменён. Очередь сохранена для проверки.');
         }
         final item = local.queue.firstWhere((q) => q['id'] == queued['id']);
-        if (item['state'] == 'conflict') break;
         if (item['server_id'] != serverId) {
           local.conflict(
             item['id'] as String,
@@ -457,6 +479,14 @@ class DashboardRepository extends ChangeNotifier {
           );
           break;
         }
+        if (item['state'] == 'conflict') {
+          if (_isGoalCommand(item)) {
+            goalCommandsBlocked = true;
+            continue;
+          }
+          break;
+        }
+        if (goalCommandsBlocked && _isGoalCommand(item)) continue;
         if (item['route'] == '/api/timer' &&
             context['offlineCommands'] != true) {
           throw StateError(
@@ -554,6 +584,10 @@ class DashboardRepository extends ChangeNotifier {
             if (item['route'] == '/api/timer') {
               local.set('timerChainConflict', true);
             }
+            if (_isGoalCommand(item)) {
+              goalCommandsBlocked = true;
+              continue;
+            }
             break;
           }
           rethrow;
@@ -591,7 +625,7 @@ class DashboardRepository extends ChangeNotifier {
         }
       });
       status = pending.any((q) => q['state'] == 'conflict')
-          ? 'Нужен разбор очереди'
+          ? 'Не удалось отправить изменения · подробности в Данных'
           : pending.isNotEmpty
           ? 'Сохранено на устройстве · ожидает отправки: ${pending.length}'
           : 'Синхронизировано · ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}';
@@ -605,7 +639,11 @@ class DashboardRepository extends ChangeNotifier {
           : 'Нет связи с сервером${Uri.parse(base).host.endsWith('.ts.net') ? ' · проверь Tailscale' : ''} · изменения сохранены на устройстве';
     } finally {
       syncing = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
+      if (_syncRequestedWhileBusy) {
+        _syncRequestedWhileBusy = false;
+        scheduleMicrotask(requestAutoSync);
+      }
     }
   }
 
@@ -2367,6 +2405,8 @@ class DashboardRepository extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _syncRequestedWhileBusy = false;
     _poll?.cancel();
     _http.close();
     local.close();

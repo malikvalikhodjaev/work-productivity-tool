@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'repository.dart';
 
-/// The same recovery control in the full and compact timer.
+/// Service information belongs to Data/settings, outside the working timer.
 class TimerCommandNotice extends StatelessWidget {
   final DashboardRepository repo;
   final VoidCallback retry;
@@ -29,15 +29,17 @@ class TimerCommandNotice extends StatelessWidget {
                 : repo.timerBusy
                 ? 'Подтверждаю действие…'
                 : 'Ответ сервера не получен. Действие сохранено и будет проверено при связи.',
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 13,
+            ),
           ),
           if (!repo.timerBusy)
             TextButton.icon(
               onPressed: retry,
-              icon: const Icon(Icons.sync, color: Colors.white),
+              icon: const Icon(Icons.sync),
               label: Text(
                 repo.durableTimer ? 'Синхронизировать' : 'Проверить действие',
-                style: const TextStyle(color: Colors.white),
               ),
             ),
         ],

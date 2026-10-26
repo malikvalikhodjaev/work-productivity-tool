@@ -63,7 +63,7 @@ void main() {
       expect(table().rows.map(text).toSet(), {'  Прошлая\nпроблема  '});
       await tester.tap(find.byTooltip('Предыдущая неделя'));
       await tester.pump();
-      expect(table().rows.map(text).toSet(), {'No Data · не записана'});
+      expect(table().rows.map(text).toSet(), {'Не записана'});
       expect(repo.pending.length, 1);
       expect(tester.takeException(), isNull);
     },

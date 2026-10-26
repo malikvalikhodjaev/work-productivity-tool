@@ -7,12 +7,12 @@ if (document.querySelector('meta[name="dashboard-access"][content="viewer"]')) {
     if (cloud && label && label.textContent !== 'Снимок сохранённых записей') label.textContent = 'Снимок сохранённых записей';
     document.querySelectorAll(mutations).forEach(element => { if (!element.disabled) element.disabled = true; element.classList.add('viewer-mutation'); });
     document.querySelectorAll('form input,form textarea,form select').forEach(element => {
-      if (element.matches('textarea,input:not([type="checkbox"]):not([type="file"])')) { element.readOnly = true; if (!element.value) element.placeholder = 'No Data'; }
+      if (element.matches('textarea,input:not([type="checkbox"]):not([type="file"])')) { element.readOnly = true; if (!element.value) element.placeholder = 'Не записано'; }
       else if (!element.disabled) element.disabled = true;
     });
     const resultState = document.getElementById('today-result-state');
-    if (resultState && document.getElementById('today-result-status')?.textContent === 'No Data') {
-      if (![...resultState.options].some(option => option.value === '')) resultState.prepend(new Option('No Data', ''));
+    if (resultState && document.getElementById('today-result-status')?.textContent === 'Не записано') {
+      if (![...resultState.options].some(option => option.value === '')) resultState.prepend(new Option('Не записано', ''));
       resultState.value = '';
     }
   };
@@ -36,9 +36,9 @@ if (document.querySelector('meta[name="dashboard-access"][content="viewer"]')) {
         info.title = 'Изменения на ПК не синхронизируются автоматически. Редактирование доступно в локальной версии.';
         document.body.prepend(info);
         fetch('/api/mobile-access', { cache: 'no-store' }).then(response => { if (!response.ok) throw new Error(); return response.json(); }).then(value => {
-          const date = value.capturedAt ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Tashkent' }).format(new Date(value.capturedAt)) : 'No Data';
+          const date = value.capturedAt ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Tashkent' }).format(new Date(value.capturedAt)) : 'Не записано';
           info.textContent = `Снимок от ${date} · Только просмотр`;
-        }).catch(() => { info.textContent = 'Дата снимка · No Data'; });
+        }).catch(() => { info.textContent = 'Дата снимка не указана'; });
       }
       const checkConnection = async () => {
         if (document.visibilityState !== 'visible') return;

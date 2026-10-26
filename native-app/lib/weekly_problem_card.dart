@@ -60,14 +60,9 @@ class _WeeklyProblemCardState extends State<WeeklyProblemCard> {
             ),
             const SizedBox(height: 8),
             SelectableText(
-              (entry['text'] ?? 'No Data').toString(),
+              (entry['text'] ?? 'Не записано').toString(),
               style: const TextStyle(fontSize: 18, height: 1.5),
             ),
-            if (repo.local.draft('weeklyProblem:$week') != null)
-              const Text(
-                'Сохранено на устройстве · ожидает синхронизации',
-                style: TextStyle(fontSize: 12),
-              ),
             TextButton(
               onPressed: () => widget.edit(week),
               child: const Text('Записать / уточнить'),
@@ -102,7 +97,7 @@ class _WeeklyProblemCardState extends State<WeeklyProblemCard> {
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12),
                     child: Text(
-                      'Цитата прислана владельцем. Ссылка на первоисточник: No Data.',
+                      'Цитата прислана владельцем. Ссылка на первоисточник не указана.',
                       style: TextStyle(fontSize: 12),
                     ),
                   ),

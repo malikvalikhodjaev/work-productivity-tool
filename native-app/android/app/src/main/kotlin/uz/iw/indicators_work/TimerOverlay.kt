@@ -57,7 +57,7 @@ class TimerOverlay(private val context: Context) {
         val problemText = problemData?.opt("text")?.takeIf { it != JSONObject.NULL }?.toString() ?: ""
         problem?.text = "Главная проблема на сегодня\n" + when {
             problemData == null || problemData.optString("date") != FocusService.date(now) || !problemData.optBoolean("loaded") ->
-                "No Data · проблема дня ещё не загружена"
+                "Проблема дня ещё не загружена"
             problemText.isBlank() -> "Главная проблема на сегодня не записана"
             else -> problemText
         }

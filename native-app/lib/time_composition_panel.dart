@@ -79,7 +79,7 @@ class _TimeCompositionPanelState extends State<TimeCompositionPanel> {
         Text(
           widget.known
               ? 'Всего учтено: ${number(seconds / 3600)} ч · $count помидорок'
-              : 'No Data · записи ещё не загружены',
+              : 'записи ещё не загружены',
         ),
         if (seconds > 0) ...[
           const SizedBox(height: 10),
@@ -132,12 +132,14 @@ class _TimeCompositionPanelState extends State<TimeCompositionPanel> {
                     ),
                     DataCell(
                       Text(
-                        widget.known ? number(e['seconds'] / 3600) : 'No Data',
+                        widget.known
+                            ? number(e['seconds'] / 3600)
+                            : 'Не записано',
                       ),
                     ),
                     DataCell(Text(percent(e['percent']))),
                     DataCell(
-                      Text(widget.known ? '${e['pomodoros']}' : 'No Data'),
+                      Text(widget.known ? '${e['pomodoros']}' : 'Не записано'),
                     ),
                     DataCell(Text(percent(e['pomodoroPercent']))),
                   ],

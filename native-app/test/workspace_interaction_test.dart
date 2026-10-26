@@ -236,7 +236,7 @@ void main() {
     db.conflict(repo.pending.single['id'], 'Конфликт');
     repo.notifyListeners();
     await tester.pump();
-    expect(find.textContaining('Нужен разбор'), findsOneWidget);
+    expect(find.textContaining('Не отправлено'), findsOneWidget);
     expect(find.text('Синхронизировано · 12:00'), findsNothing);
   });
   testWidgets(

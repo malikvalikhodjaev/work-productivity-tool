@@ -8,13 +8,12 @@
   <link rel="stylesheet" href="/focus-ambience.css">
 </head>
 <body><main>
-  <header><a href="/">I&amp;W <span>Дашборд ↗</span></a><span id="connection">Проверяю хранилище…</span></header>
+  <header><a href="/">I&amp;W <span>Дашборд ↗</span></a></header>
   <p class="eyebrow">INDICATORS &amp; WORK DASHBOARD</p><h1>Таймер на устройстве</h1><p class="lead">Работай без сети. Завершённые записи отправятся на ПК, когда он станет доступен и приложение будет открыто.</p>
   <p id="message" role="status" hidden></p>
   <section id="setup" class="card"><h2>Подготовить к работе без сети</h2><p>Один раз подключись к серверу. На этом устройстве сохранятся названия работ, нормативов, настройки и твои сеансы таймера.</p><button id="connect">Сохранять на этом устройстве</button></section>
   <div id="ready" hidden>
-    <div class="toolbar"><button id="sync">Синхронизировать</button><button id="export" class="secondary">Выгрузить локальные данные</button></div>
-    <p id="context-note" class="note"></p><p id="server-active" class="warning" hidden></p>
+    <p id="server-active" class="warning" hidden></p>
     <section id="active-card" class="card" hidden><p id="phase" class="eyebrow"></p><h2 id="active-title"></h2><div id="clock" aria-live="off">00:00</div><p id="active-note" class="note"></p><div class="toolbar"><button id="pause">Пауза</button><button id="extend" class="secondary">+5 минут</button><button id="finish">Завершить</button><button id="cancel" class="secondary">Отменить</button></div></section>
     <section id="start-card" class="card"><h2>Новая работа</h2><form id="start-form">
       <label>Работа из сохранённого списка<select id="work-ref"><option value="">Отдельная активность</option></select></label>
@@ -25,9 +24,13 @@
       <div class="toolbar"><button type="submit">Начать на устройстве</button><button type="button" id="break" class="secondary">Начать перерыв</button></div>
     </form><p class="note">Этот сеанс сохраняется здесь до завершения. Таймер на ПК учитывается отдельно; пересечения проверим при отправке.</p></section>
     <section class="card"><div class="section-head"><h2>Записи устройства</h2><span id="counts"></span></div><p class="note">До подтверждения сервера время не включено в показатели и нормативы. Перерывы не выполняют норматив.</p><div id="records"></div></section>
-    <p id="storage-note" class="note"></p>
+    <details id="offline-service" class="card"><summary>Данные и синхронизация</summary>
+      <p id="connection">Проверяю хранилище…</p><p id="context-note" class="note"></p>
+      <div class="toolbar"><button id="sync">Синхронизировать</button><button id="export" class="secondary">Выгрузить локальные данные</button></div>
+      <p id="storage-note" class="note"></p>
+    </details>
   </div>
-  <footer>Для отправки нужны интернет, Tailscale и работающий сервер. Очищая данные сайта, ты удаляешь несинхронизированные записи — сначала выгрузи их.</footer>
+  <footer>Для отправки нужен доступ к своему серверу. Очищая данные сайта, ты удаляешь несинхронизированные записи — сначала выгрузи их.</footer>
 </main>
 <dialog id="finish-dialog"><form id="finish-form"><h2>Подтверди фактическое время</h2><p id="finish-note"></p><label>Сколько минут засчитать<input id="worked-seconds" type="number" min="0" step="0.01" inputmode="decimal" required></label><label>Что сделал за помидорку? Какую систему, какую её характеристику изменил?<textarea id="observation" rows="6" maxlength="10000" placeholder="Можно свободно записать мысли о прошедшей работе"></textarea></label><div class="toolbar"><button type="submit">Сохранить на устройстве</button><button type="button" id="finish-close" class="secondary">Вернуться</button></div></form></dialog>
 </body>

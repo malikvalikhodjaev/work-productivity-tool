@@ -3,7 +3,7 @@ import {mountTimerRingtones,playTimerRingtone} from './timer-ringtones.js';
 import {activeTimerMessage} from './timer-core.js';
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const duration = seconds => { if (seconds === null) return 'No Data'; const n = Math.max(0, Math.floor(seconds)); return `${Math.floor(n / 3600) ? Math.floor(n / 3600) + ':' : ''}${String(Math.floor(n / 60) % 60).padStart(2,'0')}:${String(n % 60).padStart(2,'0')}`; };
+const duration = seconds => { if (seconds === null) return 'Не записано'; const n = Math.max(0, Math.floor(seconds)); return `${Math.floor(n / 3600) ? Math.floor(n / 3600) + ':' : ''}${String(Math.floor(n / 60) % 60).padStart(2,'0')}:${String(n % 60).padStart(2,'0')}`; };
 const number = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
 const humanTime = seconds => { const n=Math.round(seconds); return [Math.floor(n/3600) ? `${Math.floor(n/3600)} ч` : '',Math.floor(n/60)%60 ? `${Math.floor(n/60)%60} мин` : '',n%60 || n===0 ? `${n%60} с` : ''].filter(Boolean).join(' '); };
 const embedded = window.parent !== window;
@@ -102,12 +102,12 @@ function render() {
     if(inLeisure(s)&&!embedded)$('timer-widget-phase').textContent='Leisure';
   }
   if(!s)$('timer-clock').textContent=duration(state.settings.workMinutes*60);
-  $('timer-summary').innerHTML=`<div><small>Работа за неделю</small><strong>${state.summary.workSeconds===null?'No Data':duration(state.summary.workSeconds)}</strong></div><div><small>Полные помидорки</small><strong>${state.summary.records?state.summary.pomodoros:'No Data'}</strong></div><div><small>Перерывы</small><strong>${state.sessions.some(s=>s.phase!=='work')?duration(state.summary.breakSeconds):'No Data'}</strong></div>`;
-  $('timer-summary').insertAdjacentHTML('beforeend',`<div><small>Leisure за неделю</small><strong>${state.summary.leisureSeconds==null?'No Data':number.format(state.summary.leisureSeconds/60)+' мин'}</strong></div>`);
+  $('timer-summary').innerHTML=`<div><small>Работа за неделю</small><strong>${state.summary.workSeconds===null?'Не записано':duration(state.summary.workSeconds)}</strong></div><div><small>Полные помидорки</small><strong>${state.summary.records?state.summary.pomodoros:'Не записано'}</strong></div><div><small>Перерывы</small><strong>${state.sessions.some(s=>s.phase!=='work')?duration(state.summary.breakSeconds):'Не записано'}</strong></div>`;
+  $('timer-summary').insertAdjacentHTML('beforeend',`<div><small>Leisure за неделю</small><strong>${state.summary.leisureSeconds==null?'Не записано':number.format(state.summary.leisureSeconds/60)+' мин'}</strong></div>`);
   $('timer-week').textContent=`${state.week} — ${state.end} · Ташкент, UTC+5`;
-  $('timer-plans').innerHTML=state.plans.map(p=>`<div class="timer-plan"><strong>${esc(p.title)}</strong><span>${p.actual===null?'No Data':humanTime(p.actual*3600)} / ${humanTime(p.target*3600)} · ${p.percent===null?'No Data':p.percent+'%'}</span><progress max="100" value="${Math.min(100,p.percent??0)}" aria-label="${esc(p.title)}"></progress></div>`).join('')||'<p class="timer-note">Норматив конкретной работы: No Data</p>';
-  $('timer-by-work').innerHTML='<h3>Куда ушло время таймера</h3>'+(state.byWork.map(w=>`<div class="timer-work-row"><span>${esc(w.title)}</span><strong>${duration(w.seconds)}</strong></div>`).join('')||'<p>No Data</p>');
-  $('timer-history').innerHTML=state.sessions.map(s=>`<tr><td>${esc(new Date(s.startedAt).toLocaleString('ru-RU',{timeZone:'Asia/Tashkent'}))}</td><td>${esc(s.title)}</td><td>${s.status==='cancelled'?'Отменён, не учтён':s.phase==='work'?'Учтён':'Перерыв'}</td><td>${duration(s.elapsedMs/1000)}</td><td>${s.completedPomodoros}</td><td>${esc(s.observation||'No Data')}</td></tr>`).join('')||'<tr><td colspan="6">No Data</td></tr>';
+  $('timer-plans').innerHTML=state.plans.map(p=>`<div class="timer-plan"><strong>${esc(p.title)}</strong><span>${p.actual===null?'Не записано':humanTime(p.actual*3600)} / ${humanTime(p.target*3600)} · ${p.percent===null?'Не записано':p.percent+'%'}</span><progress max="100" value="${Math.min(100,p.percent??0)}" aria-label="${esc(p.title)}"></progress></div>`).join('')||'<p class="timer-note">Норматив конкретной работы: Не записано</p>';
+  $('timer-by-work').innerHTML='<h3>Куда ушло время таймера</h3>'+(state.byWork.map(w=>`<div class="timer-work-row"><span>${esc(w.title)}</span><strong>${duration(w.seconds)}</strong></div>`).join('')||'<p>Не записано</p>');
+  $('timer-history').innerHTML=state.sessions.map(s=>`<tr><td>${esc(new Date(s.startedAt).toLocaleString('ru-RU',{timeZone:'Asia/Tashkent'}))}</td><td>${esc(s.title)}</td><td>${s.status==='cancelled'?'Отменён, не учтён':s.phase==='work'?'Учтён':'Перерыв'}</td><td>${duration(s.elapsedMs/1000)}</td><td>${s.completedPomodoros}</td><td>${esc(s.observation||'Не записано')}</td></tr>`).join('')||'<tr><td colspan="6">Не записано</td></tr>';
   tick();
   if(!s) $('timer-clock').textContent=duration(state.settings.workMinutes*60);
   ambience?.update(state);
@@ -207,7 +207,7 @@ if(!embedded) {
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) void load(); });
   setInterval(tick,250); setInterval(()=>{ if(!document.hidden) void load(); },3000);
   void load(); void context().catch(error=>notice(error.message,true));
-  void get('/api/server-status').then(s=>{ $('timer-backup').textContent=s.backup.lastSuccess?'Резервная копия: '+new Date(s.backup.lastSuccess).toLocaleString('ru-RU',{timeZone:'Asia/Tashkent'}) : 'Резервная копия: No Data'; }).catch(()=>{});
+  void get('/api/server-status').then(s=>{ $('timer-backup').textContent=s.backup.lastSuccess?'Резервная копия: '+new Date(s.backup.lastSuccess).toLocaleString('ru-RU',{timeZone:'Asia/Tashkent'}) : 'Резервная копия ещё не создана'; }).catch(()=>{});
 }
 async function playOrOpen(input={}) {
   if(readOnly)return false;

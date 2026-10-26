@@ -109,7 +109,7 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
         SnackBar(
           content: Text(
             repo.cache('portfolio')['templateError']?.toString() ??
-                'No Data · пакет шаблонов пока не загружен.',
+                'пакет шаблонов пока не загружен.',
           ),
         ),
       );
@@ -195,7 +195,7 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
                   const SizedBox(height: 12),
                   Text(
                     source == null
-                        ? 'Сохранённый пакет · ${definition['capturedAt'] ?? 'No Data'}'
+                        ? 'Сохранённый пакет · ${definition['capturedAt'] ?? 'Не записано'}'
                         : 'Источник: ${source['name']}',
                   ),
                   const SizedBox(height: 12),
@@ -361,7 +361,7 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
                     if (!projects.any((p) => p['status'] == status.key))
                       const Padding(
                         padding: EdgeInsets.all(16),
-                        child: Text('No Data'),
+                        child: Text('Не записано'),
                       ),
                   ],
                 ),
@@ -477,7 +477,7 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
           if (projects.isEmpty)
             const Padding(
               padding: EdgeInsets.all(16),
-              child: Text('No Data · создай первый проект.'),
+              child: Text('создай первый проект.'),
             ),
           if (board)
             projectBoard(shown)
@@ -579,9 +579,7 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
             if (alphas.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(16),
-                child: Text(
-                  'No Data · здесь пока нет альф. Нажми ＋ у нужной зоны.',
-                ),
+                child: Text('здесь пока нет альф. Нажми ＋ у нужной зоны.'),
               ),
             PortfolioGrid(
               key: ValueKey('alphas:${repo.serverId}$selected'),
@@ -619,7 +617,7 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
                         ),
                         SelectableText(
                           (alpha[item.value] ?? '').toString().isEmpty
-                              ? 'No Data'
+                              ? 'Не записано'
                               : alpha[item.value].toString(),
                         ),
                       ],
@@ -758,12 +756,13 @@ class _AlphaHistoryPanelState extends State<AlphaHistoryPanel> {
         if (note != null)
           Padding(padding: const EdgeInsets.all(12), child: Text(note!)),
         if (entries.isEmpty && !loading)
-          const ListTile(title: Text('No Data · сохранённых версий пока нет')),
+          const ListTile(title: Text('сохранённых версий пока нет')),
         for (final entry in entries)
           ExpansionTile(
             title: Text(entry['at'].toString()),
             subtitle: Text(
-              alphaStateNames[object(entry['snapshot'])['state']] ?? 'No Data',
+              alphaStateNames[object(entry['snapshot'])['state']] ??
+                  'Не записано',
             ),
             children: [
               for (final item in {
@@ -780,7 +779,7 @@ class _AlphaHistoryPanelState extends State<AlphaHistoryPanel> {
                     (object(entry['snapshot'])[item.value] ?? '')
                             .toString()
                             .isEmpty
-                        ? 'No Data'
+                        ? 'Не записано'
                         : object(entry['snapshot'])[item.value].toString(),
                   ),
                 ),

@@ -35,7 +35,7 @@ function renderProgress() {
   const known = Number.isInteger(progress) && progress >= 0 && progress <= 100;
   bar.firstElementChild.style.width = `${known ? progress : 0}%`;
   bar.classList.toggle('no-data', !known);
-  bar.setAttribute('aria-valuetext', known ? `${progress}% · оценка продвижения` : 'No Data');
+  bar.setAttribute('aria-valuetext', known ? `${progress}% · оценка продвижения` : 'Не записано');
   if (known) bar.setAttribute('aria-valuenow', String(progress)); else bar.removeAttribute('aria-valuenow');
 }
 function options(selected = $('today-work-ref').value) {
@@ -47,7 +47,7 @@ function options(selected = $('today-work-ref').value) {
 function renderWorkContext() {
   const ref = $('today-work-ref').value;
   const records = timeEntries.filter(item => item.date === draftDate && item.workRef === ref && item.metricId !== 'alphas');
-  $('today-work-hours').textContent = ref && records.length ? `${number.format(records.reduce((sum, item) => sum + item.amount, 0))} ч` : 'No Data';
+  $('today-work-hours').textContent = ref && records.length ? `${number.format(records.reduce((sum, item) => sum + item.amount, 0))} ч` : 'Не записано';
   $('work-impact-details').hidden = !ref;
   if (ref) $('work-impact').dataset.impactRef = ref;
   else { $('work-impact').removeAttribute('data-impact-ref'); $('work-impact').replaceChildren(); }
@@ -66,19 +66,19 @@ function fillResult(result) {
   $('today-focus-window').value = result?.focusWindow ?? '';
   options(result?.workRef ?? '');
   evidenceField(); renderProgress(); renderWorkContext();
-  status(result ? `${stateLabel[result.status]} · сохранено` : 'No Data');
+  status(result ? `${stateLabel[result.status]} · сохранено` : 'Не записано');
 }
 function renderSummary() {
   if (!todaySnapshot) return;
   const result = todaySnapshot.result, problem = todaySnapshot.problem;
   const object = entities.find(item => item.ref === result?.workRef);
   const progress = result?.progress ?? null;
-  $('focus-summary').innerHTML = `<div class="focus-summary-heading"><span class="eyebrow">ГЛАВНОЕ СЕГОДНЯ · ${escapeHtml(dateLabel(todaySnapshot.date))}</span><button type="button" class="text-button" data-open-work>Открыть работу →</button></div><div class="focus-summary-content"><div><h2>${escapeHtml(result?.text || 'No Data')}</h2><p>Проблема: ${escapeHtml(problem?.text || 'No Data')}</p>${object ? `<p>${escapeHtml(typeLabel[object.type] ?? '')} · ${escapeHtml(object.title)}</p>` : ''}${result?.nextStep ? `<p>Следующий ход: ${escapeHtml(result.nextStep)}</p>` : ''}${result?.focusWindow ? `<p>Окно фокуса: ${escapeHtml(result.focusWindow)}</p>` : ''}</div><div class="focus-summary-percent"><strong>${progress === null ? 'No Data' : `${progress}%`}</strong><span>${result ? stateLabel[result.status] : 'Работа ещё не выбрана'}</span></div></div><div class="work-progress-track${progress === null ? ' no-data' : ''}" role="progressbar" aria-label="Главная работа сегодня" aria-valuemin="0" aria-valuemax="100" ${progress === null ? 'aria-valuetext="No Data"' : `aria-valuenow="${progress}" aria-valuetext="${progress}% · оценка продвижения"`}><span style="width:${progress ?? 0}%"></span></div>`;
+  $('focus-summary').innerHTML = `<div class="focus-summary-heading"><span class="eyebrow">ГЛАВНОЕ СЕГОДНЯ · ${escapeHtml(dateLabel(todaySnapshot.date))}</span><button type="button" class="text-button" data-open-work>Открыть работу →</button></div><div class="focus-summary-content"><div><h2>${escapeHtml(result?.text || 'Не записано')}</h2><p>Проблема: ${escapeHtml(problem?.text || 'Не записано')}</p>${object ? `<p>${escapeHtml(typeLabel[object.type] ?? '')} · ${escapeHtml(object.title)}</p>` : ''}${result?.nextStep ? `<p>Следующий ход: ${escapeHtml(result.nextStep)}</p>` : ''}${result?.focusWindow ? `<p>Окно фокуса: ${escapeHtml(result.focusWindow)}</p>` : ''}</div><div class="focus-summary-percent"><strong>${progress === null ? 'Не записано' : `${progress}%`}</strong><span>${result ? stateLabel[result.status] : 'Работа ещё не выбрана'}</span></div></div><div class="work-progress-track${progress === null ? ' no-data' : ''}" role="progressbar" aria-label="Главная работа сегодня" aria-valuemin="0" aria-valuemax="100" ${progress === null ? 'aria-valuetext="Не записано"' : `aria-valuenow="${progress}" aria-valuetext="${progress}% · оценка продвижения"`}><span style="width:${progress ?? 0}%"></span></div>`;
 }
 function render() {
   const { date, week, end, dailyTime, weeklyTime, norms, daysRemaining } = snapshot;
   $('today-date').textContent = dateLabel(date);
-  $('today-hours').textContent = dailyTime.total === null ? 'No Data' : `${number.format(dailyTime.total)} ч`;
+  $('today-hours').textContent = dailyTime.total === null ? 'Не записано' : `${number.format(dailyTime.total)} ч`;
   $('today-hours-detail').textContent = dailyTime.records ? dailyTime.byAllocation.map(item => `${item.title}: ${number.format(item.hours)} ч`).join(' · ') : 'Записей времени за этот день пока нет';
   $('today-completed').textContent = `${snapshot.completed} / ${norms.length}`;
   $('today-completed-detail').textContent = norms.length ? 'норм подтверждено учётными записями' : 'Недельные нормативы ещё не заданы';
@@ -86,12 +86,12 @@ function render() {
   $('today-week-label').textContent = `Нормы недели · ${dateLabel(week)} — ${dateLabel(end)}`;
   $('today-norms').innerHTML = norms.length ? norms.map(metric => {
     const unit = metric.unit === 'hours' ? 'ч' : 'шт.';
-    const actual = metric.actual === null ? 'No Data' : number.format(metric.actual);
+    const actual = metric.actual === null ? 'Не записано' : number.format(metric.actual);
     const remainder = metric.complete ? 'Норма выполнена' : `Осталось по учёту ${number.format(metric.remaining)} ${unit}`;
     const pace = metric.complete ? 'Можно выбрать другую работу' : `В среднем ${number.format(metric.dailyPace)} ${unit}/день до воскресенья`;
-    return `<article class="today-norm${metric.complete ? ' today-norm-complete' : ''}"><div class="today-norm-top"><h3>${escapeHtml(metric.title)}</h3><strong>${actual}<small> / ${number.format(metric.target)} ${unit}</small></strong></div><div class="today-norm-track" role="progressbar" aria-label="Норма недели: ${escapeHtml(metric.title)}" aria-valuemin="0" aria-valuemax="100" ${metric.percent === null ? 'aria-valuetext="No Data"' : `aria-valuenow="${Math.min(metric.percent, 100)}" aria-valuetext="${metric.percent}%"`}><span style="width:${metric.percent === null ? 0 : Math.min(metric.percent, 100)}%"></span></div><p>${remainder}</p><div class="today-norm-bottom"><span>${pace}</span><button type="button" class="text-button" data-today-metric="${metric.id}">Учесть →</button></div></article>`;
-  }).join('') : '<p class="today-note">No Data · задай недельные нормативы в настройках.</p>';
-  $('today-coverage').textContent = weeklyTime.records ? 'Остатки и темп рассчитаны по учтённым записям до выбранного дня. Дни включают выбранный день; доступное время и расписание не заданы.' : 'No Data · до выбранного дня в этой неделе нет записей времени. Сначала внеси уже потраченное время.';
+    return `<article class="today-norm${metric.complete ? ' today-norm-complete' : ''}"><div class="today-norm-top"><h3>${escapeHtml(metric.title)}</h3><strong>${actual}<small> / ${number.format(metric.target)} ${unit}</small></strong></div><div class="today-norm-track" role="progressbar" aria-label="Норма недели: ${escapeHtml(metric.title)}" aria-valuemin="0" aria-valuemax="100" ${metric.percent === null ? 'aria-valuetext="Не записано"' : `aria-valuenow="${Math.min(metric.percent, 100)}" aria-valuetext="${metric.percent}%"`}><span style="width:${metric.percent === null ? 0 : Math.min(metric.percent, 100)}%"></span></div><p>${remainder}</p><div class="today-norm-bottom"><span>${pace}</span><button type="button" class="text-button" data-today-metric="${metric.id}">Учесть →</button></div></article>`;
+  }).join('') : '<p class="today-note">задай недельные нормативы в настройках.</p>';
+  $('today-coverage').textContent = weeklyTime.records ? 'Остатки и темп рассчитаны по учтённым записям до выбранного дня. Дни включают выбранный день; доступное время и расписание не заданы.' : 'до выбранного дня в этой неделе нет записей времени. Сначала внеси уже потраченное время.';
   if (!dirty && !saving) {
     draftDate = date;
     $('work-date').value = date; $('work-date').max = todaySnapshot.date;

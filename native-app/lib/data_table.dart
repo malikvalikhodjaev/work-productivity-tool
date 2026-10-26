@@ -10,7 +10,7 @@ class InspectableTable extends StatelessWidget {
   const InspectableTable({super.key, required this.title, required this.data});
   @override
   Widget build(BuildContext context) {
-    if (data.isEmpty) return const ListTile(title: Text('No Data'));
+    if (data.isEmpty) return const ListTile(title: Text('Записей пока нет'));
     final keys = data.first.keys.take(6).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -53,7 +53,7 @@ class InspectableTable extends StatelessWidget {
                             SizedBox(
                               width: 140,
                               child: Text(
-                                (row[key] ?? 'No Data').toString(),
+                                (row[key] ?? 'Не записано').toString(),
                                 softWrap: true,
                               ),
                             ),

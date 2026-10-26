@@ -31,12 +31,12 @@ export class ProjectViews {
     if(this.mode!=='board')return;
     board.innerHTML=Object.entries(statuses).map(([id,title])=>{
       const projects=portfolio.projects.filter(p=>p.status===id);
-      return `<section class="project-lane" aria-label="${title}"><h3>${title} <span>${projects.length}</span></h3>${projects.map(p=>`<article class="project-board-card ${this.selected()?.id===p.id?'selected':''}"><button type="button" data-board-project="${escape(p.id)}" aria-pressed="${this.selected()?.id===p.id}">${escape(p.name)}</button><p>${p.phase==='operation'?'В эксплуатации':'До эксплуатации'} · альф: ${p.summary.filled} / ${p.summary.slots}</p><p>Зон с пробелами: ${p.summary.gaps}</p><label>Состояние<select data-board-status="${escape(p.id)}">${Object.entries(statuses).map(([value,label])=>`<option value="${value}" ${value===p.status?'selected':''}>${label}</option>`).join('')}</select></label><button type="button" class="text-button" data-board-copy="${escape(p.id)}">Копировать структуру</button></article>`).join('') || '<p class="project-empty">No Data</p>'}</section>`;
+      return `<section class="project-lane" aria-label="${title}"><h3>${title} <span>${projects.length}</span></h3>${projects.map(p=>`<article class="project-board-card ${this.selected()?.id===p.id?'selected':''}"><button type="button" data-board-project="${escape(p.id)}" aria-pressed="${this.selected()?.id===p.id}">${escape(p.name)}</button><p>${p.phase==='operation'?'В эксплуатации':'До эксплуатации'} · альф: ${p.summary.filled} / ${p.summary.slots}</p><p>Зон с пробелами: ${p.summary.gaps}</p><label>Состояние<select data-board-status="${escape(p.id)}">${Object.entries(statuses).map(([value,label])=>`<option value="${value}" ${value===p.status?'selected':''}>${label}</option>`).join('')}</select></label><button type="button" class="text-button" data-board-copy="${escape(p.id)}">Копировать структуру</button></article>`).join('') || '<p class="project-empty">Не записано</p>'}</section>`;
     }).join('');
   }
   copyDialog(source=null){
     const portfolio=this.portfolio(),catalog=portfolio.projectTemplates ?? [];
-    if(!source&&!catalog.length){this.grid.dialog('Шаблоны проектов',`<p>No Data · пакет шаблонов недоступен.</p><p>${escape(portfolio.templateError ?? 'Загрузи свой справочник альф в локальные источники.')}</p>`,null);return;}
+    if(!source&&!catalog.length){this.grid.dialog('Шаблоны проектов',`<p>пакет шаблонов недоступен.</p><p>${escape(portfolio.templateError ?? 'Загрузи свой справочник альф в локальные источники.')}</p>`,null);return;}
     const projectDefinition=source?{id:source.id,version:source.copyVersion,capturedAt:source.updatedAt,areas:source.zones,alphas:portfolio.alphas.filter(a=>a.projectId===source.id).map(a=>({sourceId:a.id,areaId:a.zoneId}))}:null;
     let definition=projectDefinition || catalog[0];
     const clientId=crypto.randomUUID(),ids=new Map();
@@ -48,7 +48,7 @@ export class ProjectViews {
     });
     const count=()=>{const selected=[...dialog.querySelectorAll('[name=area]:checked')].map(c=>c.value);dialog.querySelector('[data-template-count]').textContent=`Будет создано альф и подальф: ${definition.alphas.filter(a=>selected.includes(a.areaId)).length}. Заполнено: 0.`;};
     const populate=()=>{
-      dialog.querySelector('[data-template-date]').textContent=source?'Независимая копия выбранной структуры':`Сохранённый пакет · ${definition.capturedAt || 'No Data'} · ${definition.areas.length} областей`;
+      dialog.querySelector('[data-template-date]').textContent=source?'Независимая копия выбранной структуры':`Сохранённый пакет · ${definition.capturedAt || 'Не записано'} · ${definition.areas.length} областей`;
       dialog.querySelector('[data-template-areas]').innerHTML='<legend>Области интересов</legend>'+definition.areas.map(a=>`<label class="grid-column-choice"><span>${escape(a.title)}</span><input type="checkbox" name="area" value="${escape(a.id)}" checked></label>`).join('');count();
     };
     dialog.querySelector('[name=template]')?.addEventListener('change',event=>{definition=catalog.find(t=>t.id===event.target.value);populate();});

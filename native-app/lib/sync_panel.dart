@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'repository.dart';
+import 'timer_command_notice.dart';
 
 class SyncPanel extends StatelessWidget {
   final DashboardRepository repo;
@@ -36,7 +37,7 @@ class SyncPanel extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'Ожидает отправки: ${repo.pending.length} · Требует разбора: $conflicts',
+              'Ожидает отправки: ${repo.pending.where((q) => q['state'] != 'conflict').length} · Не удалось отправить: $conflicts',
             ),
             Text(
               'Последняя связь с сервером: ${stamp(repo.local.get('lastSyncAt'))}',
@@ -63,6 +64,8 @@ class SyncPanel extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(repo.status),
+            if (!repo.durableTimer)
+              TimerCommandNotice(repo: repo, retry: repo.checkPendingTimer),
             if (repo.local.get('lastSyncError') != null)
               ExpansionTile(
                 title: const Text('Подробности синхронизации'),
@@ -72,7 +75,7 @@ class SyncPanel extends StatelessWidget {
               ),
             if (conflicts > 0)
               const Text(
-                'Исходники сохранены. Открой записи ниже и разбери конфликт перед учётом на сервере.',
+                'Исходные правки сохранены. Открой конфликтные записи ниже, чтобы выбрать сохраняемый вариант.',
               ),
           ],
         ),

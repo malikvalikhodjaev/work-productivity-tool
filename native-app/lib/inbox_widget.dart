@@ -57,7 +57,7 @@ class _InboxWidgetState extends State<InboxWidget> {
               .isEmpty)
             const Padding(
               padding: EdgeInsets.all(20),
-              child: Text('No Data · сообщения боту появятся здесь.'),
+              child: Text('сообщения боту появятся здесь.'),
             ),
           for (final item in entries.where(
             (e) => filter == 'favorites'

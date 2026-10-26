@@ -25,8 +25,8 @@ const shift = (value, days) => { const d = date(value); d.setUTCDate(d.getUTCDat
 const unit = metric => metric.unit === 'hours' ? 'ч' : 'шт.';
 const clamp = value => Math.min(100, Math.max(0, value ?? 0));
 const observed = metric => metric.recordCount > 0;
-const actualLabel = metric => observed(metric) ? format(metric.actual) : 'No Data';
-const targetLabel = metric => metric.target === null ? 'No Data' : format(metric.target);
+const actualLabel = metric => observed(metric) ? format(metric.actual) : 'Не записано';
+const targetLabel = metric => metric.target === null ? 'Не записано' : format(metric.target);
 
 async function api(url, options = {}) {
   const response = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...options.headers } });
@@ -44,7 +44,7 @@ function toast(message) {
 
 function track(metric, extraClass = '') {
   const hasData = observed(metric);
-  const aria = metric.target === null ? 'Норматив не задан' : hasData ? `${metric.title}: ${format(metric.actual)} из ${format(metric.target)} ${unit(metric)}` : `${metric.title}: No Data, записей пока нет`;
+  const aria = metric.target === null ? 'Норматив не задан' : hasData ? `${metric.title}: ${format(metric.actual)} из ${format(metric.target)} ${unit(metric)}` : `${metric.title}: Не записано, записей пока нет`;
   return `<div class="progress-track ${extraClass} ${hasData ? '' : 'no-data'}" role="progressbar" aria-label="${esc(aria)}" aria-valuemin="0" aria-valuemax="100" ${hasData ? `aria-valuenow="${clamp(metric.percent)}"` : ''} aria-valuetext="${esc(aria)}"><div class="progress-fill" style="width:${hasData ? clamp(metric.percent) : 0}%"></div></div>`;
 }
 
@@ -52,7 +52,7 @@ function card(metric) {
   const unset = metric.target === null;
   const finished = !unset && metric.actual >= metric.target;
   const bottom = unset ? 'Недельный план не задан' : !observed(metric) ? 'Данных о выполнении пока нет' : finished ? `Норматив выполнен${metric.actual > metric.target ? ` · сверх плана ${format(metric.actual - metric.target)} ${unit(metric)}` : ''}` : `Осталось ${format(metric.remaining)} ${unit(metric)}`;
-  return `<article class="goal-card ${unset ? 'unset' : ''} ${observed(metric) ? '' : 'without-data'}" data-color="${metric.color}"><div class="card-heading"><div class="card-title"><span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true">${icons[metric.id]}</svg></span><h3>${metric.title}</h3></div><button class="edit-card" data-edit="${metric.id}" aria-label="Изменить норматив: ${metric.title}">${editIcon}</button></div><p class="card-description">${metric.description}</p><div class="card-value"><strong>${actualLabel(metric)}</strong><span class="plan-value">/ ${targetLabel(metric)} ${unit(metric)}</span>${unset ? '' : `<span class="percent">${observed(metric) ? `${metric.percent}%` : 'No Data'}</span>`}</div>${track(metric)}<div class="card-bottom"><span>${bottom}</span>${unset ? `<button class="text-button" data-edit="${metric.id}">Задать</button>` : `<span>${metric.recordCount ? `${metric.recordCount} зап.` : 'No Data'}</span>`}</div></article>`;
+  return `<article class="goal-card ${unset ? 'unset' : ''} ${observed(metric) ? '' : 'without-data'}" data-color="${metric.color}"><div class="card-heading"><div class="card-title"><span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true">${icons[metric.id]}</svg></span><h3>${metric.title}</h3></div><button class="edit-card" data-edit="${metric.id}" aria-label="Изменить норматив: ${metric.title}">${editIcon}</button></div><p class="card-description">${metric.description}</p><div class="card-value"><strong>${actualLabel(metric)}</strong><span class="plan-value">/ ${targetLabel(metric)} ${unit(metric)}</span>${unset ? '' : `<span class="percent">${observed(metric) ? `${metric.percent}%` : 'Не записано'}</span>`}</div>${track(metric)}<div class="card-bottom"><span>${bottom}</span>${unset ? `<button class="text-button" data-edit="${metric.id}">Задать</button>` : `<span>${metric.recordCount ? `${metric.recordCount} зап.` : 'Не записано'}</span>`}</div></article>`;
 }
 
 function guidesCard(guides, mentor) {
@@ -62,15 +62,15 @@ function guidesCard(guides, mentor) {
   const hasTargets = guides.target !== null || mentor.target !== null;
   const weighted = total ? ((guides.target === null ? 0 : Math.min(guides.actual, guides.target)) + (mentor.target === null ? 0 : Math.min(mentor.actual, mentor.target))) / total * 100 : 0;
   const line = (metric, label, extra) => `<div><div class="guide-line"><span>${label}</span><strong>${actualLabel(metric)} / ${targetLabel(metric)} ч</strong></div>${track(metric, extra)}</div>`;
-  return `<article class="goal-card guide-card ${hasData ? '' : 'without-data'}"><div class="card-heading"><div class="card-title"><span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true">${icons.guides}</svg></span><h3>Руководства и проект</h3></div><button class="edit-card" data-edit="guides" aria-label="Изменить норматив руководств и наставника">${editIcon}</button></div><div class="guide-layout"><div class="guide-bars">${line(guides, 'Самостоятельная работа', '')}${line(mentor, 'Разбор с наставником', 'mentor-track')}</div><div class="guide-ring ${hasData ? '' : 'no-data'}" style="--ring-angle:${hasData ? clamp(weighted) * 3.6 : 0}deg" role="img" aria-label="${hasData ? `Выполнено ${Math.round(weighted)} процентов нормативов руководств и наставника` : 'No Data: работа пока не учтена'}"><div class="ring-inner"><strong>${hasData ? `${format(combined)}<span style="font-size:16px"> ч</span>` : 'No Data'}</strong><span>${hasTargets ? `из ${format(total)} ч` : 'нет норматива'}</span></div></div></div><div class="guide-bottom"><span>${hasTargets ? `Ориентир: ${format(total)} ч в неделю` : 'Задай нормативы для двух направлений'}</span><span>${!hasData ? 'No Data' : guides.actual >= (guides.target ?? Infinity) && mentor.actual >= (mentor.target ?? Infinity) ? 'Оба норматива выполнены' : `${Math.round(weighted)}% плана`}</span></div></article>`;
+  return `<article class="goal-card guide-card ${hasData ? '' : 'without-data'}"><div class="card-heading"><div class="card-title"><span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true">${icons.guides}</svg></span><h3>Руководства и проект</h3></div><button class="edit-card" data-edit="guides" aria-label="Изменить норматив руководств и наставника">${editIcon}</button></div><div class="guide-layout"><div class="guide-bars">${line(guides, 'Самостоятельная работа', '')}${line(mentor, 'Разбор с наставником', 'mentor-track')}</div><div class="guide-ring ${hasData ? '' : 'no-data'}" style="--ring-angle:${hasData ? clamp(weighted) * 3.6 : 0}deg" role="img" aria-label="${hasData ? `Выполнено ${Math.round(weighted)} процентов нормативов руководств и наставника` : 'Не записано: работа пока не учтена'}"><div class="ring-inner"><strong>${hasData ? `${format(combined)}<span style="font-size:16px"> ч</span>` : 'Не записано'}</strong><span>${hasTargets ? `из ${format(total)} ч` : 'нет норматива'}</span></div></div></div><div class="guide-bottom"><span>${hasTargets ? `Ориентир: ${format(total)} ч в неделю` : 'Задай нормативы для двух направлений'}</span><span>${!hasData ? 'Не записано' : guides.actual >= (guides.target ?? Infinity) && mentor.actual >= (mentor.target ?? Infinity) ? 'Оба норматива выполнены' : `${Math.round(weighted)}% плана`}</span></div></article>`;
 }
 
 function render() {
   $('dashboard').setAttribute('aria-busy', 'false');
   $('week-label').textContent = weekLabel(state);
   $('week-tag').textContent = state.week === state.currentWeek ? 'Текущая неделя' : state.week < state.currentWeek ? 'Прошлая неделя' : 'Будущая неделя';
-  $('hours-actual').textContent = state.summary.hourRecords > 0 ? format(state.summary.actualHours) : 'No Data';
-  $('hours-target').textContent = ` ч · план по нормам ${state.summary.targetHours ? format(state.summary.targetHours) : 'No Data'} ч`;
+  $('hours-actual').textContent = state.summary.hourRecords > 0 ? format(state.summary.actualHours) : 'Не записано';
+  $('hours-target').textContent = ` ч · план по нормам ${state.summary.targetHours ? format(state.summary.targetHours) : 'Не записано'} ч`;
   $('hours-hint').textContent = state.summary.unconfigured ? 'План учитывает заданные нормативы часов' : 'По всем направлениям недели';
   $('completed').textContent = state.summary.completed;
   $('configured').textContent = ` / ${state.summary.configured}`;
@@ -83,14 +83,14 @@ function render() {
   const mentor = state.metrics.find(metric => metric.id === 'mentor');
   const chosen = state.metrics.filter(metric => metric.target !== null);
   const guidePair = guides.target !== null && mentor.target !== null;
-  $('goals-grid').innerHTML = (guidePair ? guidesCard(guides, mentor) : '') + chosen.filter(metric => !guidePair || !['guides', 'mentor'].includes(metric.id)).map(card).join('') || '<div class="project-empty">No Data · выбери направления и задай нормативы в «Мои нормативы».</div>';
+  $('goals-grid').innerHTML = (guidePair ? guidesCard(guides, mentor) : '') + chosen.filter(metric => !guidePair || !['guides', 'mentor'].includes(metric.id)).map(card).join('') || '<div class="project-empty">выбери направления и задай нормативы в «Мои нормативы».</div>';
   const pending = state.metrics.filter(m => m.unit === 'hours' && m.target !== null && m.remaining > 0);
   $('weekly-next-step').textContent = pending.length ? 'До нормы по учтённым записям: ' + pending.map(m => `${m.title} — ${format(m.remaining)} ч`).join(' · ') : 'Заданные нормативы часов выполнены или пока не заданы.';
   $('entry-count').textContent = state.entries.length;
   $('journal').innerHTML = state.entries.length ? `<div class="journal-list">${state.entries.map(entry => {
     const metric = state.metrics.find(item => item.id === entry.metricId) ?? { title: entry.allocation === 'outside' ? 'Вне нормативов' : 'Не разобрано', unit: 'hours' };
     return `<div class="journal-row"><span class="journal-date">${date(entry.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</span><div><div class="journal-title">${esc(entry.title || metric.title)}</div><div class="journal-category">${metric.title} · ${entry.source === 'manual' ? 'Вручную' : esc(entry.source)}</div></div><strong class="journal-amount">${format(entry.amount)} ${unit(metric)}</strong><button class="delete-entry" data-delete="${entry.id}" aria-label="Удалить запись: ${esc(entry.title || metric.title)}">×</button></div>`;
-  }).join('')}</div>` : '<div class="journal-empty"><div><strong>No Data</strong><p>Нормативы уже готовы. Добавь первую запись — прогресс посчитается автоматически.</p></div></div>';
+  }).join('')}</div>` : '<div class="journal-empty"><div><strong>Не записано</strong><p>Нормативы уже готовы. Добавь первую запись — прогресс посчитается автоматически.</p></div></div>';
   $('save-label').textContent = `Недельные записи сохранены · ${new Date(state.updatedAt).toLocaleTimeString('ru-RU', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit' })}`;
   window.dispatchEvent(new CustomEvent('rhythm:week-loaded', { detail: { week: state.week } }));
 }
