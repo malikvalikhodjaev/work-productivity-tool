@@ -11,6 +11,7 @@ import 'goal_change_scale.dart';
 import 'model_hierarchy.dart';
 import 'goal_hierarchy.dart';
 import 'goal_row_drag.dart';
+import 'characteristic_fields.dart';
 import 'repository.dart';
 import 'workspace_table.dart';
 import 'inline_cell.dart';
@@ -341,13 +342,10 @@ class _GoalsTableState extends State<GoalsTable> {
     return InlineCell(
       key: ValueKey('goal-cell:$id:${goal['id']}'),
       text: goal[id]?.toString() ?? '',
-      label: const {
-        'title': 'Индикатор',
-        'physicalSystem': 'Физическая система',
-        'unit': 'Единица / период',
-        'target': 'Предпочтительная мною шкала',
-        'dueDate': 'Дедлайн цели · ГГГГ-ММ-ДД',
-      }[id]!,
+      label: widget.repo
+          .goalColumns()
+          .firstWhere((c) => c['id'] == id)['title']
+          .toString(),
       maxLines: id == 'physicalSystem' ? 3 : 1,
       displayText: id == 'title' ? '${goal['_wbs']} · ${goal['title']}' : null,
       draft: object(widget.repo.local.get(draftKey))['text'] as String?,
@@ -405,7 +403,7 @@ class _GoalsTableState extends State<GoalsTable> {
 
   Widget rowMenu(Json g) => PopupMenuButton<String>(
     key: ValueKey('goal-menu:${g['id']}'),
-    tooltip: 'Меню цели',
+    tooltip: 'Меню характеристики',
     icon: const Icon(Icons.more_horiz),
     onSelected: (action) => rowAction(g, action),
     itemBuilder: (_) => [
@@ -448,7 +446,7 @@ class _GoalsTableState extends State<GoalsTable> {
         .map((g) => g['id'].toString())
         .toSet();
     final tools = <Widget>[
-      Text('Индикаторов: ${items.length}'),
+      Text('Характеристик: ${items.length}'),
       PopupMenuButton<String>(
         tooltip: 'Иерархия целей',
         onSelected: (action) => collapse(action == 'expand' ? {} : parents),
@@ -564,8 +562,8 @@ class _GoalsTableState extends State<GoalsTable> {
             if (items.isEmpty)
               Text(
                 widget.goals.isEmpty
-                    ? 'Добавь первую цель кнопкой «＋ Цель».'
-                    : 'По этим фильтрам целей нет. Измени или сбрось фильтры.',
+                    ? 'Добавь первую характеристику кнопкой «＋ Характеристика».'
+                    : 'По этим фильтрам характеристик нет. Измени или сбрось фильтры.',
               ),
             WorkspaceTable(
               key: const ValueKey('goals-hierarchy-table'),
@@ -612,11 +610,13 @@ class _GoalsTableState extends State<GoalsTable> {
                   ),
               ],
               value: (g, id) => id == '*'
-                  ? '${g['title']} ${g['physicalSystem'] ?? ''} ${g['unit'] ?? ''} ${object(g['customValues']).values.join(' ')} ${goalStatusLabel(g['status'])}'
+                  ? '${g['title']} ${g['physicalSystem'] ?? ''} ${g['unit'] ?? ''} ${characteristicTypes[g['characteristicType']] ?? ''} ${object(g['customValues']).values.join(' ')} ${goalStatusLabel(g['status'])}'
                   : id == 'measurement'
                   ? object(g['measurement'])['date']
                   : id == 'status'
                   ? goalStatusLabel(g[id])
+                  : id == 'characteristicType'
+                  ? characteristicTypes[g[id]] ?? ''
                   : object(g['customValues']).containsKey(id)
                   ? object(g['customValues'])[id]
                   : g[id],
@@ -671,6 +671,47 @@ class _GoalsTableState extends State<GoalsTable> {
                           rowMenu(g),
                         ],
                       ),
+                    );
+                  case 'characteristicType':
+                    return DropdownButtonFormField<String>(
+                      key: ValueKey(
+                        'characteristic-type:${g['id']}:${g['characteristicType']}',
+                      ),
+                      initialValue:
+                          characteristicTypes.containsKey(
+                            g['characteristicType'],
+                          )
+                          ? g['characteristicType'].toString()
+                          : '',
+                      isExpanded: true,
+                      itemHeight: null,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: InputBorder.none,
+                      ),
+                      items: [
+                        const DropdownMenuItem(
+                          value: '',
+                          child: Text('Выбрать тип'),
+                        ),
+                        for (final type in characteristicTypes.entries)
+                          DropdownMenuItem(
+                            value: type.key,
+                            child: Text(type.value, softWrap: true),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        try {
+                          widget.repo.editGoalField(
+                            g['id'].toString(),
+                            'characteristicType',
+                            value == '' ? null : value,
+                            expectedGoal: g,
+                          );
+                        } catch (e) {
+                          error(e);
+                        }
+                      },
                     );
                   case 'physicalSystem':
                   case 'target':
@@ -813,7 +854,7 @@ class GoalFocusPage extends StatelessWidget {
       return Scaffold(
         key: ValueKey('goal-focus:$goalId'),
         appBar: AppBar(
-          title: const Text('Моделирование цели'),
+          title: const Text('Моделирование характеристики'),
           actions: [
             ActivityStatus(repo: repo, compact: true, showTimer: false),
           ],

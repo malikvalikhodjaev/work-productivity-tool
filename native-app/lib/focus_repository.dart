@@ -95,6 +95,7 @@ class FocusRepository extends DashboardRepository {
     Json input,
     String entity, {
     Json? draft,
+    Json? expectedEntity,
     dynamic expectedUpdatedAt,
     dynamic expectedTarget,
   }) {

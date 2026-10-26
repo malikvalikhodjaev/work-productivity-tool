@@ -63,7 +63,14 @@ class _InlineCellState extends State<InlineCell> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          error = e.toString();
+          error = e is StateError
+              ? e.message.toString()
+              : e is FormatException
+              ? e.message
+              : e.toString().replaceFirst(
+                  RegExp(r'^(Exception: |Bad state: |FormatException: )'),
+                  '',
+                );
           saving = false;
         });
       }
@@ -119,7 +126,17 @@ class _InlineCellState extends State<InlineCell> {
             maxLines: widget.maxLines,
             decoration: InputDecoration(
               labelText: widget.label,
-              errorText: error,
+              error: error == null
+                  ? null
+                  : Text(
+                      error!,
+                      key: const ValueKey('inline-cell-error'),
+                      softWrap: true,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontSize: 12,
+                      ),
+                    ),
               helperText: widget.maxLines == 1
                   ? 'Enter — сохранить · Esc — отменить'
                   : 'Переносы строк сохраняются',

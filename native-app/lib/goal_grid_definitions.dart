@@ -1,6 +1,17 @@
 // Stable built-in IDs shared with lib/goal-grid.mjs.
 const List<Map<String, dynamic>> defaultGoalColumns = [
-  {"id": "title", "title": "Индикатор", "type": "text", "width": 400},
+  {"id": "title", "title": "Характеристика", "type": "text", "width": 400},
+  {
+    "id": "characteristicType",
+    "title": "Тип",
+    "type": "select",
+    "width": 220,
+    "options": {
+      "indicator": "Индикатор",
+      "monitoring": "Мониторинг",
+      "guardrail": "Ограничение (guardrail)",
+    },
+  },
   {
     "id": "physicalSystem",
     "title": "Физическая система",

@@ -41,6 +41,7 @@ import 'connection_bootstrap.dart';
 import 'goal_progress.dart';
 import 'goal_table.dart';
 import 'goal_status.dart';
+import 'characteristic_fields.dart';
 import 'model_link.dart';
 import 'systems_panel.dart';
 import 'norms_overview.dart';
@@ -190,7 +191,7 @@ class _DashboardHomeState extends State<DashboardHome>
   String planningDate = today();
   bool planEntryPending = true;
   static const sections = [
-    'Показатели',
+    'Характеристики',
     'Проекты и модели',
     'Работа',
     'Письмо',
@@ -264,7 +265,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.41',
+        'clientVersion': '0.1.42',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -2269,18 +2270,37 @@ class _DashboardHomeState extends State<DashboardHome>
     final base = rows(repo.cache('workspace')['goals'])
         .where((g) => g['id'] == id)
         .firstOrNull;
+    final formDraft = object(repo.local.get('form:$key'));
+    final baseKey = 'goalFormBase:${repo.serverId}:$id';
+    final legacyStale =
+        formDraft.isNotEmpty &&
+        repo.local.get(baseKey) == null &&
+        formDraft['updatedAt'] != null &&
+        formDraft['updatedAt'] != base?['updatedAt'];
+    if (!legacyStale &&
+        (formDraft.isEmpty || repo.local.get(baseKey) == null)) {
+      repo.local.set(baseKey, previous ?? base ?? <String, dynamic>{});
+    }
+    final editingBase = object(repo.local.get(baseKey));
     await editEntity(
-      'Индикатор и шкала',
+      'Характеристика и шкала',
       key,
       {
         ...previous ?? {},
         'id': id,
         'status': previous?['status'] ?? 'active',
+        'characteristicType': previous?['characteristicType'] ?? '',
         'direction': previous?['direction'] ?? 'up',
         'parentId': previous?['parentId'] ?? parentId ?? '',
       },
       [
-        const FieldSpec('title', 'Индикатор'),
+        const FieldSpec('title', 'Характеристика'),
+        const FieldSpec(
+          'characteristicType',
+          'Тип',
+          options: {'': 'Выбрать тип', ...characteristicTypes},
+          nullable: true,
+        ),
         const FieldSpec('physicalSystem', 'Физическая система', lines: 3),
         FieldSpec(
           'parentId',
@@ -2317,12 +2337,22 @@ class _DashboardHomeState extends State<DashboardHome>
         'saveGoal',
         {
           ...input,
+          'characteristicType': input['characteristicType'] == ''
+              ? null
+              : input['characteristicType'],
           'expectedParentId': base?['parentId'],
-          if (base == null) 'id': null,
-          if (base == null) 'clientId': id,
+          if (previous == null) 'id': null,
+          if (previous == null) 'clientId': id,
         },
         key,
-        expectedUpdatedAt: base?['updatedAt'],
+        expectedUpdatedAt: legacyStale
+            ? formDraft['updatedAt']
+            : base?['updatedAt'],
+        expectedEntity: legacyStale
+            ? null
+            : editingBase.isEmpty
+            ? previous ?? base
+            : editingBase,
       ),
     );
   }
@@ -2369,10 +2399,10 @@ class _DashboardHomeState extends State<DashboardHome>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         sectionTitle(
-          'Индикаторы',
+          'Целевые характеристики',
           trailing: TextButton(
             onPressed: () => editGoal(),
-            child: const Text('＋ Индикатор'),
+            child: const Text('＋ Характеристика'),
           ),
         ),
         GoalsTable(
@@ -3180,7 +3210,7 @@ class _DashboardHomeState extends State<DashboardHome>
                                 const SizedBox(height: 20),
                                 const SizedBox(height: 12),
                                 const Text(
-                                  'I&W · Native 0.1.41',
+                                  'I&W · Native 0.1.42',
                                   style: TextStyle(fontSize: 11),
                                 ),
                               ],

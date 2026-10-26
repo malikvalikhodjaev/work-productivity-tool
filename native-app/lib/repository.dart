@@ -13,6 +13,7 @@ import 'grid_definitions.dart';
 import 'goal_grid_definitions.dart';
 import 'model_hierarchy.dart';
 import 'goal_hierarchy.dart';
+import 'characteristic_fields.dart';
 import 'active_timer_conflict.dart';
 
 class ApiFailure implements Exception {
@@ -441,6 +442,7 @@ class DashboardRepository extends ChangeNotifier {
       if (serverId == null) local.set('serverId', context['serverId']);
       local.capture('context', context);
       online = true;
+      await recoverLegacyGoalValidation();
       if (local.get('pendingTimer') != null) await _recoverTimerCommand();
       for (final queued in pending) {
         if (base != syncBase) {
@@ -607,17 +609,85 @@ class DashboardRepository extends ChangeNotifier {
     }
   }
 
+  Future<void> recoverLegacyGoalValidation() async {
+    final rejected = local.queue.where((q) {
+      final body = object(q['body']), input = object(body['input']);
+      return q['state'] == 'conflict' &&
+          q['server_id'] == serverId &&
+          body['module'] == 'workspace' &&
+          body['action'] == 'saveGoal' &&
+          (q['error'] ?? '').toString() == 'Единица: не больше 30 символов.' &&
+          input['unit'] is String &&
+          input['unit'].length > 30 &&
+          input['unit'].length <= 200;
+    }).toList();
+    if (rejected.isEmpty) return;
+    final fresh = await request('/api/workspace');
+    if (object(fresh['goalTextLimits'])['unit'] != 200) return;
+    local.atomic(() {
+      local.capture('workspace', fresh);
+      final history = rows(local.get('goalValidationReplayHistory'));
+      for (final item in rejected) {
+        history.add({
+          ...item,
+          'replayedAt': DateTime.fromMillisecondsSinceEpoch(
+            now,
+            isUtc: true,
+          ).toIso8601String(),
+          'reason': 'server_unit_limit_extended',
+          'commandChanged': false,
+        });
+        local.retry(item['id'].toString());
+      }
+      local.set('goalValidationReplayHistory', history);
+    });
+  }
+
+  void saveCharacteristicFields(String id, Json patch, {Json? expectedGoal}) {
+    validateCharacteristicFields(patch);
+    if (cache('workspace')['goalFieldEditingVersion'] != 1) {
+      throw StateError(
+        'Сначала синхронизируй характеристики с обновлённым сервером. Введённый текст сохранён.',
+      );
+    }
+    final before =
+        expectedGoal ??
+        entities('goals', 'goal').firstWhere((g) => g['id'] == id);
+    final changes = <Json>[
+      for (final field in characteristicEditableFields)
+        if (patch.containsKey(field) &&
+            jsonEncode(before[field]) != jsonEncode(patch[field]))
+          {'field': field, 'before': before[field], 'value': patch[field]},
+    ];
+    if (changes.isEmpty) return;
+    goalGridCommand('editGoalFields', {'id': id, 'changes': changes});
+  }
+
   void nativeSave(
     String module,
     String action,
     Json input,
     String entity, {
     Json? draft,
+    Json? expectedEntity,
     dynamic expectedUpdatedAt,
     dynamic expectedTarget,
   }) {
     if (serverId == null) {
       throw StateError('Сначала подключи приложение к своему серверу.');
+    }
+    if (module == 'workspace' && action == 'saveGoal') {
+      validateCharacteristicFields(input);
+      if (input['id'] != null &&
+          expectedEntity != null &&
+          cache('workspace')['goalFieldEditingVersion'] == 1) {
+        saveCharacteristicFields(
+          input['id'].toString(),
+          input,
+          expectedGoal: expectedEntity,
+        );
+        return;
+      }
     }
     if (module == 'pomodoroTarget') {
       validateNormTimeType(input);
@@ -767,6 +837,12 @@ class DashboardRepository extends ChangeNotifier {
         'Сначала синхронизируйся с обновлённым сервером индикаторов.',
       );
     }
+    if (field == 'characteristicType' &&
+        cache('workspace')['goalFieldEditingVersion'] != 1) {
+      throw StateError(
+        'Сначала синхронизируй характеристики с обновлённым сервером.',
+      );
+    }
     if (field == 'trashedAt' && cache('workspace')['goalTrashVersion'] != 1) {
       throw StateError(
         'Сначала синхронизируйся с сервером, поддерживающим корзину целей. Строка не удалена.',
@@ -781,6 +857,7 @@ class DashboardRepository extends ChangeNotifier {
       'status',
       'trashedAt',
       'physicalSystem',
+      'characteristicType',
     ].contains(field)) {
       throw ArgumentError('Это поле редактируется через подробности цели.');
     }
@@ -788,34 +865,40 @@ class DashboardRepository extends ChangeNotifier {
         expectedGoal ??
         entities('goals', 'goal').firstWhere((g) => g['id'] == id);
     final before = goal[field];
-    final input = {
-      for (final key in [
-        'id',
-        'title',
-        'unit',
-        'baseline',
-        'target',
-        'direction',
-        'dueDate',
-        'status',
-        'trashedAt',
-        'parentId',
-        'characteristicId',
-        'workRef',
-        'physicalSystem',
-        'customValues',
-      ])
-        if (goal.containsKey(key)) key: goal[key],
-      field: value,
-      'expectedParentId': parentOf(goal),
-    };
-    nativeSave(
-      'workspace',
-      'saveGoal',
-      input,
-      'goal:$id',
-      expectedUpdatedAt: goal['updatedAt'],
-    );
+    validateCharacteristicFields({field: value});
+    if (cache('workspace')['goalFieldEditingVersion'] == 1) {
+      saveCharacteristicFields(id, {field: value}, expectedGoal: goal);
+    } else {
+      final input = {
+        for (final key in [
+          'id',
+          'title',
+          'unit',
+          'baseline',
+          'target',
+          'direction',
+          'dueDate',
+          'status',
+          'trashedAt',
+          'parentId',
+          'characteristicId',
+          'workRef',
+          'physicalSystem',
+          'customValues',
+          'characteristicType',
+        ])
+          if (goal.containsKey(key)) key: goal[key],
+        field: value,
+        'expectedParentId': parentOf(goal),
+      };
+      nativeSave(
+        'workspace',
+        'saveGoal',
+        input,
+        'goal:$id',
+        expectedUpdatedAt: goal['updatedAt'],
+      );
+    }
     if (remember) {
       local.set(
         'goalUndo',
@@ -838,11 +921,20 @@ class DashboardRepository extends ChangeNotifier {
       rows(local.get('goalUndo')).any((r) => r['serverId'] == serverId);
 
   List<Json> goalColumns({bool archived = false}) {
+    final cachedDefinitions = rows(cache('workspace')['goalColumnDefinitions']);
+    final definitions = cachedDefinitions.isEmpty
+        ? defaultGoalColumns
+        : cachedDefinitions;
+    final additions = rows(
+      cache('workspace')['characteristicColumnDefinitions'],
+    ).where((c) => !definitions.any((d) => d['id'] == c['id'])).toList();
     final all = <String, Json>{
-      for (final c
-          in rows(cache('workspace')['goalColumnDefinitions']).isEmpty
-              ? defaultGoalColumns
-              : rows(cache('workspace')['goalColumnDefinitions']))
+      for (final c in [
+        for (final base in definitions) ...[
+          base,
+          if (base['id'] == 'title') ...additions,
+        ],
+      ])
         c['id'].toString(): {'revision': 0, ...c},
       for (final c in rows(cache('workspace')['goalColumns']))
         c['id'].toString(): {...c},
@@ -1289,6 +1381,20 @@ class DashboardRepository extends ChangeNotifier {
     }
     for (final queued in pending) {
       final body = object(queued['body']), input = object(body['input']);
+      if (collection == 'goals' &&
+          queued['state'] != 'conflict' &&
+          body['module'] == 'workspace' &&
+          body['action'] == 'editGoalFields') {
+        final key = 'goal:${input['id']}', before = items[key];
+        if (before != null) {
+          items[key] = {
+            ...before,
+            for (final change in rows(input['changes']))
+              change['field'].toString(): change['value'],
+          };
+        }
+        continue;
+      }
       if (collection == 'goals' &&
           queued['state'] != 'conflict' &&
           body['module'] == 'workspace' &&
@@ -1794,13 +1900,27 @@ class DashboardRepository extends ChangeNotifier {
             'editGoalCell',
             'updateGoalColumn',
             'moveGoal',
+            'editGoalFields',
           ].contains(body['action'])) {
             final fresh = await request('/api/workspace');
             if (item['server_id'] != serverId) {
               throw StateError('Правка связана с другой установкой.');
             }
             local.capture('workspace', fresh);
-            if (body['action'] == 'moveGoal') {
+            if (body['action'] == 'editGoalFields') {
+              final row = rows(fresh['goals'])
+                  .where((r) => r['id'] == input['id'])
+                  .firstOrNull;
+              if (row == null) {
+                throw StateError(
+                  'Характеристика не найдена. Исходная правка сохранена.',
+                );
+              }
+              input['changes'] = [
+                for (final c in rows(input['changes']))
+                  {...c, 'before': row[c['field']]},
+              ];
+            } else if (body['action'] == 'moveGoal') {
               relocateGoal(rows(fresh['goals']), input);
               input['expectedHierarchy'] = goalHierarchySignature(
                 rows(fresh['goals']),
@@ -1809,14 +1929,18 @@ class DashboardRepository extends ChangeNotifier {
               final row = rows(fresh['goals'])
                   .where((g) => g['id'] == input['id'])
                   .firstOrNull;
-              final col = rows(fresh['goalColumnDefinitions'])
-                  .where(
-                    (c) =>
-                        c['id'] == input['columnId'] &&
-                        c['custom'] == true &&
-                        c['archived'] != true,
-                  )
-                  .firstOrNull;
+              final col =
+                  [
+                        ...rows(fresh['goalColumnDefinitions']),
+                        ...rows(fresh['characteristicColumnDefinitions']),
+                      ]
+                      .where(
+                        (c) =>
+                            c['id'] == input['columnId'] &&
+                            c['custom'] == true &&
+                            c['archived'] != true,
+                      )
+                      .firstOrNull;
               if (row == null || col == null) {
                 throw StateError(
                   'Строка или столбец недоступны. Исходник сохранён.',
@@ -1824,9 +1948,10 @@ class DashboardRepository extends ChangeNotifier {
               }
               input['before'] = object(row['customValues'])[input['columnId']];
             } else {
-              final col = rows(fresh['goalColumnDefinitions'])
-                  .where((c) => c['id'] == input['id'])
-                  .firstOrNull;
+              final col = [
+                ...rows(fresh['goalColumnDefinitions']),
+                ...rows(fresh['characteristicColumnDefinitions']),
+              ].where((c) => c['id'] == input['id']).firstOrNull;
               if (col == null) {
                 throw StateError('Столбец не найден. Исходный текст сохранён.');
               }
