@@ -8,6 +8,7 @@ import 'package:indicators_work/local_database.dart';
 import 'package:indicators_work/model_hierarchy.dart';
 import 'package:indicators_work/modeling_workspace.dart';
 import 'package:indicators_work/repository.dart';
+import 'package:indicators_work/workspace_table.dart';
 
 void main() {
   final project = <String, dynamic>{
@@ -246,17 +247,18 @@ void main() {
           ),
         ),
       );
-      expect(find.byType(DataTable), findsNWidgets(2));
+      expect(find.byType(WorkspaceTable), findsNWidgets(2));
       await tester.tap(find.text('Доска'));
       await tester.pumpAndSettle();
-      expect(find.byType(DataTable), findsOneWidget);
+      expect(find.byType(WorkspaceTable), findsOneWidget);
       expect(repo.local.get('projectView'), 'board');
       await tester.ensureVisible(
-        find.byTooltip('Свернуть или развернуть ветку').first,
+        find.byKey(const ValueKey('model-tree-toggle:alpha:a')),
       );
-      await tester.tap(find.byTooltip('Свернуть или развернуть ветку').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('model-tree-toggle:alpha:a')));
       await tester.pump();
-      expect(find.text('Подсистема'), findsNothing);
+      expect(find.textContaining('Подсистема'), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       repo.dispose();

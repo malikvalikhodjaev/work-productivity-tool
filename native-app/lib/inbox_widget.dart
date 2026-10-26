@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'domain.dart';
 import 'repository.dart';
@@ -125,6 +125,8 @@ class _InboxReviewState extends State<_InboxReview> {
   AudioPlayer? player;
   StreamSubscription<PlayerState>? subscription;
   bool playing = false;
+  bool loadingAudio = false;
+  Uint8List? voiceBytes;
   bool favorite = false;
   String? error;
   String get entity => 'inbox:${widget.item['id']}';
@@ -183,6 +185,73 @@ class _InboxReviewState extends State<_InboxReview> {
     }
   }
 
+  Future<void> toggleAudio(Json audio) async {
+    if (loadingAudio) return;
+    setState(() {
+      error = null;
+      loadingAudio = true;
+    });
+    try {
+      final compatible = Theme.of(context).platform == TargetPlatform.windows;
+      if (player?.state == PlayerState.playing) {
+        await player!.pause();
+      } else if (player?.state == PlayerState.paused) {
+        await player!.resume();
+      } else {
+        voiceBytes ??= Uint8List.fromList(
+          await widget.repo.inboxAudio(
+            audio['url'].toString(),
+            compatible: compatible,
+          ),
+        );
+        if (!mounted) return;
+        if (player == null) {
+          player = AudioPlayer();
+          subscription = player!.onPlayerStateChanged.listen(
+            (state) {
+              if (mounted) {
+                setState(() => playing = state == PlayerState.playing);
+              }
+            },
+            onError: (Object _) {
+              if (mounted) {
+                setState(() {
+                  playing = false;
+                  error =
+                      'Запись загружена, но плеер не смог её воспроизвести.';
+                });
+              }
+            },
+          );
+          await player!.setReleaseMode(ReleaseMode.stop);
+        }
+        if (!mounted) return;
+        await player!.play(
+          BytesSource(
+            voiceBytes!,
+            mimeType: compatible ? 'audio/wav' : audio['mime'] as String?,
+          ),
+        );
+      }
+    } on ApiFailure catch (failure) {
+      if (mounted) setState(() => error = failure.message);
+    } on PlatformException {
+      if (mounted) {
+        setState(
+          () => error = 'Запись загружена, но плеер не поддержал её формат. Попробуй открыть запись повторно.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => error = 'Не удалось загрузить голосовую. Проверь подключение к серверу и повтори.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => loadingAudio = false);
+    }
+  }
+
   @override
   void dispose() {
     subscription?.cancel();
@@ -232,47 +301,20 @@ class _InboxReviewState extends State<_InboxReview> {
                 ),
               if (audio.isNotEmpty)
                 TextButton.icon(
-                  onPressed: audio['status'] == 'ready' && widget.repo.online
-                      ? () async {
-                          try {
-                            if (player == null) {
-                              player = AudioPlayer();
-                              subscription = player!.onPlayerStateChanged
-                                  .listen((s) {
-                                    if (mounted) {
-                                      setState(
-                                        () =>
-                                            playing = s == PlayerState.playing,
-                                      );
-                                    }
-                                  });
-                            }
-                            if (playing) {
-                              await player!.pause();
-                            } else {
-                              await player!.play(
-                                BytesSource(
-                                  Uint8List.fromList(
-                                    await widget.repo.inboxAudio(
-                                      audio['url'].toString(),
-                                    ),
-                                  ),
-                                  mimeType: audio['mimeType'] as String?,
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            if (mounted) {
-                              setState(
-                                () => error = 'Не удалось воспроизвести запись. Проверь связь с сервером.',
-                              );
-                            }
-                          }
-                        }
+                  onPressed: audio['status'] == 'ready' && !loadingAudio
+                      ? () => toggleAudio(audio)
                       : null,
-                  icon: Icon(playing ? Icons.pause : Icons.play_arrow),
+                  icon: loadingAudio
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(playing ? Icons.pause : Icons.play_arrow),
                   label: Text(
-                    playing
+                    loadingAudio
+                        ? 'Загрузка…'
+                        : playing
                         ? 'Пауза'
                         : audio['status'] == 'ready'
                         ? 'Прослушать голосовую'

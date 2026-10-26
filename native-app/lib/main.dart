@@ -40,6 +40,8 @@ import 'time_composition.dart';
 import 'connection_bootstrap.dart';
 import 'goal_progress.dart';
 import 'goal_table.dart';
+import 'goal_status.dart';
+import 'model_link.dart';
 import 'activity_status.dart';
 import 'dashboard_timer_bar.dart';
 import 'dashboard_window_header.dart';
@@ -187,7 +189,7 @@ class _DashboardHomeState extends State<DashboardHome>
   bool planEntryPending = true;
   static const sections = [
     'Показатели',
-    'Проекты',
+    'Проекты и модели',
     'Работа',
     'Письмо',
     'Данные',
@@ -260,7 +262,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.36',
+        'clientVersion': '0.1.37',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -2296,15 +2298,7 @@ class _DashboardHomeState extends State<DashboardHome>
           nullable: true,
           hint: goalDeadlineHint,
         ),
-        FieldSpec(
-          'status',
-          'Состояние',
-          options: {
-            'active': 'Активная',
-            'paused': 'Приостановлена',
-            'archived': 'В архиве',
-          },
-        ),
+        FieldSpec('status', 'Статус цели', options: goalStatusOptions),
       ],
       (input) => repo.nativeSave(
         'workspace',
@@ -2704,6 +2698,11 @@ class _DashboardHomeState extends State<DashboardHome>
         ),
         const FieldSpec('stateLabel', 'Состояние по шаблону'),
         const FieldSpec('description', 'Описание и заметки', lines: 6),
+        const FieldSpec(
+          'modelUrl',
+          'Ссылка на модель · HTTP / HTTPS',
+          hint: 'Можно добавить ссылку на другую модель, схему или документ. Открывается отдельной кнопкой.',
+        ),
         const FieldSpec('criteria', 'Критерий состояния', lines: 3),
         const FieldSpec('evidence', 'Свидетельства', lines: 4),
         const FieldSpec('nextStep', 'Следующий шаг', lines: 3),
@@ -2725,17 +2724,25 @@ class _DashboardHomeState extends State<DashboardHome>
         const FieldSpec('systemTime', 'Время системы'),
         const FieldSpec('attention', 'Внимание'),
       ],
-      (input) => repo.nativeSave(
-        'portfolio',
-        base == null ? 'createAlpha' : 'updateAlpha',
-        {
-          ...input,
-          if (base == null) 'clientId': id,
-          'expectedRevision': base?['revision'] ?? 0,
-        },
-        key,
-        expectedUpdatedAt: base?['updatedAt'],
-      ),
+      (input) {
+        final url = (input['modelUrl'] ?? '').toString();
+        if (url.isNotEmpty && modelLinkUri(url) == null) {
+          throw ArgumentError(
+            'Укажи HTTP / HTTPS URL модели без логина и пароля.',
+          );
+        }
+        repo.nativeSave(
+          'portfolio',
+          base == null ? 'createAlpha' : 'updateAlpha',
+          {
+            ...input,
+            if (base == null) 'clientId': id,
+            'expectedRevision': base?['revision'] ?? 0,
+          },
+          key,
+          expectedUpdatedAt: base?['updatedAt'],
+        );
+      },
     );
   }
 
@@ -3210,7 +3217,7 @@ class _DashboardHomeState extends State<DashboardHome>
                                 const SizedBox(height: 20),
                                 const SizedBox(height: 12),
                                 const Text(
-                                  'I&W · Native 0.1.36',
+                                  'I&W · Native 0.1.37',
                                   style: TextStyle(fontSize: 11),
                                 ),
                               ],

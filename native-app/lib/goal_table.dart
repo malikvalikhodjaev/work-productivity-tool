@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'domain.dart';
 import 'goal_progress.dart';
+import 'goal_status.dart';
 import 'model_hierarchy.dart';
 import 'repository.dart';
 import 'workspace_table.dart';
@@ -198,7 +199,7 @@ class _GoalsTableState extends State<GoalsTable> {
                 hint: goalDeadlineHint,
                 width: 200,
               ),
-              WorkColumn('status', 'Состояние'),
+              WorkColumn('status', 'Статус цели'),
               WorkColumn('_actions', 'Действия', width: 280),
             ],
             value: (g, id) => id == '*'
@@ -289,12 +290,34 @@ class _GoalsTableState extends State<GoalsTable> {
                     ],
                   );
                 case 'status':
-                  return editable(switch (g['status']) {
-                    'active' => 'Активная',
-                    'paused' => 'На паузе',
-                    'archived' => 'В архиве',
-                    _ => 'Заполнить',
-                  }, () => widget.edit(g));
+                  return DropdownButtonFormField<String>(
+                    key: ValueKey('goal-status:${g['id']}:${g['status']}'),
+                    initialValue: goalStatusOptions.containsKey(g['status'])
+                        ? g['status'].toString()
+                        : null,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Статус цели'),
+                    items: [
+                      for (final status in goalStatusOptions.entries)
+                        DropdownMenuItem(
+                          value: status.key,
+                          child: Text(status.value),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null || value == g['status']) return;
+                      try {
+                        widget.repo.editGoalField(
+                          g['id'].toString(),
+                          'status',
+                          value,
+                          expectedGoal: g,
+                        );
+                      } catch (e) {
+                        error(e);
+                      }
+                    },
+                  );
                 default:
                   return Wrap(
                     children: [

@@ -30,7 +30,9 @@ void main() {
     await tester.pumpWidget(
       DashboardApp(repo: repo, folder: '.', backgroundEnabled: false),
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Проекты').first);
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Проекты и модели').first,
+    );
     await tester.pump();
     final reads = repo.portfolioReads;
     expect(reads, greaterThan(0));

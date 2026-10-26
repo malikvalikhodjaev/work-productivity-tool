@@ -827,43 +827,12 @@ class PomodoroChecklist extends StatelessWidget {
                   ),
                 ],
               ),
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: [
-                  for (final category in categories.entries)
-                    ChoiceChip(
-                      key: ValueKey('norm-filter:${category.key}'),
-                      label: Text(
-                        '${category.value} · ${category.key == 'all' ? norms.length : types.values.where((t) => normMatchesCategory(t, category.key)).length}',
-                      ),
-                      selected: filter == category.key,
-                      showCheckmark: false,
-                      onSelected: (_) =>
-                          repo.setUiPreference('normTimeFilter', category.key),
-                    ),
-                ],
-              ),
-              if (activeHidden)
-                TextButton.icon(
-                  onPressed: () => repo.setUiPreference(
-                    'normTimeFilter',
-                    timeTypes(types[activeRef]).firstOrNull ?? 'unclassified',
-                  ),
-                  icon: const Icon(Icons.play_circle_outline),
-                  label: const Text('Показать активный норматив'),
-                ),
               if (norms.isNotEmpty && visible.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: Text(
                     'В этой категории нормативов пока нет. Добавь через «+» или смени тип существующего.',
                   ),
-                ),
-              if (filter != 'all')
-                const Text(
-                  'Дневной лимит ниже — общий для всех категорий.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               if (!rowsFirst)
                 PomodoroCapacityNotice(
@@ -887,6 +856,56 @@ class PomodoroChecklist extends StatelessWidget {
                 PomodoroCapacityNotice(
                   summary: repo.pomodoroCapacityForDate(),
                   workMinutes: repo.settings['workMinutes'] as int,
+                ),
+              const SizedBox(height: 6),
+              SingleChildScrollView(
+                key: const ValueKey('norm-filters-bottom'),
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final category in categories.entries)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: ChoiceChip(
+                          key: ValueKey('norm-filter:${category.key}'),
+                          label: Text(
+                            '${category.value} · ${category.key == 'all' ? norms.length : types.values.where((t) => normMatchesCategory(t, category.key)).length}',
+                          ),
+                          labelStyle: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
+                          ),
+                          side: BorderSide.none,
+                          backgroundColor: Colors.transparent,
+                          selectedColor: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHigh,
+                          selected: filter == category.key,
+                          showCheckmark: false,
+                          onSelected: (_) => repo.setUiPreference(
+                            'normTimeFilter',
+                            category.key,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (activeHidden)
+                TextButton.icon(
+                  onPressed: () => repo.setUiPreference(
+                    'normTimeFilter',
+                    timeTypes(types[activeRef]).firstOrNull ?? 'unclassified',
+                  ),
+                  icon: const Icon(Icons.play_circle_outline),
+                  label: const Text('Показать активный норматив'),
+                ),
+              if (filter != 'all')
+                const Text(
+                  'Дневной лимит общий для всех типов времени.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               if (norms.any((n) => (n['pendingPomodoros'] as int) > 0))
                 const Text(

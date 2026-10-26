@@ -372,12 +372,18 @@ class DashboardRepository extends ChangeNotifier {
     return result;
   }
 
-  Future<List<int>> inboxAudio(String route) async {
-    final uri = Uri.parse(base).resolve(route);
+  Future<List<int>> inboxAudio(String route, {bool compatible = false}) async {
+    var uri = Uri.parse(base).resolve(route);
     if (uri.origin != Uri.parse(base).origin ||
-        !uri.path.startsWith('/api/inbox/audio/')) {
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment ||
+        !RegExp(
+          r'^/api/inbox/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/audio$',
+        ).hasMatch(uri.path)) {
       throw ArgumentError('Неизвестный адрес аудио.');
     }
+    if (compatible) uri = uri.replace(queryParameters: {'format': 'wav'});
     final outgoing = http.Request('GET', uri)..followRedirects = false;
     outgoing.headers['Origin'] = Uri.parse(base).origin;
     if (serverAuthorization != null) {
@@ -386,7 +392,28 @@ class DashboardRepository extends ChangeNotifier {
     final response = await http.Response.fromStream(
       await _http.send(outgoing).timeout(const Duration(seconds: 30)),
     ).timeout(const Duration(seconds: 30));
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      throw ApiFailure(
+        'Нет доступа к голосовой. Проверь ключ сервера в настройках.',
+        response.statusCode,
+      );
+    }
+    if (response.statusCode == 404) {
+      throw ApiFailure('Оригинал голосовой пока не найден на сервере.', 404);
+    }
+    if (response.statusCode == 413 || response.statusCode == 503) {
+      throw ApiFailure(
+        compatible
+            ? 'Сервер не смог подготовить голосовую для Windows. Оригинал сохранён; повтори позже.'
+            : 'Голосовая временно недоступна. Оригинал сохранён.',
+        response.statusCode,
+      );
+    }
     if (response.statusCode != 200 ||
+        response.bodyBytes.isEmpty ||
+        !(response.headers['content-type'] ?? '').toLowerCase().startsWith(
+          'audio/',
+        ) ||
         response.bodyBytes.length > 25 * 1024 * 1024) {
       throw StateError('Не удалось загрузить голосовую запись.');
     }
@@ -707,7 +734,14 @@ class DashboardRepository extends ChangeNotifier {
     bool remember = true,
     Json? expectedGoal,
   }) {
-    if (!['title', 'unit', 'baseline', 'target', 'dueDate'].contains(field)) {
+    if (![
+      'title',
+      'unit',
+      'baseline',
+      'target',
+      'dueDate',
+      'status',
+    ].contains(field)) {
       throw ArgumentError('Это поле редактируется через подробности цели.');
     }
     final goal =
@@ -726,6 +760,7 @@ class DashboardRepository extends ChangeNotifier {
         'status',
         'parentId',
         'characteristicId',
+        'workRef',
       ])
         if (goal.containsKey(key)) key: goal[key],
       field: value,

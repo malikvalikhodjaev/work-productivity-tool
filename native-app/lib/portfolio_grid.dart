@@ -6,6 +6,7 @@ import 'model_hierarchy.dart';
 import 'adaptive_detail.dart';
 import 'workspace_table.dart';
 import 'inline_cell.dart';
+import 'model_link.dart';
 
 const gridTypes = {
   'text': 'Текст',
@@ -813,7 +814,7 @@ class _PortfolioGridState extends State<PortfolioGrid> {
         },
       );
     }
-    return InlineCell(
+    final editor = InlineCell(
       key: ValueKey('inline:${widget.table}:${row['id']}:${col['id']}'),
       label: col['title'].toString(),
       text: value?.toString() ?? '',
@@ -833,6 +834,13 @@ class _PortfolioGridState extends State<PortfolioGrid> {
         'value': text,
       }),
       commit: (text) async {
+        if (col['id'] == 'modelUrl' &&
+            text.isNotEmpty &&
+            modelLinkUri(text) == null) {
+          throw ArgumentError(
+            'Укажи HTTP / HTTPS URL модели без логина и пароля.',
+          );
+        }
         dynamic result = text;
         if (col['type'] == 'number') {
           result = text.isEmpty
@@ -869,6 +877,15 @@ class _PortfolioGridState extends State<PortfolioGrid> {
         repo.local.remove(draftKey);
       },
     );
+    return col['id'] == 'modelUrl'
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              editor,
+              ModelLink(value: (value ?? '').toString()),
+            ],
+          )
+        : editor;
   }
 
   @override

@@ -106,6 +106,8 @@ void main() {
         ),
       );
       for (final filter in ['investment', 'productive']) {
+        await tester.ensureVisible(find.byKey(ValueKey('norm-filter:$filter')));
+        await tester.pumpAndSettle();
         await tester.tap(find.byKey(ValueKey('norm-filter:$filter')));
         await tester.pump();
         expect(
@@ -115,6 +117,10 @@ void main() {
         expect(repo.pomodoroTargetsForDate().length, 1);
         expect(repo.active, session);
       }
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('norm-filter:leisure')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('norm-filter:leisure')));
       await tester.pump();
       expect(find.byKey(const ValueKey('pomodoro-row:work:a')), findsNothing);

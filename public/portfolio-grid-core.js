@@ -16,6 +16,7 @@ export const portfolioGridColumns = {
     {id:'_wbs',title:'WBS',type:'computed',visible:true},
     text('uniqueName','Проектное имя',180,true), text('typeName','Типовое имя',120,true),
     select('state','Состояние',{empty:'Пустой слот',described:'Описано',working:'В работе',verified:'Подтверждено',ready:'Готово к эксплуатации',not_applicable:'Не применяется'},true),
+    text('modelUrl','Ссылка на модель',4000,true),
     text('description','Описание и заметки'), text('criteria','Критерий состояния'),
     text('evidence','Свидетельства'), text('nextStep','Следующий шаг',1000,true),
     date('reviewDate','Вернуться',true), date('filledDate','Дата заполнения'),

@@ -87,6 +87,20 @@ void main() {
       final id = repo.active!['id'];
       final cap = repo.pomodoroCapacityForDate();
       await tester.pumpWidget(screen(repo));
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey('norm-filters-bottom'))).dy,
+        greaterThan(
+          tester
+              .getBottomLeft(
+                find.byKey(const ValueKey('pomodoro-row:work:unknown')),
+              )
+              .dy,
+        ),
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('norm-filter:leisure')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('norm-filter:leisure')));
       await tester.pump();
       expect(
@@ -129,6 +143,10 @@ void main() {
         findsOneWidget,
       );
       expect(repo.active!['status'], 'paused');
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('norm-filter:unclassified')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('norm-filter:unclassified')));
       await tester.pump();
       expect(

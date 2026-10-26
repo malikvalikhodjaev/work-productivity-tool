@@ -102,6 +102,13 @@ const Map<String, List<Map<String, dynamic>>> defaultGridColumns = {
       "visible": true,
     },
     {
+      "id": "modelUrl",
+      "title": "Ссылка на модель",
+      "type": "text",
+      "maxLength": 4000,
+      "visible": true,
+    },
+    {
       "id": "description",
       "title": "Описание и заметки",
       "type": "text",

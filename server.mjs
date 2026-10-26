@@ -20,6 +20,8 @@ import { backupData, backupStatus } from './lib/backup.mjs';
 import { createWritingStore } from './lib/writing.mjs';
 import {createInboxStore} from './lib/inbox.mjs';
 import {createTelegramBot} from './lib/telegram-bot.mjs';
+import {createInboxPlayback} from './lib/inbox-playback.mjs';
+const inboxPlayback = createInboxPlayback();
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const serverVersion = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version;
@@ -127,7 +129,9 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, input.action==='configure'?await telegram.configure(input):telegram.control(input.action));
     }
     if (['GET','HEAD'].includes(req.method) && /^\/api\/inbox\/[a-f0-9-]{36}\/audio$/.test(url.pathname)) {
-      const audio=inbox.audioFile(url.pathname.split('/')[3]),bytes=readFileSync(audio.path),size=bytes.length;
+      const original=inbox.audioFile(url.pathname.split('/')[3]);
+      const audio=url.searchParams.get('format')==='wav'?await inboxPlayback(original):original;
+      const bytes=readFileSync(audio.path),size=bytes.length;
       const range=req.headers.range?.match(/^bytes=(\d*)-(\d*)$/);
       let start=0,end=size-1;
       if(range) {

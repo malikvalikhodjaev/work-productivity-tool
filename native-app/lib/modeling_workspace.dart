@@ -7,6 +7,8 @@ import 'repository.dart';
 import 'portfolio_grid.dart';
 import 'model_hierarchy.dart';
 import 'section_analytics.dart';
+import 'project_models_table.dart';
+import 'model_link.dart';
 
 class ModelingWorkspace extends StatefulWidget {
   final DashboardRepository repo;
@@ -43,6 +45,7 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
   String? selected;
   String? inspected;
   bool board = false;
+  bool overview = true;
   @override
   void initState() {
     super.initState();
@@ -51,11 +54,14 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
     queryController = TextEditingController(text: query);
     inspected = widget.repo.local.get('modelerInspected') as String?;
     board = widget.repo.local.get('projectView') == 'board';
+    overview = widget.repo.local.get('modelerOverview') != false;
   }
 
   void open(Json project) {
     widget.repo.local.set('modelerProjectId', project['id']);
+    widget.repo.local.set('modelerOverview', false);
     setState(() {
+      overview = false;
       selected = project['id'].toString();
       inspected = null;
     });
@@ -492,13 +498,53 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
             child: Divider(),
           ),
           Text(
-            'Моделирование',
+            'Моделирование проектов (по альфам)',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('Таблица проектов и альф'),
+                selected: overview,
+                onSelected: (_) {
+                  repo.local.set('modelerOverview', true);
+                  setState(() => overview = true);
+                },
+              ),
+              ChoiceChip(
+                label: const Text('Выбранный проект'),
+                selected: !overview,
+                onSelected: project == null
+                    ? null
+                    : (_) {
+                        repo.local.set('modelerOverview', false);
+                        setState(() => overview = false);
+                      },
+              ),
+            ],
+          ),
+          if (overview)
+            ProjectModelsTable(
+              repo: repo,
+              projects: projects,
+              alphas: allAlphas,
+              openProject: open,
+              openAlpha: (a) {
+                open(projects.firstWhere((p) => p['id'] == a['projectId']));
+                repo.local.set('modelerInspected', a['id']);
+                setState(() => inspected = a['id'].toString());
+              },
+              addAlpha: (p) => widget.editAlpha(p, null),
+              addChild: (a) => widget.createChild(
+                projects.firstWhere((p) => p['id'] == a['projectId']),
+                a,
+              ),
+            ),
           if (project == null && projects.isNotEmpty)
             const Text('Выбери проект в таблице, чтобы открыть его альфы.'),
-          if (project != null) ...[
+          if (!overview && project != null) ...[
             Text(
               'Альфы проекта',
               style: Theme.of(context).textTheme.headlineSmall,
@@ -581,6 +627,7 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
                         onPressed: () => widget.editAlpha(project, alpha),
                         child: const Text('Записать'),
                       ),
+                      ModelLink(value: (alpha['modelUrl'] ?? '').toString()),
                       TemplateHints(alpha: alpha),
                       AlphaHistoryPanel(
                         key: ValueKey('history:${repo.base}:${alpha['id']}'),
@@ -645,7 +692,7 @@ class _ModelingWorkspaceState extends State<ModelingWorkspace> {
               ),
             ],
           ),
-          ModelAnalytics(repo: repo, projectId: selected),
+          ModelAnalytics(repo: repo, projectId: overview ? null : selected),
         ],
       );
     },
@@ -742,5 +789,4 @@ class _AlphaHistoryPanelState extends State<AlphaHistoryPanel> {
       ],
     );
   }
-
 }
