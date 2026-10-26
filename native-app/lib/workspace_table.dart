@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'domain.dart';
 import 'model_hierarchy.dart';
 import 'repository.dart';
+import 'forms.dart';
 
 class WorkColumn {
   final String id, title;
@@ -107,6 +108,8 @@ class WorkspaceTable extends StatefulWidget {
   final List<Widget> tools;
   final bool compactToolbar;
   final VoidCallback? reset;
+  final Future<void> Function(WorkColumn)? rename;
+  final VoidCallback? addColumn;
   const WorkspaceTable({
     super.key,
     required this.repo,
@@ -121,6 +124,8 @@ class WorkspaceTable extends StatefulWidget {
     this.tools = const [],
     this.compactToolbar = false,
     this.reset,
+    this.rename,
+    this.addColumn,
   });
   @override
   State<WorkspaceTable> createState() => _WorkspaceTableState();
@@ -169,7 +174,17 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
     return [
       ...[...order, ...all.map((c) => c.id).where((id) => !order.contains(id))]
           .map((id) => all.where((c) => c.id == id).firstOrNull)
-          .whereType<WorkColumn>(),
+          .whereType<WorkColumn>()
+          .map(
+            (c) => widget.rename != null
+                ? c
+                : WorkColumn(
+                    c.id,
+                    (object(view['labels'])[c.id] ?? c.title).toString(),
+                    width: c.width,
+                    hint: c.hint,
+                  ),
+          ),
     ];
   }
 
@@ -178,6 +193,28 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
         100,
         600,
       );
+  Future<void> renameColumn(WorkColumn column) async {
+    if (widget.rename != null) {
+      await widget.rename!(column);
+      return;
+    }
+    await editFields(
+      context,
+      title: 'Название столбца',
+      initial: {'title': column.title},
+      fields: const [FieldSpec('title', 'Название')],
+      save: (input) async {
+        final title = input['title'].toString();
+        if (title.trim().isEmpty || title.length > 120) {
+          throw const FormatException('Название: 1–120 символов.');
+        }
+        change({
+          'labels': {...object(view['labels']), column.id: title},
+        });
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cols = columns;
@@ -203,6 +240,13 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
         ),
       ),
       ...widget.tools,
+      if (widget.addColumn != null)
+        TextButton.icon(
+          key: const ValueKey('table-add-column'),
+          onPressed: widget.addColumn,
+          icon: const Icon(Icons.add),
+          label: const Text('Столбец'),
+        ),
       if (widget.grouping)
         SizedBox(
           width: 220,
@@ -346,6 +390,17 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
                                       ),
                                     ),
                               ),
+                            ),
+                            IconButton(
+                              key: ValueKey('column-rename:${col.id}'),
+                              tooltip: 'Переименовать столбец «${col.title}»',
+                              onPressed: () => renameColumn(col),
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 40,
+                              ),
+                              padding: const EdgeInsets.all(4),
+                              icon: const Icon(Icons.edit_outlined, size: 16),
                             ),
                             Semantics(
                               label: 'Изменить ширину: ${col.title}',

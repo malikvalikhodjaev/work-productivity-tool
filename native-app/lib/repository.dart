@@ -10,6 +10,7 @@ import 'local_database.dart';
 import 'pomodoro_plan.dart';
 import 'durable_timer.dart';
 import 'grid_definitions.dart';
+import 'goal_grid_definitions.dart';
 import 'model_hierarchy.dart';
 import 'active_timer_conflict.dart';
 
@@ -734,6 +735,12 @@ class DashboardRepository extends ChangeNotifier {
     bool remember = true,
     Json? expectedGoal,
   }) {
+    if (field == 'physicalSystem' &&
+        cache('workspace')['goalGridVersion'] != 1) {
+      throw StateError(
+        'Сначала синхронизируйся с обновлённым сервером индикаторов.',
+      );
+    }
     if (field == 'trashedAt' && cache('workspace')['goalTrashVersion'] != 1) {
       throw StateError(
         'Сначала синхронизируйся с сервером, поддерживающим корзину целей. Строка не удалена.',
@@ -747,6 +754,7 @@ class DashboardRepository extends ChangeNotifier {
       'dueDate',
       'status',
       'trashedAt',
+      'physicalSystem',
     ].contains(field)) {
       throw ArgumentError('Это поле редактируется через подробности цели.');
     }
@@ -768,6 +776,8 @@ class DashboardRepository extends ChangeNotifier {
         'parentId',
         'characteristicId',
         'workRef',
+        'physicalSystem',
+        'customValues',
       ])
         if (goal.containsKey(key)) key: goal[key],
       field: value,
@@ -800,6 +810,90 @@ class DashboardRepository extends ChangeNotifier {
   bool get canUndoGoal =>
       rows(local.get('goalUndo')).any((r) => r['serverId'] == serverId);
 
+  List<Json> goalColumns({bool archived = false}) {
+    final all = <String, Json>{
+      for (final c
+          in rows(cache('workspace')['goalColumnDefinitions']).isEmpty
+              ? defaultGoalColumns
+              : rows(cache('workspace')['goalColumnDefinitions']))
+        c['id'].toString(): {'revision': 0, ...c},
+      for (final c in rows(cache('workspace')['goalColumns']))
+        c['id'].toString(): {...c},
+    };
+    for (final q in pending.where((q) => q['state'] != 'conflict')) {
+      final body = object(q['body']), input = object(body['input']);
+      if (body['module'] != 'workspace') continue;
+      if (body['action'] == 'createGoalColumn') {
+        all[input['id'].toString()] = {
+          ...input,
+          'custom': true,
+          'archived': false,
+          'revision': 1,
+          'width': 200,
+        };
+      } else if (body['action'] == 'updateGoalColumn' &&
+          all.containsKey(input['id'])) {
+        all[input['id'].toString()] = {
+          ...all[input['id']]!,
+          ...input,
+          'revision': (input['expectedRevision'] as int) + 1,
+        };
+      }
+    }
+    return all.values.where((c) => archived || c['archived'] != true).toList();
+  }
+
+  void goalGridCommand(String action, Json input) {
+    if (serverId == null || cache('workspace')['goalGridVersion'] != 1) {
+      throw StateError(
+        'Сначала синхронизируйся с сервером, поддерживающим столбцы индикаторов.',
+      );
+    }
+    final id = uuid.v4();
+    local.enqueue('goal-grid:$id', '/api/native/command', {
+      'requestId': id,
+      'serverId': serverId,
+      'deviceId': deviceId,
+      'module': 'workspace',
+      'action': action,
+      'input': input,
+    });
+    status = 'Сохранено на устройстве · ожидает синхронизации';
+    notifyListeners();
+    requestAutoSync();
+  }
+
+  void editGoalCell(
+    String id,
+    String columnId,
+    dynamic before,
+    dynamic value, {
+    bool remember = true,
+  }) {
+    goalGridCommand('editGoalCell', {
+      'id': id,
+      'columnId': columnId,
+      'before': before,
+      'value': value,
+    });
+    if (remember) {
+      local.set(
+        'goalUndo',
+        [
+          ...rows(local.get('goalUndo')),
+          {
+            'serverId': serverId,
+            'id': id,
+            'columnId': columnId,
+            'before': before,
+            'value': value,
+          },
+        ].reversed.take(50).toList().reversed.toList(),
+      );
+    }
+    notifyListeners();
+  }
+
   /// A new immutable measurement, never a rewrite of the previous fact.
   /// Capture the owner's local measurement date when Save is pressed.
   void recordGoalMeasurement(Json goal, num value, {String evidence = ''}) {
@@ -831,6 +925,26 @@ class DashboardRepository extends ChangeNotifier {
       'goals',
       'goal',
     ).where((g) => g['id'] == change['id']).firstOrNull;
+    if (change['columnId'] != null) {
+      if (goal == null ||
+          jsonEncode(object(goal['customValues'])[change['columnId']]) !=
+              jsonEncode(change['value'])) {
+        throw StateError(
+          'Ячейка уже изменилась. Проверь значение перед отменой.',
+        );
+      }
+      editGoalCell(
+        change['id'].toString(),
+        change['columnId'].toString(),
+        change['value'],
+        change['before'],
+        remember: false,
+      );
+      history.remove(change);
+      local.set('goalUndo', history);
+      notifyListeners();
+      return;
+    }
     if (goal == null ||
         jsonEncode(goal[change['field']]) != jsonEncode(change['value'])) {
       throw StateError('Цель уже изменилась. Проверь значение перед отменой.');
@@ -1118,8 +1232,35 @@ class DashboardRepository extends ChangeNotifier {
     )) {
       items[draft['entity'] as String] = object(draft['body']);
     }
+    if (collection == 'goals') {
+      for (final row in source) {
+        final key = 'goal:${row['id']}';
+        if (items.containsKey(key)) {
+          items[key] = {
+            ...items[key]!,
+            'customValues': object(row['customValues']),
+          };
+        }
+      }
+    }
     for (final queued in pending) {
       final body = object(queued['body']), input = object(body['input']);
+      if (collection == 'goals' &&
+          queued['state'] != 'conflict' &&
+          body['module'] == 'workspace' &&
+          body['action'] == 'editGoalCell') {
+        final key = 'goal:${input['id']}', row = items['goal:${input['id']}'];
+        if (row != null) {
+          items[key] = {
+            ...row,
+            'customValues': {
+              ...object(row['customValues']),
+              input['columnId'].toString(): input['value'],
+            },
+          };
+        }
+        continue;
+      }
       if (body['module'] != 'portfolio' ||
           body['action'] != 'editCells' ||
           input['table'] != collection) {
@@ -1592,6 +1733,41 @@ class DashboardRepository extends ChangeNotifier {
     } else if (item['route'] == '/api/native/command') {
       switch (body['module']) {
         case 'workspace':
+          if (['editGoalCell', 'updateGoalColumn'].contains(body['action'])) {
+            final fresh = await request('/api/workspace');
+            if (item['server_id'] != serverId) {
+              throw StateError('Правка связана с другой установкой.');
+            }
+            local.capture('workspace', fresh);
+            if (body['action'] == 'editGoalCell') {
+              final row = rows(fresh['goals'])
+                  .where((g) => g['id'] == input['id'])
+                  .firstOrNull;
+              final col = rows(fresh['goalColumnDefinitions'])
+                  .where(
+                    (c) =>
+                        c['id'] == input['columnId'] &&
+                        c['custom'] == true &&
+                        c['archived'] != true,
+                  )
+                  .firstOrNull;
+              if (row == null || col == null) {
+                throw StateError(
+                  'Строка или столбец недоступны. Исходник сохранён.',
+                );
+              }
+              input['before'] = object(row['customValues'])[input['columnId']];
+            } else {
+              final col = rows(fresh['goalColumnDefinitions'])
+                  .where((c) => c['id'] == input['id'])
+                  .firstOrNull;
+              if (col == null) {
+                throw StateError('Столбец не найден. Исходный текст сохранён.');
+              }
+              input['expectedRevision'] = col['revision'];
+            }
+            break;
+          }
           final collections = {
             'saveCase': 'cases',
             'saveGoal': 'goals',

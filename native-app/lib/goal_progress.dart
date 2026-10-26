@@ -96,6 +96,11 @@ String goalNumber(dynamic value) {
       .replaceAll('.', ',');
 }
 
+/// Presentation of arithmetic results only; measurements retain full precision.
+String goalDifferenceNumber(dynamic value) => value is num && value.isFinite
+    ? goalNumber(num.parse(value.toStringAsPrecision(12)))
+    : goalNumber(value);
+
 Future<void> showGoalHistory(
   BuildContext context,
   Json goal,

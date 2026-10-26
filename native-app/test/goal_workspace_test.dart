@@ -185,6 +185,8 @@ void main() {
       await tester.pumpWidget(page(repo));
       await tester.pumpAndSettle();
       expect(find.text('Группировать верхние уровни'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('goal-menu:b')));
+      await tester.pumpAndSettle();
       final open = find.byKey(const ValueKey('goal-open:b'));
       await tester.ensureVisible(open);
       await tester.tap(open);

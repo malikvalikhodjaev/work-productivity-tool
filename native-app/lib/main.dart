@@ -264,7 +264,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.39',
+        'clientVersion': '0.1.40',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -2270,7 +2270,7 @@ class _DashboardHomeState extends State<DashboardHome>
         .where((g) => g['id'] == id)
         .firstOrNull;
     await editEntity(
-      'Цель и шкала',
+      'Индикатор и шкала',
       key,
       {
         ...previous ?? {},
@@ -2280,7 +2280,8 @@ class _DashboardHomeState extends State<DashboardHome>
         'parentId': previous?['parentId'] ?? parentId ?? '',
       },
       [
-        const FieldSpec('title', 'Цель'),
+        const FieldSpec('title', 'Индикатор'),
+        const FieldSpec('physicalSystem', 'Физическая система', lines: 3),
         FieldSpec(
           'parentId',
           'Родительская цель',
@@ -2367,10 +2368,10 @@ class _DashboardHomeState extends State<DashboardHome>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         sectionTitle(
-          'Цели',
+          'Индикаторы',
           trailing: TextButton(
             onPressed: () => editGoal(),
-            child: const Text('＋ Цель'),
+            child: const Text('＋ Индикатор'),
           ),
         ),
         GoalsTable(
@@ -3178,7 +3179,7 @@ class _DashboardHomeState extends State<DashboardHome>
                                 const SizedBox(height: 20),
                                 const SizedBox(height: 12),
                                 const Text(
-                                  'I&W · Native 0.1.39',
+                                  'I&W · Native 0.1.40',
                                   style: TextStyle(fontSize: 11),
                                 ),
                               ],

@@ -6,6 +6,7 @@ import 'domain.dart';
 import 'goal_progress.dart';
 import 'goal_status.dart';
 import 'goal_workspace.dart';
+import 'goal_columns.dart';
 import 'model_hierarchy.dart';
 import 'repository.dart';
 import 'workspace_table.dart';
@@ -63,6 +64,9 @@ class _GoalsTableState extends State<GoalsTable> {
   Future<void> rowAction(Json goal, String action) async {
     try {
       switch (action) {
+        case 'open':
+          open(goal);
+          return;
         case 'edit':
           widget.edit(goal);
           return;
@@ -168,7 +172,7 @@ class _GoalsTableState extends State<GoalsTable> {
   Widget field(Json goal, String id) {
     final text = id == 'title'
         ? goal['title'].toString()
-        : id == 'unit' || id == 'dueDate'
+        : id == 'unit' || id == 'dueDate' || id == 'physicalSystem'
         ? (goal[id] ?? '').toString()
         : goalNumber(goal[id]);
     if (goal['characteristicId'] != null) {
@@ -182,11 +186,13 @@ class _GoalsTableState extends State<GoalsTable> {
       key: ValueKey('goal-cell:$id:${goal['id']}'),
       text: goal[id]?.toString() ?? '',
       label: const {
-        'title': 'Цель',
+        'title': 'Индикатор',
+        'physicalSystem': 'Физическая система',
         'unit': 'Единица / период',
         'target': 'Предпочтительная мною шкала',
         'dueDate': 'Дедлайн цели · ГГГГ-ММ-ДД',
       }[id]!,
+      maxLines: id == 'physicalSystem' ? 3 : 1,
       displayText: id == 'title' ? '${goal['_wbs']} · ${goal['title']}' : null,
       draft: object(widget.repo.local.get(draftKey))['text'] as String?,
       begin: () {
@@ -218,6 +224,9 @@ class _GoalsTableState extends State<GoalsTable> {
         if (id == 'title' && (text.trim().isEmpty || text.length > 200)) {
           throw const FormatException('Название: 1–200 символов.');
         }
+        if (id == 'physicalSystem' && text.length > 2000) {
+          throw const FormatException('Текст до 2000 символов.');
+        }
         if (id == 'dueDate') {
           value = text.isEmpty ? null : text;
           if (text.isNotEmpty &&
@@ -238,6 +247,36 @@ class _GoalsTableState extends State<GoalsTable> {
     );
   }
 
+  Widget rowMenu(Json g) => PopupMenuButton<String>(
+    key: ValueKey('goal-menu:${g['id']}'),
+    tooltip: 'Меню цели',
+    icon: const Icon(Icons.more_horiz),
+    onSelected: (action) => rowAction(g, action),
+    itemBuilder: (_) => [
+      PopupMenuItem(
+        key: ValueKey('goal-open:${g['id']}'),
+        value: 'open',
+        child: const Text('Открыть отдельно'),
+      ),
+      const PopupMenuItem(value: 'edit', child: Text('Изменить цель')),
+      const PopupMenuItem(value: 'history', child: Text('История замеров')),
+      if (g['_inTrash'] != true) ...[
+        const PopupMenuItem(value: 'child', child: Text('Добавить подцель')),
+        PopupMenuItem(
+          value: g['_inArchive'] == true ? 'unarchive' : 'archive',
+          child: Text(
+            g['_inArchive'] == true ? 'Вернуть из архива' : 'В архив',
+          ),
+        ),
+        const PopupMenuItem(value: 'delete', child: Text('Удалить строку')),
+      ] else
+        const PopupMenuItem(
+          value: 'restore',
+          child: Text('Восстановить из корзины'),
+        ),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
     final controlScale = MediaQuery.textScalerOf(context).scale(14) / 14;
@@ -253,7 +292,7 @@ class _GoalsTableState extends State<GoalsTable> {
         .map((g) => g['id'].toString())
         .toSet();
     final tools = <Widget>[
-      Text('Целей: ${items.length}'),
+      Text('Индикаторов: ${items.length}'),
       PopupMenuButton<String>(
         tooltip: 'Иерархия целей',
         onSelected: (action) => collapse(action == 'expand' ? {} : parents),
@@ -385,27 +424,31 @@ class _GoalsTableState extends State<GoalsTable> {
               ? const {}
               : collapsed,
           rowKey: (r) => 'goal-row:${r['id']}',
-          columns: const [
-            WorkColumn('title', 'Цель', width: 340),
-            WorkColumn('unit', 'Единица / период'),
-            WorkColumn('current', 'Шкала/характеристика сейчас', width: 240),
-            WorkColumn('target', 'Предпочтительная мною шкала', width: 240),
-            WorkColumn('delta', 'Изменение', width: 260),
-            WorkColumn(
-              'dueDate',
-              'Дедлайн цели',
-              hint: goalDeadlineHint,
-              width: 200,
+          rename: (column) => editGoalColumn(
+            context,
+            widget.repo,
+            column: widget.repo.goalColumns().firstWhere(
+              (c) => c['id'] == column.id,
             ),
-            WorkColumn('status', 'Статус цели', width: 220),
-            WorkColumn('_actions', '', width: 156),
+          ),
+          addColumn: () => editGoalColumn(context, widget.repo),
+          columns: [
+            for (final c in widget.repo.goalColumns())
+              WorkColumn(
+                c['id'].toString(),
+                c['title'].toString(),
+                width: (c['width'] as num? ?? 200).toDouble(),
+                hint: c['id'] == 'dueDate' ? goalDeadlineHint : null,
+              ),
           ],
           value: (g, id) => id == '*'
-              ? '${g['title']} ${g['unit'] ?? ''} ${goalStatusLabel(g['status'])}'
+              ? '${g['title']} ${g['physicalSystem'] ?? ''} ${g['unit'] ?? ''} ${object(g['customValues']).values.join(' ')} ${goalStatusLabel(g['status'])}'
               : id == 'measurement'
               ? object(g['measurement'])['date']
               : id == 'status'
               ? goalStatusLabel(g[id])
+              : object(g['customValues']).containsKey(id)
+              ? object(g['customValues'])[id]
               : g[id],
           cell: (context, g, col) {
             switch (col.id) {
@@ -437,9 +480,11 @@ class _GoalsTableState extends State<GoalsTable> {
                           ),
                         ),
                       Expanded(child: field(g, 'title')),
+                      rowMenu(g),
                     ],
                   ),
                 );
+              case 'physicalSystem':
               case 'target':
               case 'unit':
               case 'dueDate':
@@ -467,14 +512,14 @@ class _GoalsTableState extends State<GoalsTable> {
                   children: [
                     if (g['delta'] is num)
                       Text(
-                        'С начала: ${g['delta'] > 0 ? '+' : ''}${goalNumber(g['delta'])} ${g['unit'] ?? ''}'
+                        'С начала: ${g['delta'] > 0 ? '+' : ''}${goalDifferenceNumber(g['delta'])} ${g['unit'] ?? ''}'
                         '${g['changePercent'] is num ? ' (${g['changePercent'] > 0 ? '+' : ''}${goalNumber((g['changePercent'] as num).round())}%)' : ''}',
                       )
                     else
                       editable('Заполнить', () => widget.measure(g)),
                     if (g['lastChange'] is num)
                       Text(
-                        'К прошлому: ${g['lastChange'] > 0 ? '+' : ''}${goalNumber(g['lastChange'])}',
+                        'К прошлому: ${g['lastChange'] > 0 ? '+' : ''}${goalDifferenceNumber(g['lastChange'])}',
                       ),
                     if (g['percent'] is num) ...[
                       const SizedBox(height: 6),
@@ -527,54 +572,12 @@ class _GoalsTableState extends State<GoalsTable> {
                   },
                 );
               default:
-                return Wrap(
-                  children: [
-                    TextButton(
-                      key: ValueKey('goal-open:${g['id']}'),
-                      onPressed: () => open(g),
-                      child: const Text('Открыть'),
-                    ),
-                    PopupMenuButton<String>(
-                      key: ValueKey('goal-menu:${g['id']}'),
-                      tooltip: 'Меню цели',
-                      icon: const Icon(Icons.more_horiz),
-                      onSelected: (action) => rowAction(g, action),
-                      itemBuilder: (_) => [
-                        const PopupMenuItem(
-                          value: 'edit',
-                          child: Text('Изменить цель'),
-                        ),
-                        const PopupMenuItem(
-                          value: 'history',
-                          child: Text('История замеров'),
-                        ),
-                        if (g['_inTrash'] != true) ...[
-                          const PopupMenuItem(
-                            value: 'child',
-                            child: Text('Добавить подцель'),
-                          ),
-                          PopupMenuItem(
-                            value: g['_inArchive'] == true
-                                ? 'unarchive'
-                                : 'archive',
-                            child: Text(
-                              g['_inArchive'] == true
-                                  ? 'Вернуть из архива'
-                                  : 'В архив',
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Text('Удалить строку'),
-                          ),
-                        ] else
-                          const PopupMenuItem(
-                            value: 'restore',
-                            child: Text('Восстановить из корзины'),
-                          ),
-                      ],
-                    ),
-                  ],
+                return GoalCustomCell(
+                  repo: widget.repo,
+                  goal: g,
+                  column: widget.repo.goalColumns().firstWhere(
+                    (c) => c['id'] == col.id,
+                  ),
                 );
             }
           },

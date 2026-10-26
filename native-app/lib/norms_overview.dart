@@ -5,6 +5,7 @@ import 'pomodoro_plan.dart';
 import 'repository.dart';
 import 'section_analytics.dart';
 import 'workspace_table.dart';
+import 'table_progress.dart';
 
 /// Sum exactly the owner's effective daily rules, never the metric templates.
 List<Json> userNormsWeek(DashboardRepository repo, String week) {
@@ -105,21 +106,30 @@ class _NormsOverviewState extends State<NormsOverview> {
             columns: const [
               WorkColumn('title', 'Работа', width: 340),
               WorkColumn('planned', 'План за неделю · помидорки', width: 220),
-              WorkColumn('actual', 'Учтено · помидорки', width: 200),
+              WorkColumn('actual', 'Выполнение · помидорки', width: 240),
               WorkColumn('hours', 'Учтено · часы', width: 180),
             ],
             value: (r, id) => id == '*' ? r['title'] : r[id],
-            cell: (_, r, c) => Text(
-              c.id == 'hours'
-                  ? (r['hours'] == null
-                        ? 'Не загружено'
-                        : (r['hours'] as num)
-                              .toStringAsFixed(2)
-                              .replaceAll('.', ','))
-                  : c.id == 'actual'
-                  ? '${r['actual']}${(r['pending'] as int) > 0 ? ' · на устройстве: ${r['pending']}' : ''}'
-                  : '${r[c.id]}',
-            ),
+            cell: (_, r, c) => c.id == 'actual'
+                ? TableProgress(
+                    key: ValueKey('norm-week-progress:${r['id']}'),
+                    done: r['actual'] as num,
+                    planned: r['planned'] as num,
+                    pending: (r['pending'] as int) > 0
+                        ? 'На устройстве: ${r['pending']}'
+                        : null,
+                  )
+                : Text(
+                    c.id == 'hours'
+                        ? (r['hours'] == null
+                              ? 'Не загружено'
+                              : (r['hours'] as num)
+                                    .toStringAsFixed(2)
+                                    .replaceAll('.', ','))
+                        : c.id == 'actual'
+                        ? '${r['actual']}${(r['pending'] as int) > 0 ? ' · на устройстве: ${r['pending']}' : ''}'
+                        : '${r[c.id]}',
+                  ),
           ),
       ],
     );

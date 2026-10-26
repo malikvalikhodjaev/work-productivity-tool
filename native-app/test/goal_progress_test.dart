@@ -7,6 +7,11 @@ import 'package:indicators_work/local_database.dart';
 import 'package:indicators_work/repository.dart';
 
 void main() {
+  test('calculated difference hides binary display noise without rounding raw values', () {
+    expect(goalDifferenceNumber(7.2 - 8), '-0,8');
+    expect(goalNumber(0.123456789123456), '0,123456789123456');
+  });
+
   test('manual before/after separates change from progress, including decreasing goals', () {
     final increasing = evaluateGoal(
       {'baseline': 10, 'target': 30, 'direction': 'up'},
