@@ -14,11 +14,13 @@ String syncTime(Object? raw) {
 class ActivityStatus extends StatelessWidget {
   final DashboardRepository repo;
   final bool showTimer;
+  final bool compact;
   final VoidCallback? inspect;
   const ActivityStatus({
     super.key,
     required this.repo,
     this.showTimer = true,
+    this.compact = false,
     this.inspect,
   });
   @override
@@ -41,6 +43,56 @@ class ActivityStatus extends StatelessWidget {
           ? 'Синхронизировано · $last'
           : 'Локальное хранилище готово · первая синхронизация ещё не выполнена';
       final active = repo.active;
+      if (compact) {
+        final short = conflicts > 0
+            ? 'Нужен разбор: $conflicts'
+            : repo.syncing
+            ? 'Синхронизация…'
+            : pending.isNotEmpty
+            ? 'Ожидает: ${pending.length}'
+            : error != null
+            ? 'Нет связи'
+            : last.isNotEmpty
+            ? 'Синхронизировано · $last'
+            : 'На устройстве';
+        return Semantics(
+          liveRegion: true,
+          label: label,
+          child: Tooltip(
+            message: label,
+            child: Row(
+              key: const ValueKey('activity-status-compact'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (MediaQuery.sizeOf(context).width >= 1100)
+                  TextButton(
+                    onPressed: inspect,
+                    child: Text(
+                      short,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: conflicts > 0 || error != null
+                            ? Theme.of(context).colorScheme.error
+                            : null,
+                      ),
+                    ),
+                  ),
+                IconButton(
+                  tooltip: '$label\nСинхронизировать сейчас',
+                  onPressed: repo.syncing ? null : repo.synchronize,
+                  icon: Icon(
+                    conflicts > 0
+                        ? Icons.warning_amber
+                        : error != null
+                        ? Icons.cloud_off_outlined
+                        : Icons.sync,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       final timer = active == null
           ? null
           : '${repo.timerBusy

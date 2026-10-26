@@ -43,6 +43,7 @@ import 'goal_table.dart';
 import 'goal_status.dart';
 import 'model_link.dart';
 import 'systems_panel.dart';
+import 'norms_overview.dart';
 import 'activity_status.dart';
 import 'dashboard_timer_bar.dart';
 import 'dashboard_window_header.dart';
@@ -263,7 +264,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.38',
+        'clientVersion': '0.1.39',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -2372,26 +2373,6 @@ class _DashboardHomeState extends State<DashboardHome>
             child: const Text('＋ Цель'),
           ),
         ),
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 12),
-          child: Text(
-            'Укажи единицу, запиши характеристику сейчас и предпочтительную шкалу. Дата замера ставится при сохранении. Предыдущие значения доступны в истории; первый замер задаёт начало сравнения.',
-          ),
-        ),
-        const ExpansionTile(
-          title: Text('Как вводить и читать показатели'),
-          children: [
-            Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Руководства: часы чтения и применения — отдельные нормы. В замере можно записывать, какую идею применяешь, что меняется в проекте, карьере или результате и чем это подтверждается.\n\n'
-                'Выручка — платежи клиентов. Прибыль бизнеса — выручка минус расходы. Личный доход — полученное себе. Для каждого денежного показателя укажи валюту и период; в месячном замере записывай итог выбранного месяца.\n\n'
-                'Сон: записывай часы за ночь на дату пробуждения. Минимум указан в карточке нормы.\n\n'
-                'Изменение показывает разницу с началом и с прошлым замером. Полоса и процент показывают движение от исходного значения к предпочтительному. Без определённой шкалы процент не вычисляется. Все замеры и их даты сохраняются в истории.',
-              ),
-            ),
-          ],
-        ),
         GoalsTable(
           repo: repo,
           goals: allGoals,
@@ -2399,55 +2380,23 @@ class _DashboardHomeState extends State<DashboardHome>
           measure: measureGoal,
           child: (g) => editGoal(null, g['id'].toString()),
           history: (g) => showGoalHistory(context, g),
+          timer: (_) => DashboardTimerBar(
+            repo: repo,
+            pulse: clockPulse,
+            open: () {
+              Navigator.of(context).popUntil((route) => route.isFirst);
+              changeFocus(true);
+            },
+            pause: () => safe(
+              () => repo.timerAction(
+                repo.active?['status'] == 'paused' ? 'resume' : 'pause',
+              ),
+            ),
+            finish: finishTimer,
+          ),
         ),
         sectionTitle('Нормативы'),
-        const Text(
-          'На неделю',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: rows(repo.cache('dashboard')['metrics'])
-              .map(
-                (m) => SizedBox(
-                  width: 260,
-                  child: metricCard(
-                    m['title'].toString(),
-                    m['recordCount'] == 0 ? null : m['actual'],
-                    m['target'],
-                    m['recordCount'] == 0 ? null : m['percent'],
-                    unit: m['unit'] == 'hours' ? 'ч' : 'альф',
-                    onTap: () => editFields(
-                      context,
-                      title: 'Недельный норматив',
-                      initial: {'target': m['target']},
-                      fields: const [
-                        FieldSpec(
-                          'target',
-                          'Норма · пусто для снятия',
-                          numeric: true,
-                        ),
-                      ],
-                      save: (input) async {
-                        repo.nativeSave(
-                          'target',
-                          'save',
-                          {
-                            'metricId': m['id'],
-                            'week': repo.cache('dashboard')['week'],
-                            'target': input['target'],
-                          },
-                          'target:${repo.cache('dashboard')['week']}:${m['id']}',
-                          expectedTarget: m['target'],
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              )
-              .toList(),
-        ),
+        NormsOverview(repo: repo),
         sectionTitle(
           'На день',
           trailing: TextButton(
@@ -3150,12 +3099,11 @@ class _DashboardHomeState extends State<DashboardHome>
                   tooltip: 'Скрыть таймер в трей',
                 ),
               ] else ...[
-                IconButton(
-                  onPressed: repo.syncing ? null : repo.synchronize,
-                  icon: Icon(
-                    repo.online ? Icons.sync : Icons.cloud_off_outlined,
-                  ),
-                  tooltip: repo.status,
+                ActivityStatus(
+                  repo: repo,
+                  showTimer: false,
+                  compact: true,
+                  inspect: () => selectSection(4),
                 ),
                 IconButton(
                   onPressed: settings,
@@ -3230,7 +3178,7 @@ class _DashboardHomeState extends State<DashboardHome>
                                 const SizedBox(height: 20),
                                 const SizedBox(height: 12),
                                 const Text(
-                                  'I&W · Native 0.1.38',
+                                  'I&W · Native 0.1.39',
                                   style: TextStyle(fontSize: 11),
                                 ),
                               ],
@@ -3241,14 +3189,6 @@ class _DashboardHomeState extends State<DashboardHome>
                         key: const ValueKey('dashboard-page-stack'),
                         child: Column(
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-                              child: ActivityStatus(
-                                repo: repo,
-                                showTimer: false,
-                                inspect: () => selectSection(4),
-                              ),
-                            ),
                             Expanded(
                               child: IndexedStack(
                                 index: section,

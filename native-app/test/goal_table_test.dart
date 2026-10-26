@@ -164,7 +164,7 @@ void main() {
       expect(text.maxLines, null);
       expect(text.overflow, isNot(TextOverflow.ellipsis));
       expect(find.byType(FittedBox), findsNothing);
-      final history = find.byKey(const ValueKey('goal-history:g'));
+      final history = find.byKey(const ValueKey('goal-menu:g'));
       await tester.ensureVisible(history);
       await tester.pumpAndSettle();
       expect(history.hitTestable(), findsOneWidget);

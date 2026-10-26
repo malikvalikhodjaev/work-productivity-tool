@@ -21,7 +21,10 @@ List<Json> arrangeTableRows(
   dynamic Function(Json, String) value,
   Set<String> collapsed,
 ) {
-  final original = hierarchyRows(source);
+  final original = [
+    for (final row in hierarchyRows(source))
+      {...row, if (row['_sourceWbs'] != null) '_wbs': row['_sourceWbs']},
+  ];
   final map = {for (final row in original) row['id'].toString(): row};
   final indexes = {
     for (var i = 0; i < original.length; i++) original[i]['id']: i,
@@ -100,6 +103,10 @@ class WorkspaceTable extends StatefulWidget {
   final Widget Function(BuildContext, Json, WorkColumn) cell;
   final dynamic Function(Json, String) value;
   final String Function(Json)? rowKey;
+  final bool grouping;
+  final List<Widget> tools;
+  final bool compactToolbar;
+  final VoidCallback? reset;
   const WorkspaceTable({
     super.key,
     required this.repo,
@@ -110,6 +117,10 @@ class WorkspaceTable extends StatefulWidget {
     required this.value,
     this.collapsed = const {},
     this.rowKey,
+    this.grouping = true,
+    this.tools = const [],
+    this.compactToolbar = false,
+    this.reset,
   });
   @override
   State<WorkspaceTable> createState() => _WorkspaceTableState();
@@ -148,166 +159,20 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
     });
     return c;
   });
-  Future<void> saveNamedView() async {
-    final name = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Сохранить вид таблицы'),
-        content: TextField(
-          controller: name,
-          autofocus: true,
-          maxLength: 80,
-          decoration: const InputDecoration(labelText: 'Название вида'),
-          onSubmitted: (v) {
-            if (v.trim().isNotEmpty) Navigator.pop(context, v.trim());
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (name.text.trim().isNotEmpty) {
-                Navigator.pop(context, name.text.trim());
-              }
-            },
-            child: const Text('Сохранить'),
-          ),
-        ],
-      ),
-    );
-    // Dialog transition may still reference the text controller.
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    name.dispose();
-    if (!mounted || result == null) return;
-    final saved = object(widget.repo.local.get('${widget.viewKey}:saved'));
-    widget.repo.local.set('${widget.viewKey}:saved', {...saved, result: view});
-    setState(() {});
-  }
-
   List<WorkColumn> get columns {
     final all = widget.columns;
     if (all.isEmpty) return [];
-    final order = (view['order'] as List? ?? []).whereType<String>().toList();
-    final hidden = (view['hidden'] as List? ?? []).whereType<String>().toSet();
+    final order = (view['order'] as List? ?? [])
+        .whereType<String>()
+        .toSet()
+        .toList();
     return [
-      all.first,
       ...[...order, ...all.map((c) => c.id).where((id) => !order.contains(id))]
-          .where((id) => id != all.first.id && !hidden.contains(id))
           .map((id) => all.where((c) => c.id == id).firstOrNull)
           .whereType<WorkColumn>(),
     ];
   }
 
-  Future<void> configure() => showDialog<void>(
-    context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, update) {
-        final ordered = [
-          columns.first,
-          ...widget.columns.where((c) => c.id != columns.first.id),
-        ];
-        void apply(Json patch) {
-          change(patch);
-          update(() {});
-        }
-
-        return AlertDialog(
-          title: const Text('Столбцы и ширина'),
-          content: SizedBox(
-            width: 500,
-            height: min(520, MediaQuery.sizeOf(context).height * .65),
-            child: ListView(
-              children: [
-                const Text(
-                  'Первый столбец закреплён. Ширину можно также менять за ручку в заголовке.',
-                ),
-                for (final col in ordered)
-                  Column(
-                    children: [
-                      CheckboxListTile(
-                        title: Text(col.title),
-                        value: columns.any((c) => c.id == col.id),
-                        onChanged: col == ordered.first
-                            ? null
-                            : (checked) {
-                                final hidden = (view['hidden'] as List? ?? [])
-                                    .toSet();
-                                checked == true
-                                    ? hidden.remove(col.id)
-                                    : hidden.add(col.id);
-                                apply({'hidden': hidden.toList()});
-                              },
-                        secondary: col == ordered.first
-                            ? const Icon(Icons.push_pin_outlined)
-                            : PopupMenuButton<String>(
-                                tooltip: 'Положение столбца',
-                                itemBuilder: (_) => [
-                                  const PopupMenuItem(
-                                    value: 'left',
-                                    child: Text('Левее'),
-                                  ),
-                                  const PopupMenuItem(
-                                    value: 'right',
-                                    child: Text('Правее'),
-                                  ),
-                                ],
-                                onSelected: (direction) {
-                                  final order = columns
-                                      .map((c) => c.id)
-                                      .toList();
-                                  final at = order.indexOf(col.id);
-                                  if (at < 1 || order.length < 2) return;
-                                  final target =
-                                      (order.indexOf(col.id) +
-                                              (direction == 'left' ? -1 : 1))
-                                          .clamp(1, order.length - 1);
-                                  if (at < 1) return;
-                                  order.removeAt(at);
-                                  order.insert(target, col.id);
-                                  apply({'order': order});
-                                },
-                              ),
-                      ),
-                      Row(
-                        children: [
-                          const Text('Ширина'),
-                          Expanded(
-                            child: Slider(
-                              value: width(col).clamp(100, 600),
-                              min: 100,
-                              max: 600,
-                              divisions: 50,
-                              label: '${width(col).round()}',
-                              onChanged: (w) => apply({
-                                'widths': {
-                                  ...object(view['widths']),
-                                  col.id: w,
-                                },
-                              }),
-                            ),
-                          ),
-                          Text('${width(col).round()}'),
-                        ],
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Готово'),
-            ),
-          ],
-        );
-      },
-    ),
-  );
   double width(WorkColumn col) =>
       (object(view['widths'])[col.id] as num? ?? col.width).toDouble().clamp(
         100,
@@ -319,102 +184,84 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
     if (cols.isEmpty) return const SizedBox.shrink();
     final shown = arrangeTableRows(
       widget.items,
-      view,
+      {...view, if (!widget.grouping) 'group': ''},
       widget.value,
       widget.collapsed,
     );
-    final named = object(widget.repo.local.get('${widget.viewKey}:saved'));
     final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+    final toolbar = <Widget>[
+      SizedBox(
+        width: 240 * scale,
+        child: TextField(
+          controller: query,
+          decoration: const InputDecoration(
+            labelText: 'Поиск по таблице',
+            prefixIcon: Icon(Icons.search),
+            isDense: true,
+          ),
+          onChanged: (s) => change({'query': s}),
+        ),
+      ),
+      ...widget.tools,
+      if (widget.grouping)
+        SizedBox(
+          width: 220,
+          child: DropdownButtonFormField<String>(
+            initialValue: widget.columns.any((c) => c.id == view['group'])
+                ? view['group'].toString()
+                : '',
+            key: ValueKey('group:${view['group']}'),
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Группировать верхние уровни',
+              isDense: true,
+            ),
+            items: [
+              const DropdownMenuItem(value: '', child: Text('Без группировки')),
+              for (final c in widget.columns.where((c) => c.id != '_actions'))
+                DropdownMenuItem(value: c.id, child: Text(c.title)),
+            ],
+            onChanged: (value) => change({'group': value}),
+          ),
+        ),
+      TextButton(
+        onPressed: () {
+          query.clear();
+          change({'query': '', 'sort': '', 'group': '', 'descending': false});
+          widget.reset?.call();
+        },
+        child: const Text('Сбросить'),
+      ),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            SizedBox(
-              width: 240,
-              child: TextField(
-                controller: query,
-                decoration: const InputDecoration(
-                  labelText: 'Поиск по таблице',
-                  prefixIcon: Icon(Icons.search),
-                  isDense: true,
-                ),
-                onChanged: (s) => change({'query': s}),
-              ),
-            ),
-            TextButton.icon(
-              onPressed: configure,
-              icon: const Icon(Icons.view_column_outlined),
-              label: const Text('Вид таблицы'),
-            ),
-            TextButton.icon(
-              onPressed: saveNamedView,
-              icon: const Icon(Icons.bookmark_add_outlined),
-              label: const Text('Сохранить вид'),
-            ),
-            if (named.isNotEmpty)
-              PopupMenuButton<String>(
-                tooltip: 'Сохранённые виды',
-                itemBuilder: (_) => [
-                  for (final name in named.keys)
-                    PopupMenuItem(value: name, child: Text(name)),
-                ],
-                onSelected: (name) {
-                  query.text = (object(named[name])['query'] ?? '').toString();
-                  widget.repo.local.set(widget.viewKey, named[name]);
-                  setState(() {});
-                },
-                child: const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Text('Открыть вид ▾'),
-                ),
-              ),
-            SizedBox(
-              width: 220,
-              child: DropdownButtonFormField<String>(
-                initialValue: widget.columns.any((c) => c.id == view['group'])
-                    ? view['group'].toString()
-                    : '',
-                key: ValueKey('group:${view['group']}'),
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Группировать верхние уровни',
-                  isDense: true,
-                ),
-                items: [
-                  const DropdownMenuItem(
-                    value: '',
-                    child: Text('Без группировки'),
+        if (widget.compactToolbar)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final tool in toolbar)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: tool,
                   ),
-                  for (final c in widget.columns.where(
-                    (c) => c.id != '_actions',
-                  ))
-                    DropdownMenuItem(value: c.id, child: Text(c.title)),
-                ],
-                onChanged: (value) => change({'group': value}),
-              ),
+              ],
             ),
-            TextButton(
-              onPressed: () {
-                query.clear();
-                change({
-                  'query': '',
-                  'sort': '',
-                  'group': '',
-                  'descending': false,
-                });
-              },
-              child: const Text('Сбросить фильтр'),
-            ),
-          ],
-        ),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: toolbar,
+          ),
         const SizedBox(height: 8),
-        Text(
-          'Показано: ${shown.length} / ${widget.items.length} · заголовок — сортировка · первый столбец закреплён',
-        ),
+        if (!widget.compactToolbar)
+          Text(
+            'Показано: ${shown.length} / ${widget.items.length} · перетащи заголовок для перестановки, границу — для ширины · нажатие — сортировка',
+          ),
         const SizedBox(height: 8),
         LayoutBuilder(
           builder: (context, box) {
@@ -425,6 +272,7 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
             Widget line(String id, Json? row) {
               final head = row == null;
               Widget content(WorkColumn col, double w) => SizedBox(
+                key: ValueKey('column-cell:${col.id}'),
                 width: w,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -435,24 +283,68 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
                       ? Row(
                           children: [
                             Expanded(
-                              child: TextButton(
-                                onPressed: () => change({
-                                  'sort': col.id,
-                                  'descending':
-                                      view['sort'] == col.id &&
-                                      view['descending'] != true,
-                                }),
-                                child: Tooltip(
-                                  message: col.hint ?? col.title,
-                                  child: Text(
-                                    '${col.title}${view['sort'] == col.id
-                                        ? view['descending'] == true
-                                              ? ' ↓'
-                                              : ' ↑'
-                                        : ''}',
-                                    softWrap: true,
-                                  ),
-                                ),
+                              child: DragTarget<String>(
+                                onWillAcceptWithDetails: (d) =>
+                                    d.data != col.id &&
+                                    cols.any((c) => c.id == d.data),
+                                onAcceptWithDetails: (d) {
+                                  final order = cols.map((c) => c.id).toList();
+                                  final from = order.indexOf(d.data),
+                                      to = order.indexOf(col.id);
+                                  order.removeAt(from);
+                                  order.insert(to, d.data);
+                                  change({'order': order});
+                                },
+                                builder: (context, candidate, rejected) =>
+                                    Draggable<String>(
+                                      key: ValueKey('column-drag:${col.id}'),
+                                      data: col.id,
+                                      affinity: Axis.horizontal,
+                                      feedback: Material(
+                                        elevation: 4,
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(12),
+                                          child: Text(col.title),
+                                        ),
+                                      ),
+                                      childWhenDragging: Opacity(
+                                        opacity: .4,
+                                        child: Text(col.title),
+                                      ),
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          border: candidate.isEmpty
+                                              ? null
+                                              : Border(
+                                                  left: BorderSide(
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .primary,
+                                                    width: 2,
+                                                  ),
+                                                ),
+                                        ),
+                                        child: TextButton(
+                                          onPressed: () => change({
+                                            'sort': col.id,
+                                            'descending':
+                                                view['sort'] == col.id &&
+                                                view['descending'] != true,
+                                          }),
+                                          child: Tooltip(
+                                            message: col.hint ?? col.title,
+                                            child: Text(
+                                              '${col.title}${view['sort'] == col.id
+                                                  ? view['descending'] == true
+                                                        ? ' ↓'
+                                                        : ' ↑'
+                                                  : ''}',
+                                              softWrap: true,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                               ),
                             ),
                             Semantics(
@@ -460,6 +352,8 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
                               child: MouseRegion(
                                 cursor: SystemMouseCursors.resizeColumn,
                                 child: GestureDetector(
+                                  key: ValueKey('column-resize:${col.id}'),
+                                  behavior: HitTestBehavior.opaque,
                                   onHorizontalDragUpdate: (event) => change({
                                     'widths': {
                                       ...object(view['widths']),
@@ -467,10 +361,18 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
                                           .clamp(100, 600),
                                     },
                                   }),
-                                  child: const SizedBox(
-                                    width: 16,
+                                  child: SizedBox(
+                                    width: 12,
                                     height: 48,
-                                    child: Icon(Icons.drag_indicator, size: 16),
+                                    child: Center(
+                                      child: Container(
+                                        width: 1,
+                                        height: 28,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .outlineVariant,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -479,7 +381,10 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
                         )
                       : Semantics(
                           label: col.title,
-                          child: widget.cell(context, row, col),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: widget.cell(context, row, col),
+                          ),
                         ),
                 ),
               );

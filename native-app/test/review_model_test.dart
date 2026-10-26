@@ -227,7 +227,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(status);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('В эксплуатации').last);
+    await tester.tap(find.text('Поддерживается').last);
     await tester.pumpAndSettle();
     final input = object(object(repo.pending.single['body'])['input']);
     expect(input['status'], 'operation');

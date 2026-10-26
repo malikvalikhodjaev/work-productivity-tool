@@ -240,7 +240,7 @@ void main() {
     expect(find.text('Синхронизировано · 12:00'), findsNothing);
   });
   testWidgets(
-    'table keeps headers and first column fixed; views survive remount',
+    'table keeps headers and first column fixed; search survives remount without view settings',
     (tester) async {
       tester.view.physicalSize = const Size(900, 1100);
       tester.view.devicePixelRatio = 1;
@@ -308,14 +308,8 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Строка 0'), findsNothing);
-      await tester.tap(find.text('Сохранить вид'));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Название вида'),
-        'Мой вид',
-      );
-      await tester.tap(find.text('Сохранить'));
-      await tester.pumpAndSettle();
+      expect(find.text('Вид таблицы'), findsNothing);
+      expect(find.text('Сохранить вид'), findsNothing);
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(app());
       await tester.pumpAndSettle();
@@ -326,10 +320,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(
-        object(repo.local.get('test-view:saved')).containsKey('Мой вид'),
-        isTrue,
-      );
+      expect(object(repo.local.get('test-view'))['query'], 'Строка 12');
       expect(repo.pending, isEmpty);
       expect(tester.takeException(), isNull);
     },

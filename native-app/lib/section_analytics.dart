@@ -65,6 +65,7 @@ List<Json> analyticsTimeRows(DashboardRepository repo) {
           'date': date,
           'durationSeconds': (stop - start) / 1000,
           'timerSessionId': s['id'],
+          'workRef': s['workRef'],
           'workType': s['workType'],
         });
         start = stop;

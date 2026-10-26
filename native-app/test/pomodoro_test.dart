@@ -102,7 +102,7 @@ void main() {
       expect(find.text('Сделал это?'), findsNothing);
       await tester.tap(find.byTooltip('Настройки и нормативы'));
       await tester.pump(const Duration(milliseconds: 350));
-      expect(find.text('Настройки · нормативы на день'), findsOneWidget);
+      expect(find.text('Настройки'), findsOneWidget);
       expect(find.text('Читать руководства'), findsWidgets);
       expect(find.text('0/10'), findsWidgets);
       expect(find.text('Помидорки за неделю'), findsWidgets);

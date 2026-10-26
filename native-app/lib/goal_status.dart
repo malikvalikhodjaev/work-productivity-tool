@@ -1,8 +1,13 @@
-import 'work_stage_board.dart';
-
 const goalStatusOptions = {
-  ...workStageLabels,
+  'note': 'Записана',
+  'planned': 'Запланирована',
+  'active': 'В работе',
+  'blocked': 'Есть препятствие',
   'paused': 'На паузе',
+  'commissioning': 'Внедряется',
+  'ready': 'Достигнута',
+  'operation': 'Поддерживается',
+  'retired': 'Отложена',
   'archived': 'В архиве',
 };
 

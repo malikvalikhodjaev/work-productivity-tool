@@ -734,6 +734,11 @@ class DashboardRepository extends ChangeNotifier {
     bool remember = true,
     Json? expectedGoal,
   }) {
+    if (field == 'trashedAt' && cache('workspace')['goalTrashVersion'] != 1) {
+      throw StateError(
+        'Сначала синхронизируйся с сервером, поддерживающим корзину целей. Строка не удалена.',
+      );
+    }
     if (![
       'title',
       'unit',
@@ -741,6 +746,7 @@ class DashboardRepository extends ChangeNotifier {
       'target',
       'dueDate',
       'status',
+      'trashedAt',
     ].contains(field)) {
       throw ArgumentError('Это поле редактируется через подробности цели.');
     }
@@ -758,6 +764,7 @@ class DashboardRepository extends ChangeNotifier {
         'direction',
         'dueDate',
         'status',
+        'trashedAt',
         'parentId',
         'characteristicId',
         'workRef',
