@@ -1417,9 +1417,39 @@ class DashboardRepository extends ChangeNotifier {
           };
         }
       }
+      // A later creation must not participate in earlier queued moves: the
+      // server has not created that row yet when it applies those moves.
+      final canonicalIds = source.map((r) => r['id']).toSet();
+      for (final queued in pending) {
+        final body = object(queued['body']), input = object(body['input']);
+        if (body['module'] == 'workspace' &&
+            body['action'] == 'saveGoal' &&
+            input['id'] == null &&
+            input['clientId'] != null &&
+            !canonicalIds.contains(input['clientId'])) {
+          items.remove('goal:${input['clientId']}');
+        }
+      }
     }
     for (final queued in pending) {
       final body = object(queued['body']), input = object(body['input']);
+      if (collection == 'goals' &&
+          body['module'] == 'workspace' &&
+          body['action'] == 'saveGoal' &&
+          input['id'] == null &&
+          input['clientId'] != null) {
+        final key = 'goal:${input['clientId']}';
+        items.putIfAbsent(
+          key,
+          () => {
+            ...input,
+            'id': input['clientId'],
+            'parentId': parentOf(input),
+            'sortOrder': null,
+          },
+        );
+        continue;
+      }
       if (collection == 'goals' &&
           queued['state'] != 'conflict' &&
           body['module'] == 'workspace' &&

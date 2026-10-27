@@ -46,6 +46,7 @@ import 'systems_panel.dart';
 import 'norms_overview.dart';
 import 'dashboard_timer_bar.dart';
 import 'dashboard_window_header.dart';
+import 'sync_conflicts.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -263,7 +264,7 @@ class _DashboardHomeState extends State<DashboardHome>
       repo.local.set('backgroundRuntime', {
         'ready': true,
         'platform': Platform.operatingSystem,
-        'clientVersion': '0.1.44',
+        'clientVersion': '0.1.45',
         'tray': trayReady,
         'at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -2813,8 +2814,19 @@ class _DashboardHomeState extends State<DashboardHome>
                 builder: (c) => AlertDialog(
                   title: const Text('Исходная запись очереди'),
                   content: SingleChildScrollView(
-                    child: SelectableText(
-                      const JsonEncoder.withIndent('  ').convert(item),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (isGoalHierarchyConflict(item))
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 16),
+                            child: Text(goalHierarchyConflictHelp),
+                          ),
+                        SelectableText(
+                          const JsonEncoder.withIndent('  ').convert(item),
+                        ),
+                      ],
                     ),
                   ),
                   actions: [
@@ -2828,8 +2840,10 @@ class _DashboardHomeState extends State<DashboardHome>
                           await repo.resolveConflict(item, apply: false);
                           if (c.mounted) Navigator.pop(c);
                         }),
-                        child: const Text(
-                          'Сохранить исходник локально и пропустить',
+                        child: Text(
+                          isGoalHierarchyConflict(item)
+                              ? 'Оставить серверный вариант'
+                              : 'Сохранить исходник локально и пропустить',
                         ),
                       ),
                     if (item['state'] == 'conflict' &&
@@ -2867,9 +2881,14 @@ class _DashboardHomeState extends State<DashboardHome>
                             });
                           }
                         },
-                        child: const Text('Разрешить конфликт явно'),
+                        child: Text(
+                          isGoalHierarchyConflict(item)
+                              ? 'Применить перенос к текущей структуре'
+                              : 'Разрешить конфликт явно',
+                        ),
                       ),
-                    if (item['state'] == 'conflict')
+                    if (item['state'] == 'conflict' &&
+                        !isGoalHierarchyConflict(item))
                       TextButton(
                         onPressed: () {
                           repo.local.retry(item['id'].toString());
@@ -3196,7 +3215,7 @@ class _DashboardHomeState extends State<DashboardHome>
                                 const SizedBox(height: 20),
                                 const SizedBox(height: 12),
                                 const Text(
-                                  'I&W · Native 0.1.44',
+                                  'I&W · Native 0.1.45',
                                   style: TextStyle(fontSize: 11),
                                 ),
                               ],

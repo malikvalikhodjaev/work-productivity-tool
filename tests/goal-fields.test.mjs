@@ -64,3 +64,16 @@ test('field patches retain a moved parent and an unchanged legacy command may re
  store.nativeMutate(command('title',goal.title,'  Другое имя  '));
  assert.equal(store.view().goals[0].parentId,parent.id);assert.equal(store.view().goals[0].title,'  Другое имя  ');
 });
+
+test('manual goal measurements accept an optional comment, preserve it exactly and replay once',t=>{
+ const {store,goal,file,portfolio}=fixture(t);
+ const command={requestId:randomUUID(),action:'measure',input:{kind:'goal',targetId:goal.id,value:5,date:'2026-10-27',evidence:''}};
+ store.nativeMutate(command);
+ const first=readFileSync(file,'utf8');store.nativeMutate(command);assert.equal(readFileSync(file,'utf8'),first);
+ assert.equal(store.view().measurements.length,1);assert.equal(store.view().measurements[0].evidence,'');
+ const raw='  Мой комментарий\n\nсо ссылкой https://example.com/#measurement  ';
+ store.mutate('measure',{...command.input,value:6,evidence:raw});
+ assert.equal(createWorkspaceStore(file,portfolio).view().measurements.at(-1).evidence,raw);
+ const before=readFileSync(file,'utf8');assert.throws(()=>store.mutate('measure',{...command.input,evidence:'x'.repeat(3001)}),/3000/);
+ assert.equal(readFileSync(file,'utf8'),before);
+});
