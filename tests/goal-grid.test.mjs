@@ -54,3 +54,24 @@ test('select, date, checkbox and archived column validation never rewrites old v
     assert.equal(store.view().goalColumnDefinitions.some(c=>c.id===id),false);
   }
 });
+
+test('notes preserve long paragraphs and links across retries, restart and column archive',t=>{
+  const {file,store,goal,portfolio}=fixture(t),id=randomUUID();
+  store.mutate('createGoalColumn',{id,title:'Подробные заметки',type:'notes'});
+  assert.equal(store.view().goalNotesVersion,1);
+  assert.equal(store.view().goalColumnDefinitions.find(c=>c.id===id).maxLength,30000);
+  const value='  Контекст\n\n'+('Описание и обоснование. '.repeat(600))+'\nhttps://example.com/model?q=one#section  ';
+  const command={requestId:randomUUID(),action:'editGoalCell',input:{id:goal.id,columnId:id,before:null,value}};
+  store.nativeMutate(command);
+  const raw=readFileSync(file,'utf8');store.nativeMutate(command);
+  assert.equal(readFileSync(file,'utf8'),raw);
+  assert.equal(createWorkspaceStore(file,portfolio).view().goals[0].customValues[id],value);
+  assert.throws(()=>store.mutate('editGoalCell',{id:goal.id,columnId:id,before:value,value:'x'.repeat(30001)}),/30000/);
+  assert.throws(()=>store.mutate('editGoalCell',{id:goal.id,columnId:id,before:value,value:{html:'<b>text</b>'}}),/текст/);
+  assert.throws(()=>store.mutate('editGoalCell',{id:goal.id,columnId:id,before:null,value:'Перезапись'}),/изменилась/);
+  assert.equal(readFileSync(file,'utf8'),raw);
+  store.mutate('updateGoalColumn',{id,title:'Подробности',expectedRevision:1,archived:true});
+  store.mutate('updateGoalColumn',{id,title:'Подробности',expectedRevision:2,archived:false});
+  assert.equal(store.view().goals[0].customValues[id],value);
+  assert.equal(store.view().goalTableHistory.filter(h=>h.rowId===goal.id&&h.columnId===id).length,1);
+});

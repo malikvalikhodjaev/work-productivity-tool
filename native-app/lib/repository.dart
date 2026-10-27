@@ -986,7 +986,8 @@ class DashboardRepository extends ChangeNotifier {
           'custom': true,
           'archived': false,
           'revision': 1,
-          'width': 200,
+          'width': input['type'] == 'notes' ? 280 : 180,
+          if (input['type'] == 'notes') 'maxLength': 30000,
         };
       } else if (body['action'] == 'updateGoalColumn' &&
           all.containsKey(input['id'])) {

@@ -93,7 +93,9 @@ List<Json> arrangeTableRows(
   for (final row in roots) {
     visit(row, root: true);
   }
-  return result;
+  return [
+    for (var i = 0; i < result.length; i++) {...result[i], '_rowNumber': i + 1},
+  ];
 }
 
 class WorkspaceTable extends StatefulWidget {
@@ -114,6 +116,7 @@ class WorkspaceTable extends StatefulWidget {
   final Future<void> Function(WorkColumn)? removeColumn;
   final bool Function(WorkColumn)? canRemoveColumn;
   final bool cleanGrid;
+  final bool dense;
   final Widget Function(Json, Widget, ValueChanged<Offset>)? rowWrapper;
   final bool rowDragging;
   const WorkspaceTable({
@@ -135,6 +138,7 @@ class WorkspaceTable extends StatefulWidget {
     this.removeColumn,
     this.canRemoveColumn,
     this.cleanGrid = false,
+    this.dense = false,
     this.rowWrapper,
     this.rowDragging = false,
   });
@@ -307,6 +311,12 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
   }
 
   Widget buildTable(BuildContext context) {
+    final compactControls =
+        widget.dense &&
+        ![
+          TargetPlatform.android,
+          TargetPlatform.iOS,
+        ].contains(Theme.of(context).platform);
     final cols = columns;
     if (cols.isEmpty) return const SizedBox.shrink();
     final shown = arrangeTableRows(
@@ -435,9 +445,9 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
                         )
                       : const BoxDecoration(),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 8,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: widget.dense ? 6 : 8,
+                      vertical: widget.dense ? 3 : 8,
                     ),
                     child: head
                         ? Row(
@@ -493,9 +503,16 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
                                                         Alignment.centerLeft,
                                                     padding:
                                                         const EdgeInsets.symmetric(
-                                                          horizontal: 4,
-                                                          vertical: 8,
+                                                          horizontal: 2,
+                                                          vertical: 4,
                                                         ),
+                                                    minimumSize: const Size(
+                                                      0,
+                                                      28,
+                                                    ),
+                                                    tapTargetSize:
+                                                        MaterialTapTargetSize
+                                                            .shrinkWrap,
                                                     foregroundColor:
                                                         Theme.of(context)
                                                             .colorScheme
@@ -524,25 +541,38 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
                                       ),
                                 ),
                               ),
-                              IconButton(
-                                key: ValueKey('column-rename:${col.id}'),
-                                tooltip: 'Переименовать столбец «${col.title}»',
-                                onPressed: () => renameColumn(col),
-                                constraints: const BoxConstraints(
-                                  minWidth: 32,
-                                  minHeight: 40,
+                              if (!widget.dense || compactControls)
+                                IconButton(
+                                  key: ValueKey('column-rename:${col.id}'),
+                                  tooltip:
+                                      'Переименовать столбец «${col.title}»',
+                                  onPressed: () => renameColumn(col),
+                                  style: IconButton.styleFrom(
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  constraints: BoxConstraints.tightFor(
+                                    width: compactControls ? 22 : 44,
+                                    height: compactControls ? 28 : 44,
+                                  ),
+                                  padding: const EdgeInsets.all(2),
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    size: 14,
+                                  ),
                                 ),
-                                padding: const EdgeInsets.all(4),
-                                icon: const Icon(Icons.edit_outlined, size: 16),
-                              ),
                               if (widget.removeColumn != null)
                                 PopupMenuButton<String>(
                                   key: ValueKey('column-menu:${col.id}'),
                                   tooltip: 'Меню столбца',
-                                  child: const SizedBox(
-                                    width: 28,
-                                    height: 40,
-                                    child: Icon(Icons.more_vert, size: 16),
+                                  padding: EdgeInsets.zero,
+                                  child: SizedBox(
+                                    width: compactControls ? 22 : 44,
+                                    height: compactControls ? 28 : 44,
+                                    child: const Icon(
+                                      Icons.more_vert,
+                                      size: 14,
+                                    ),
                                   ),
                                   onSelected: (action) {
                                     if (action == 'rename') renameColumn(col);
@@ -580,12 +610,12 @@ class _WorkspaceTableState extends State<WorkspaceTable> {
                                       },
                                     }),
                                     child: SizedBox(
-                                      width: 12,
-                                      height: 48,
+                                      width: compactControls ? 6 : 12,
+                                      height: compactControls ? 32 : 44,
                                       child: Center(
                                         child: Container(
                                           width: 1,
-                                          height: 28,
+                                          height: compactControls ? 18 : 28,
                                           color: Theme.of(context)
                                               .colorScheme
                                               .outlineVariant,

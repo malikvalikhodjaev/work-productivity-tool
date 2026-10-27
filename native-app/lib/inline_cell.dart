@@ -5,6 +5,7 @@ class InlineCell extends StatefulWidget {
   final String text, label;
   final String? displayText;
   final int maxLines;
+  final bool compact;
   final Future<void> Function(String) commit;
   final ValueChanged<String>? retain;
   final VoidCallback? begin, cancel;
@@ -20,6 +21,7 @@ class InlineCell extends StatefulWidget {
     this.begin,
     this.cancel,
     this.maxLines = 1,
+    this.compact = false,
   });
   @override
   State<InlineCell> createState() => _InlineCellState();
@@ -85,8 +87,14 @@ class _InlineCellState extends State<InlineCell> {
         onPressed: begin,
         style: TextButton.styleFrom(
           alignment: Alignment.centerLeft,
-          minimumSize: const Size(48, 48),
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+          minimumSize: Size(32, widget.compact ? 32 : 48),
+          tapTargetSize: widget.compact
+              ? MaterialTapTargetSize.shrinkWrap
+              : null,
+          padding: EdgeInsets.symmetric(
+            horizontal: 4,
+            vertical: widget.compact ? 4 : 10,
+          ),
         ),
         child: Text(
           widget.displayText ??

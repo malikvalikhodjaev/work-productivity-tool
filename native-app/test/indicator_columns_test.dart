@@ -30,6 +30,7 @@ DashboardRepository repository() => DashboardRepository(
     }),
 );
 Widget page(DashboardRepository repo) => MaterialApp(
+  theme: ThemeData(platform: TargetPlatform.windows),
   home: Scaffold(
     body: SingleChildScrollView(
       child: ListenableBuilder(

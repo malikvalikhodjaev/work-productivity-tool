@@ -4,6 +4,7 @@ import 'domain.dart';
 import 'forms.dart';
 import 'inline_cell.dart';
 import 'repository.dart';
+import 'goal_notes.dart';
 
 Future<void> editGoalColumn(
   BuildContext context,
@@ -21,11 +22,13 @@ Future<void> editGoalColumn(
     fields: [
       const FieldSpec('title', 'Название'),
       if (column == null)
-        const FieldSpec(
+        FieldSpec(
           'type',
           'Тип значения',
           options: {
             'text': 'Текст',
+            if (repo.cache('workspace')['goalNotesVersion'] == 1)
+              'notes': 'Заметки · многострочный текст и ссылки',
             'number': 'Число',
             'date': 'Дата',
             'checkbox': 'Галочка',
@@ -114,6 +117,9 @@ class GoalCustomCell extends StatelessWidget {
       }
     }
 
+    if (column['type'] == 'notes') {
+      return GoalNotesCell(repo: repo, goal: goal, column: column);
+    }
     if (column['type'] == 'checkbox') {
       return Checkbox(
         tristate: true,
@@ -145,6 +151,7 @@ class GoalCustomCell extends StatelessWidget {
       text: current?.toString() ?? '',
       label: column['title'].toString(),
       maxLines: column['type'] == 'text' ? 3 : 1,
+      compact: MediaQuery.sizeOf(context).width >= 600,
       draft: object(repo.local.get(key))['text'] as String?,
       begin: () {
         if (repo.local.get(key) == null) {

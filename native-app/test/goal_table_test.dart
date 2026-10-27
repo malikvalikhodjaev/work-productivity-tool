@@ -30,7 +30,7 @@ Widget page(
 
 void main() {
   testWidgets(
-    'branches collapse independently, persist and preserve source data and WBS',
+    'branches collapse independently, renumber visible rows and preserve source data',
     (tester) async {
       final repo = DashboardRepository(LocalDatabase(':memory:'));
       addTearDown(repo.dispose);
@@ -43,25 +43,25 @@ void main() {
       repo.local.capture('workspace', {'goals': goals});
       final before = jsonEncode(repo.local.snapshot('workspace'));
       await tester.pumpWidget(page(repo, goals));
-      expect(find.text('1.1.1 · Внук'), findsOneWidget);
+      expect(find.text('3 · Внук'), findsOneWidget);
       await tester.ensureVisible(find.byKey(const ValueKey('goal-toggle:b')));
       await tester.tap(find.byKey(const ValueKey('goal-toggle:b')));
       await tester.pump();
-      expect(find.text('1.1 · Ребёнок'), findsOneWidget);
-      expect(find.text('1.1.1 · Внук'), findsNothing);
+      expect(find.text('2 · Ребёнок'), findsOneWidget);
+      expect(find.text('3 · Внук'), findsNothing);
       await tester.ensureVisible(find.byKey(const ValueKey('goal-toggle:a')));
       await tester.tap(find.byKey(const ValueKey('goal-toggle:a')));
       await tester.pump();
-      expect(find.text('1.1 · Ребёнок'), findsNothing);
+      expect(find.text('2 · Ребёнок'), findsNothing);
       expect(find.text('2 · Другая цель'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(page(repo, goals));
-      expect(find.text('1.1 · Ребёнок'), findsNothing);
+      expect(find.text('2 · Ребёнок'), findsNothing);
       await tester.ensureVisible(find.byKey(const ValueKey('goal-toggle:a')));
       await tester.tap(find.byKey(const ValueKey('goal-toggle:a')));
       await tester.pump();
-      expect(find.text('1.1 · Ребёнок'), findsOneWidget);
-      expect(find.text('1.1.1 · Внук'), findsNothing);
+      expect(find.text('2 · Ребёнок'), findsOneWidget);
+      expect(find.text('3 · Внук'), findsNothing);
       expect(jsonEncode(repo.local.snapshot('workspace')), before);
       expect(repo.pending, isEmpty);
     },

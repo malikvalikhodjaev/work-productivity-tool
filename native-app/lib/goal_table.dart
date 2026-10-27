@@ -333,7 +333,11 @@ class _GoalsTableState extends State<GoalsTable> {
         : goalNumber(goal[id]);
     if (goal['characteristicId'] != null) {
       return editable(
-        text.isEmpty ? 'Заполнить' : text,
+        text.isEmpty
+            ? 'Заполнить'
+            : id == 'title'
+            ? '${goal['_rowNumber']} · $text'
+            : text,
         () => widget.edit(goal),
       );
     }
@@ -346,7 +350,10 @@ class _GoalsTableState extends State<GoalsTable> {
           .firstWhere((c) => c['id'] == id)['title']
           .toString(),
       maxLines: id == 'physicalSystem' ? 3 : 1,
-      displayText: id == 'title' ? '${goal['_wbs']} · ${goal['title']}' : null,
+      compact: MediaQuery.sizeOf(context).width >= 600,
+      displayText: id == 'title'
+          ? '${goal['_rowNumber']} · ${goal['title']}'
+          : null,
       draft: object(widget.repo.local.get(draftKey))['text'] as String?,
       begin: () {
         if (widget.repo.local.get(draftKey) == null) {
@@ -403,7 +410,12 @@ class _GoalsTableState extends State<GoalsTable> {
   Widget rowMenu(Json g) => PopupMenuButton<String>(
     key: ValueKey('goal-menu:${g['id']}'),
     tooltip: 'Меню характеристики',
-    icon: const Icon(Icons.more_horiz),
+    padding: EdgeInsets.zero,
+    child: const SizedBox(
+      width: 28,
+      height: 32,
+      child: Icon(Icons.more_horiz, size: 18),
+    ),
     onSelected: (action) => rowAction(g, action),
     itemBuilder: (_) => [
       PopupMenuItem(
@@ -572,6 +584,7 @@ class _GoalsTableState extends State<GoalsTable> {
               tools: tools,
               compactToolbar: true,
               cleanGrid: true,
+              dense: true,
               rowDragging: dragging,
               rowWrapper: (g, content, hover) => GoalDropSurface(
                 key: ValueKey('goal-drop:${g['id']}'),
@@ -604,7 +617,20 @@ class _GoalsTableState extends State<GoalsTable> {
                   WorkColumn(
                     c['id'].toString(),
                     c['title'].toString(),
-                    width: (c['width'] as num? ?? 200).toDouble(),
+                    width: min(
+                      (c['width'] as num? ?? 180).toDouble(),
+                      const <String, double>{
+                            'title': 300,
+                            'physicalSystem': 180,
+                            'unit': 150,
+                            'current': 220,
+                            'target': 210,
+                            'dueDate': 150,
+                            'status': 170,
+                            'characteristicType': 170,
+                          }[c['id']] ??
+                          (c['type'] == 'notes' ? 280 : 180),
+                    ),
                     hint: c['id'] == 'dueDate' ? goalDeadlineHint : null,
                   ),
               ],
@@ -660,6 +686,15 @@ class _GoalsTableState extends State<GoalsTable> {
                                 }
                                 collapse(next);
                               },
+                              style: IconButton.styleFrom(
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              constraints: const BoxConstraints.tightFor(
+                                width: 28,
+                                height: 32,
+                              ),
+                              padding: EdgeInsets.zero,
+                              iconSize: 18,
                               icon: Icon(
                                 collapsed.contains(g['id'])
                                     ? Icons.chevron_right
